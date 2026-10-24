@@ -12,7 +12,7 @@
 #include <iosfwd>
 #include <ostream>
 
-#if defined(__CUDACC__) && (!defined(USE_ROCM) || (TORCH_HIP_VERSION >= 702))
+#if defined(__CUDACC__) && (!defined(SCALARS_USE_HIP) || (SCALARS_HIP_VERSION >= 702))
 #include <cuda_bf16.h>
 #endif
 
@@ -30,7 +30,7 @@ struct alignas(2) BFloat16
     uint16_t x;
 
     // HIP wants __host__ __device__ tag, CUDA does not
-#if defined(USE_ROCM) && defined(__HIPCC__)
+#if defined(SCALARS_USE_HIP) && defined(__HIPCC__)
     SCALARS_HOST_DEVICE BFloat16() = default;
 #else
     BFloat16() = default;
@@ -45,7 +45,7 @@ struct alignas(2) BFloat16
     /* implicit */ inline SCALARS_HOST_DEVICE BFloat16(float value);
     inline SCALARS_HOST_DEVICE                operator float() const;
 
-#if defined(__CUDACC__) && (!defined(USE_ROCM) || (TORCH_HIP_VERSION >= 702))
+#if defined(__CUDACC__) && (!defined(SCALARS_USE_HIP) || (SCALARS_HIP_VERSION >= 702))
     inline SCALARS_HOST_DEVICE          BFloat16(const __nv_bfloat16& value);
     explicit inline SCALARS_HOST_DEVICE operator __nv_bfloat16() const;
 #endif
@@ -70,7 +70,7 @@ inline SCALARS_HOST_DEVICE float f32_from_bits(uint16_t src)
     uint32_t tmp = src;
     tmp <<= 16;
 
-#if defined(USE_ROCM) && defined(__HIPCC__)
+#if defined(SCALARS_USE_HIP) && defined(__HIPCC__)
     float* tempRes;
 
     // We should be using memcpy in order to respect the strict aliasing rule
@@ -88,7 +88,7 @@ inline SCALARS_HOST_DEVICE uint16_t bits_from_f32(float src)
 {
     uint32_t res = 0;
 
-#if defined(USE_ROCM) && defined(__HIPCC__)
+#if defined(SCALARS_USE_HIP) && defined(__HIPCC__)
     // We should be using memcpy in order to respect the strict aliasing rule
     // but it fails in the HIP environment.
     uint32_t* tempRes = reinterpret_cast<uint32_t*>(&src);
@@ -102,7 +102,7 @@ inline SCALARS_HOST_DEVICE uint16_t bits_from_f32(float src)
 
 inline SCALARS_HOST_DEVICE uint16_t round_to_nearest_even(float src)
 {
-#if defined(USE_ROCM) && defined(__HIPCC__)
+#if defined(SCALARS_USE_HIP) && defined(__HIPCC__)
     if (src != src)
     {
 #elif defined(_MSC_VER)
@@ -134,8 +134,8 @@ SCALARS_CLANG_DIAGNOSTIC_IGNORE("-Wimplicit-int-float-conversion")
 inline SCALARS_HOST_DEVICE BFloat16::BFloat16(float value)
     :
 #if defined(__CUDACC__) &&                                                                         \
-    (!defined(USE_ROCM) && defined(__CUDA_ARCH__) && __CUDA_ARCH__ >= 800 ||                       \
-        defined(USE_ROCM) && (TORCH_HIP_VERSION >= 702))
+    (!defined(SCALARS_USE_HIP) && defined(__CUDA_ARCH__) && __CUDA_ARCH__ >= 800 ||                       \
+        defined(SCALARS_USE_HIP) && (SCALARS_HIP_VERSION >= 702))
       x(__bfloat16_as_ushort(__float2bfloat16(value)))
 #elif defined(__SYCL_DEVICE_ONLY__) && defined(SYCL_EXT_ONEAPI_BFLOAT16_MATH_FUNCTIONS)
       x(scalars::bit_cast<uint16_t>(sycl::ext::oneapi::bfloat16(value)))
@@ -149,7 +149,7 @@ inline SCALARS_HOST_DEVICE BFloat16::BFloat16(float value)
 /// Implicit conversions
 inline SCALARS_HOST_DEVICE BFloat16::operator float() const
 {
-#if defined(__CUDACC__) && (!defined(USE_ROCM) || (TORCH_HIP_VERSION >= 702))
+#if defined(__CUDACC__) && (!defined(SCALARS_USE_HIP) || (SCALARS_HIP_VERSION >= 702))
     return __bfloat162float(*reinterpret_cast<const __nv_bfloat16*>(&x));
 #elif defined(__SYCL_DEVICE_ONLY__) && defined(SYCL_EXT_ONEAPI_BFLOAT16_MATH_FUNCTIONS)
     return float(*reinterpret_cast<const sycl::ext::oneapi::bfloat16*>(&x));
@@ -158,7 +158,7 @@ inline SCALARS_HOST_DEVICE BFloat16::operator float() const
 #endif
 }
 
-#if defined(__CUDACC__) && (!defined(USE_ROCM) || (TORCH_HIP_VERSION >= 702))
+#if defined(__CUDACC__) && (!defined(SCALARS_USE_HIP) || (SCALARS_HIP_VERSION >= 702))
 inline SCALARS_HOST_DEVICE BFloat16::BFloat16(const __nv_bfloat16& value)
 {
     x = *reinterpret_cast<const unsigned short*>(&value);
@@ -185,7 +185,7 @@ inline SCALARS_HOST_DEVICE BFloat16::operator sycl::ext::oneapi::bfloat16() cons
 #if defined(__CUDACC__) || defined(__HIPCC__)
 inline SCALARS_DEVICE BFloat16 __ldg(const BFloat16* ptr)
 {
-#if !defined(USE_ROCM) && defined(__CUDA_ARCH__) && __CUDA_ARCH__ >= 800
+#if !defined(SCALARS_USE_HIP) && defined(__CUDA_ARCH__) && __CUDA_ARCH__ >= 800
     return __ldg(reinterpret_cast<const __nv_bfloat16*>(ptr));
 #else
     return *ptr;

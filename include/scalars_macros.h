@@ -1,10 +1,17 @@
 #pragma once
 
-// Library macros for the half, bfloat16, and complex implementations.
-// Each PyTorch/c10 macro used by those types is defined as SCALARS_YYY, and
-// the original name is an alias of that definition. Compiler and toolchain
-// macros (__host__, __device__, __CUDACC__, USE_ROCM, TORCH_HIP_VERSION,
-// CPU_CAPABILITY_*) are left unchanged.
+#include <cstddef>
+
+// Library macros for the half, bfloat16, complex, and backend/ SIMD
+// implementations. Each PyTorch/c10 macro used by those types is defined as
+// SCALARS_YYY, and the original name is an alias of that definition.
+// Compiler-provided macros (__host__, __device__, __CUDACC__, __HIPCC__,
+// __CUDA_ARCH__, __HIP_DEVICE_COMPILE__) are left unchanged; build-controlled
+// toolchain flags (USE_ROCM, TORCH_HIP_VERSION, CPU_CAPABILITY_AVX2,
+// CPU_CAPABILITY_AVX512) are set by CMake under their SCALARS_ names
+// (SCALARS_USE_HIP, SCALARS_HIP_VERSION, SCALARS_CPU_CAPABILITY_AVX2,
+// SCALARS_CPU_CAPABILITY_AVX512 -- see cmake/simd.cmake, cmake/gpu_backend.cmake)
+// and there is no longer a PyTorch-named alias.
 
 #ifdef __HIPCC__
 #include <hip/hip_runtime.h>
@@ -96,3 +103,103 @@
 
 #define HIDDEN_NAMESPACE_BEGIN(...) SCALARS_HIDDEN_NAMESPACE_BEGIN(__VA_ARGS__)
 #define HIDDEN_NAMESPACE_END(...) SCALARS_HIDDEN_NAMESPACE_END(__VA_ARGS__)
+
+// ---------------------------------------------------------------------------
+// backend/ (ported SIMD CPU/GPU tree) and math/scalar_helper_functions.h
+// macro vocabulary. Mirrors Vectorization's common/vectorization_macros.h,
+// minus its Logging::Logging / Memory::Memory integration -- Scalars has no
+// such dependency and these macros stay self-contained.
+// ---------------------------------------------------------------------------
+
+#ifndef SCALARS_FORCE_INLINE
+#if defined(_MSC_VER)
+#define SCALARS_FORCE_INLINE __forceinline
+#elif defined(__GNUC__) || defined(__clang__) || defined(__INTEL_COMPILER)
+#define SCALARS_FORCE_INLINE __attribute__((always_inline)) inline
+#else
+#define SCALARS_FORCE_INLINE inline
+#endif
+#endif
+
+#if defined(_MSC_VER)
+#define SCALARS_NOINLINE __declspec(noinline)
+#elif defined(__GNUC__) || defined(__clang__) || defined(__INTEL_COMPILER)
+#define SCALARS_NOINLINE __attribute__((noinline))
+#else
+#define SCALARS_NOINLINE
+#endif
+
+#if defined(_MSC_VER) && !defined(__clang__)
+#define SCALARS_VECTORCALL __vectorcall
+#else
+#define SCALARS_VECTORCALL
+#endif
+
+// True when compiling the device-side pass (GPU kernel body). Safe to use
+// inside SCALARS_HOST_DEVICE functions to select device-only paths.
+#if defined(__CUDA_ARCH__) || defined(__HIP_DEVICE_COMPILE__)
+// NOLINTNEXTLINE(modernize-macro-to-enum)
+#define SCALARS_ON_GPU_DEVICE 1
+#else
+// NOLINTNEXTLINE(modernize-macro-to-enum)
+#define SCALARS_ON_GPU_DEVICE 0
+#endif
+
+#ifdef NDEBUG
+#define SCALARS_SIMD_RETURN_TYPE SCALARS_FORCE_INLINE SCALARS_HOST_DEVICE static void SCALARS_VECTORCALL
+#else
+#define SCALARS_SIMD_RETURN_TYPE SCALARS_HOST_DEVICE static void
+#endif
+
+#ifdef NDEBUG
+#define SCALARS_SIMD_METHOD SCALARS_FORCE_INLINE SCALARS_HOST_DEVICE static
+#else
+#define SCALARS_SIMD_METHOD SCALARS_HOST_DEVICE static
+#endif
+
+#ifdef NDEBUG
+#define SCALARS_FUNCTION_ATTRIBUTE SCALARS_FORCE_INLINE SCALARS_HOST_DEVICE
+#else
+#define SCALARS_FUNCTION_ATTRIBUTE SCALARS_HOST_DEVICE
+#endif
+
+#ifdef NDEBUG
+#define SCALARS_HOST_FUNCTION_ATTRIBUTE SCALARS_FORCE_INLINE SCALARS_HOST
+#else
+#define SCALARS_HOST_FUNCTION_ATTRIBUTE SCALARS_HOST
+#endif
+
+#if defined(__GNUC__) || defined(__clang__) || defined(__INTEL_COMPILER)
+#define SCALARS_LIKELY(expr) (__builtin_expect(static_cast<bool>(expr), 1))
+#define SCALARS_UNLIKELY(expr) (__builtin_expect(static_cast<bool>(expr), 0))
+#else
+#define SCALARS_LIKELY(expr) (expr)
+#define SCALARS_UNLIKELY(expr) (expr)
+#endif
+
+#if defined(_MSC_VER)
+#define SCALARS_ALIGN(alignment) __declspec(align(alignment))
+#elif defined(__GNUC__) || defined(__clang__) || defined(__ICC) || defined(__INTEL_COMPILER)
+#define SCALARS_ALIGN(alignment) __attribute__((aligned(alignment)))
+#else
+#define SCALARS_ALIGN(alignment)
+#endif
+
+inline constexpr std::size_t SCALARS_ALIGNMENT = 64;
+
+#if __cplusplus >= 201703L
+#define SCALARS_NODISCARD [[nodiscard]]
+#define SCALARS_UNUSED [[maybe_unused]]
+#else
+#define SCALARS_NODISCARD
+#define SCALARS_UNUSED
+#endif
+
+// Manual-unroll factor for the vectorized hot loops in the ported backend/
+// SIMD kernels. Falls back to 1 (no manual unroll) for any translation unit
+// built outside the CMake target that doesn't get the -D from the build
+// system. See cmake/simd.cmake.
+#ifndef SCALARS_PACKET_SIZE
+#define SCALARS_PACKET_SIZE 1
+#endif
+static_assert(SCALARS_PACKET_SIZE >= 1, "SCALARS_PACKET_SIZE must be >= 1");

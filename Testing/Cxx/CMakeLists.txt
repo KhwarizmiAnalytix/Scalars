@@ -10,6 +10,18 @@ if(SCALARS_ENABLE_GTEST)
     file(GLOB_RECURSE test_sources CONFIGURE_DEPENDS LIST_DIRECTORIES false
          "${CMAKE_CURRENT_SOURCE_DIR}/Test*.cxx"
     )
+
+    # TestGpuSimd.cu exercises backend/gpu/{float,double}/simd.h directly (no tensor<T>
+    # expression templates, so none of Vectorization's ODR cross-TU tagging applies here) --
+    # only compiled in when a GPU backend is actually active.
+    set(_scalars_gpu_test_sources "")
+    if(SCALARS_GPU_BACKEND STREQUAL "cuda" OR SCALARS_GPU_BACKEND STREQUAL "hip")
+        file(GLOB_RECURSE _scalars_gpu_test_sources CONFIGURE_DEPENDS LIST_DIRECTORIES false
+             "${CMAKE_CURRENT_SOURCE_DIR}/Test*.cu"
+        )
+        list(APPEND test_sources ${_scalars_gpu_test_sources})
+    endif()
+
     add_executable(ScalarsCxxTests ${test_sources})
     target_include_directories(
         ScalarsCxxTests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/.." "${CMAKE_CURRENT_BINARY_DIR}/.."
@@ -18,6 +30,24 @@ if(SCALARS_ENABLE_GTEST)
         ScalarsCxxTests PRIVATE SCALARS_HAS_GTEST=1 SCALARS_GOOGLE_TEST USE_GTEST _VARIADIC_MAX=10
     )
     target_link_libraries(ScalarsCxxTests PRIVATE Gtest::gtest Gtest::gtest_main Scalars::Scalars)
+
+    if(_scalars_gpu_test_sources)
+        if(SCALARS_GPU_BACKEND STREQUAL "cuda")
+            set_target_properties(
+                ScalarsCxxTests PROPERTIES CUDA_STANDARD ${SCALARS_CXX_STANDARD}
+                                           CUDA_STANDARD_REQUIRED ON
+                                           CUDA_ARCHITECTURES "${SCALARS_CUDA_ARCHITECTURES}"
+            )
+        elseif(SCALARS_GPU_BACKEND STREQUAL "hip")
+            set_target_properties(
+                ScalarsCxxTests PROPERTIES HIP_STANDARD ${SCALARS_CXX_STANDARD}
+                                           HIP_ARCHITECTURES "${SCALARS_GPU_ARCHITECTURES}"
+            )
+        endif()
+        message(STATUS "ScalarsCxxTests: GPU simd tests enabled (backend: ${SCALARS_GPU_BACKEND})")
+    endif()
+    unset(_scalars_gpu_test_sources)
+
     scalars_configure_target(ScalarsCxxTests)
     set_target_properties(
         ScalarsCxxTests PROPERTIES FOLDER "Tests" VS_DEBUGGER_WORKING_DIRECTORY

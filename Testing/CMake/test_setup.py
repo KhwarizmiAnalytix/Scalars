@@ -63,8 +63,39 @@ class setup_tests(unittest.TestCase):
         _, values, _ = self.flags("config.benchmark")
         self.assertEqual(values["SCALARS_ENABLE_BENCHMARK"], "ON")
 
+    def test_cpu_backend_defaults_to_empty(self):
+        _, values, _ = self.flags("config.build.test")
+        self.assertNotIn("SCALARS_CPU_BACKEND", values)
+        self.assertNotIn("SCALARS_GPU_BACKEND", values)
+
+    def test_cpu_and_gpu_backend_tokens(self):
+        _, values, _ = self.flags("config.avx2.metal")
+        self.assertEqual(values["SCALARS_CPU_BACKEND"], "avx2")
+        self.assertEqual(values["SCALARS_GPU_BACKEND"], "metal")
+        cmake = (SCRIPTS.parent / "cmake" / "simd.cmake").read_text()
+        self.assertIn("SCALARS_CPU_BACKEND", cmake)
+        cmake = (SCRIPTS.parent / "cmake" / "gpu_backend.cmake").read_text()
+        self.assertIn("SCALARS_GPU_BACKEND", cmake)
+
+    def test_cpu_and_gpu_backend_equals_form(self):
+        flags, values, _ = self.flags(
+            "config", "--cpu_backend=sve", "--gpu-backend=hip"
+        )
+        self.assertEqual(values["SCALARS_CPU_BACKEND"], "sve")
+        self.assertEqual(values["SCALARS_GPU_BACKEND"], "hip")
+        self.assertIn("_sve", flags.builder_suffix)
+        self.assertIn("_hip", flags.builder_suffix)
+
     def test_invalid_options_fail(self):
-        for arg in ["mkl", "cxx17", "c++17", "--lto.invalid", "--sanitizer.invalid"]:
+        for arg in [
+            "mkl",
+            "cxx17",
+            "c++17",
+            "--lto.invalid",
+            "--sanitizer.invalid",
+            "--cpu_backend=avx256",
+            "--gpu_backend=opencl",
+        ]:
             with self.subTest(arg=arg), self.assertRaises(SystemExit) as error:
                 self.flags("config", arg)
             self.assertEqual(error.exception.code, 1)

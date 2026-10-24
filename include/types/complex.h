@@ -638,7 +638,7 @@ template <typename T> SCALARS_HOST_DEVICE T abs(const scalars::complex<T>& z)
 #endif
 }
 
-#if defined(USE_ROCM)
+#if defined(SCALARS_USE_HIP)
 #define ROCm_Bug(x)
 #else
 #define ROCm_Bug(x) x

@@ -41,7 +41,7 @@
 #include <sycl/sycl.hpp>  // for SYCL 2020
 #endif
 
-#if (defined(CPU_CAPABILITY_AVX2) || defined(CPU_CAPABILITY_AVX512)) && !defined(__APPLE__)
+#if (defined(SCALARS_CPU_CAPABILITY_AVX2) || defined(SCALARS_CPU_CAPABILITY_AVX512)) && !defined(__APPLE__)
 #include "detail/vec_half.h"
 #endif
 
@@ -73,7 +73,7 @@ struct alignas(2) Half
     SCALARS_HOST_DEVICE static constexpr from_bits_t from_bits() { return from_bits_t(); }
 
     // HIP wants __host__ __device__ tag, CUDA does not
-#if defined(USE_ROCM)
+#if defined(SCALARS_USE_HIP)
     SCALARS_HOST_DEVICE Half() = default;
 #else
     Half() = default;
@@ -442,7 +442,7 @@ inline SCALARS_HOST_DEVICE Half::Half(float value)
       x(__half_as_short(__float2half(value)))
 #elif defined(__SYCL_DEVICE_ONLY__)
       x(scalars::bit_cast<uint16_t>(sycl::half(value)))
-#elif (defined(CPU_CAPABILITY_AVX2) || defined(CPU_CAPABILITY_AVX512)) && !defined(__APPLE__)
+#elif (defined(SCALARS_CPU_CAPABILITY_AVX2) || defined(SCALARS_CPU_CAPABILITY_AVX512)) && !defined(__APPLE__)
       x(scalars::vec::float2half_scalar(value))
 #else
       x(detail::fp16_ieee_from_fp32_value(value))
@@ -458,7 +458,7 @@ inline SCALARS_HOST_DEVICE Half::operator float() const
     return __half2float(*reinterpret_cast<const __half*>(&x));
 #elif defined(__SYCL_DEVICE_ONLY__)
     return float(scalars::bit_cast<sycl::half>(x));
-#elif (defined(CPU_CAPABILITY_AVX2) || defined(CPU_CAPABILITY_AVX512)) && !defined(__APPLE__)
+#elif (defined(SCALARS_CPU_CAPABILITY_AVX2) || defined(SCALARS_CPU_CAPABILITY_AVX512)) && !defined(__APPLE__)
     return scalars::vec::half2float_scalar(x);
 #elif defined(__aarch64__) && !defined(__CUDACC__)
     return detail::native_fp16_to_fp32_value(x);

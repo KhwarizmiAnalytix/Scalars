@@ -47,6 +47,9 @@ from helpers import (
 
 DEBUG_FLAG = False
 
+_CPU_BACKENDS = {"no", "sse", "avx", "avx2", "avx512", "neon", "sve"}
+_GPU_BACKENDS = {"none", "cuda", "hip", "metal"}
+
 
 class error_logger:
     """Centralized error logging system for comprehensive error tracking."""
@@ -450,6 +453,8 @@ class scalars_flags:
             "cxxstd",
             "lto",
             "cppcheck",
+            "cpu_backend",
+            "gpu_backend",
         ]
         self.__description = [
             "build shared (default) or static libraries",
@@ -472,6 +477,10 @@ class scalars_flags:
             "C++ standard: cxx20, cxx23",
             "LTO mode: off | thin | full | ipo | auto (bare 'lto' = auto)",
             "enable cppcheck static analysis",
+            "CPU SIMD backend: no | sse | avx | avx2 | avx512 | neon | sve "
+            "(bare token, or --cpu_backend=<value>)",
+            "GPU backend: none | cuda | hip | metal "
+            "(bare token, or --gpu_backend=<value>)",
         ]
 
     def __build_cmake_flag(self):
@@ -494,6 +503,8 @@ class scalars_flags:
             "coverage": "SCALARS_ENABLE_COVERAGE",
             "cxxstd": "SCALARS_CXX_STANDARD",
             "lto": "SCALARS_LTO_MODE",
+            "cpu_backend": "SCALARS_CPU_BACKEND",
+            "gpu_backend": "SCALARS_GPU_BACKEND",
         }
 
     def __fill_option_flags(self, arg_list):
@@ -516,6 +527,8 @@ class scalars_flags:
                 "cxxstd": "",  # empty = let CMake use its own default (20)
                 "lto": "",  # empty = let CMake compute the smart per-compiler default
                 "sanitizer_enum": "address",
+                "cpu_backend": "",  # empty = let CMake's host-aware default apply
+                "gpu_backend": "",  # empty = let CMake default to "none"
             }
         )
 
@@ -567,6 +580,16 @@ class scalars_flags:
                 self.__value["cache_type"] = arg
                 self.builder_suffix += f"_{arg}"
                 print_status(f"Setting cache type to {arg}", "INFO")
+            elif arg in _CPU_BACKENDS:
+                self.__value["cpu_backend"] = arg
+                if arg != "no":
+                    self.builder_suffix += f"_{arg}"
+                print_status(f"Setting CPU SIMD backend to {arg}", "INFO")
+            elif arg in _GPU_BACKENDS:
+                self.__value["gpu_backend"] = arg
+                if arg != "none":
+                    self.builder_suffix += f"_{arg}"
+                print_status(f"Setting GPU backend to {arg}", "INFO")
             elif any(arg.lower() == item.lower() for item in cxx_std_list):
                 std_version = arg[3:]  # Remove "cxx" prefix
                 self.__value["cxxstd"] = std_version
@@ -1050,6 +1073,28 @@ def parse_args(args):
                 sys.exit(1)
         elif arg.startswith("--linker."):
             processed_args.append(f"linker.{arg.split('.', 1)[1].lower()}")
+        elif arg.startswith("--cpu_backend=") or arg.startswith("--cpu-backend="):
+            cpu_value = arg.split("=", 1)[1].lower()
+            if cpu_value in _CPU_BACKENDS:
+                processed_args.append(cpu_value)
+            else:
+                print_status(
+                    f"Invalid CPU backend '{cpu_value}'. "
+                    f"Valid options: {', '.join(sorted(_CPU_BACKENDS))}",
+                    "ERROR",
+                )
+                sys.exit(1)
+        elif arg.startswith("--gpu_backend=") or arg.startswith("--gpu-backend="):
+            gpu_value = arg.split("=", 1)[1].lower()
+            if gpu_value in _GPU_BACKENDS:
+                processed_args.append(gpu_value)
+            else:
+                print_status(
+                    f"Invalid GPU backend '{gpu_value}'. "
+                    f"Valid options: {', '.join(sorted(_GPU_BACKENDS))}",
+                    "ERROR",
+                )
+                sys.exit(1)
         elif (re.search(r"[/\\]", arg) or arg.endswith(".exe")) and re.search(
             r"[Cc]lang|[Gg][Cc][Cc]|[Gg]\+\+", arg
         ):
