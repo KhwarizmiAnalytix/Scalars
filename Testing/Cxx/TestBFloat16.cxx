@@ -1,4 +1,6 @@
 #include "types/bfloat16.h"
+#include "types/half.h"
+#include "common/scalar_traits.h"
 
 #include <cmath>
 #include <cstdint>
@@ -131,4 +133,96 @@ TEST(bfloat16, NumericLimitsStreamAndRoundTrip)
             EXPECT_NEAR(back, sample, std::abs(sample) * 0.02f + 1.0e-3f);
         }
     }
+}
+
+TEST(bfloat16, AccumulationType)
+{
+    static_assert(std::is_same_v<accumulation_type_t<bfloat16>, float>,
+                  "bfloat16 accumulation type must be float");
+    static_assert(std::is_same_v<accumulation_type_t<half>, float>,
+                  "half accumulation type must be float");
+    static_assert(std::is_same_v<accumulation_type_t<float>, float>,
+                  "float accumulation type must be float");
+    static_assert(std::is_same_v<accumulation_type_t<double>, double>,
+                  "double accumulation type must be double");
+}
+
+TEST(bfloat16, AccumulationSimple)
+{
+    using accum_type = accumulation_type_t<bfloat16>;
+    accum_type sum = 0;
+
+    sum += static_cast<accum_type>(bfloat16(1.0f));
+    sum += static_cast<accum_type>(bfloat16(2.0f));
+    sum += static_cast<accum_type>(bfloat16(3.0f));
+
+    EXPECT_FLOAT_EQ(sum, 6.0f);
+}
+
+TEST(bfloat16, AccumulationWithError)
+{
+    using accum_type = accumulation_type_t<bfloat16>;
+    accum_type sum = 0;
+
+    for (int i = 0; i < 100; ++i)
+    {
+        sum += static_cast<accum_type>(bfloat16(0.1f));
+    }
+
+    EXPECT_NEAR(sum, 10.0f, 0.01f);
+}
+
+TEST(bfloat16, AccumulationLargeValues)
+{
+    using accum_type = accumulation_type_t<bfloat16>;
+    accum_type sum = 0;
+
+    sum += static_cast<accum_type>(bfloat16(1000.0f));
+    sum += static_cast<accum_type>(bfloat16(2000.0f));
+    sum += static_cast<accum_type>(bfloat16(3000.0f));
+
+    EXPECT_NEAR(sum, 6000.0f, 50.0f);
+}
+
+TEST(half, AccumulationType)
+{
+    static_assert(std::is_same_v<accumulation_type_t<half>, float>,
+                  "half accumulation type must be float");
+}
+
+TEST(half, AccumulationSimple)
+{
+    using accum_type = accumulation_type_t<half>;
+    accum_type sum = 0;
+
+    sum += static_cast<accum_type>(half(1.0f));
+    sum += static_cast<accum_type>(half(2.0f));
+    sum += static_cast<accum_type>(half(3.0f));
+
+    EXPECT_FLOAT_EQ(sum, 6.0f);
+}
+
+TEST(half, AccumulationWithError)
+{
+    using accum_type = accumulation_type_t<half>;
+    accum_type sum = 0;
+
+    for (int i = 0; i < 100; ++i)
+    {
+        sum += static_cast<accum_type>(half(0.1f));
+    }
+
+    EXPECT_NEAR(sum, 10.0f, 0.01f);
+}
+
+TEST(half, AccumulationLargeValues)
+{
+    using accum_type = accumulation_type_t<half>;
+    accum_type sum = 0;
+
+    sum += static_cast<accum_type>(half(1000.0f));
+    sum += static_cast<accum_type>(half(2000.0f));
+    sum += static_cast<accum_type>(half(3000.0f));
+
+    EXPECT_NEAR(sum, 6000.0f, 10.0f);
 }
