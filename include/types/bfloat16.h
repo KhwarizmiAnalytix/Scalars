@@ -3,7 +3,7 @@
 // Defines the bloat16 type (brain floating-point). This representation uses
 // 1 bit for the sign, 8 bits for the exponent and 7 bits for the mantissa.
 
-#include "detail/bit_cast.h"
+#include "common/bit_cast.h"
 #include "scalars_macros.h"
 
 #include <cmath>
@@ -442,12 +442,12 @@ inline SCALARS_HOST_DEVICE bfloat16 operator/(int64_t a, bfloat16 b)
 
 // Overloading < and > operators, because std::max and std::min use them.
 
-inline SCALARS_HOST_DEVICE bool operator>(bfloat16& lhs, bfloat16& rhs)
+inline SCALARS_HOST_DEVICE bool operator>(const bfloat16& lhs, const bfloat16& rhs)
 {
     return float(lhs) > float(rhs);
 }
 
-inline SCALARS_HOST_DEVICE bool operator<(bfloat16& lhs, bfloat16& rhs)
+inline SCALARS_HOST_DEVICE bool operator<(const bfloat16& lhs, const bfloat16& rhs)
 {
     return float(lhs) < float(rhs);
 }

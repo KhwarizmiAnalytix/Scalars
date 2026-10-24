@@ -1,4 +1,4 @@
-#include "core/type_promotion.h"
+#include "common/type_promotion.h"
 
 #include <type_traits>
 

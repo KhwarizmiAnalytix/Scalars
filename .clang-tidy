@@ -2,11 +2,6 @@
 # convention, not an oversight) — hence -portability-avoid-pragma-once below.
 # That check only becomes reachable once --header-filter actually matches
 # include/|src/ (see cmake/clang_tidy.cmake); it used to match nothing here.
-#
-# math/complex_math.h, math/complex_utils.h, and math/scalar_helper_functions.h
-# deliberately inject function overloads into namespace std so that generic
-# code can call std::op(...) uniformly across scalar, complex, and GPU scalar
-# types — hence -bugprone-std-namespace-modification below.
 ---
 Checks: >
   -*,
@@ -20,7 +15,6 @@ Checks: >
   readability-identifier-naming,
   -bugprone-easily-swappable-parameters,
   -bugprone-narrowing-conversions,
-  -bugprone-std-namespace-modification,
   -portability-avoid-pragma-once
 WarningsAsErrors: ''
 HeaderFilterRegex: ''

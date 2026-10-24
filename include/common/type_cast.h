@@ -1,6 +1,7 @@
 #pragma once
-#include "core/scalar_traits.h"
+#include "common/scalar_traits.h"
 #include <type_traits>
+
 namespace scalars
 {
 template <class To, class From> To scalar_cast(const From& v)

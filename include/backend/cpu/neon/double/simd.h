@@ -4,6 +4,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstddef>
 #include <cstdint>
 #include <type_traits>
 
@@ -40,6 +41,7 @@ struct simd<double>
     static constexpr int size      = 2;
     static constexpr int half_size = 1;
 
+    // NOLINTNEXTLINE(bugprone-throwing-static-initialization): NEON intrinsic, cannot throw.
     inline static uint64x2_t const sign_mask = vdupq_n_u64(0x8000000000000000ULL);
 
     SCALARS_SIMD_RETURN_TYPE prefetch(const value_t* addr) { __builtin_prefetch(addr, 0, 3); }
@@ -340,7 +342,7 @@ struct simd<double>
             {
                 for (int q = 0; q < 4; ++q)
                 {
-                    simd[4 * r + q] = vld1q_f64(&out[r][2 * q]);
+                    simd[4 * r + q] = vld1q_f64(&out[r][static_cast<std::ptrdiff_t>(2 * q)]);
                 }
             }
         }
@@ -363,7 +365,7 @@ struct simd<double>
             {
                 for (int q = 0; q < 2; ++q)
                 {
-                    simd[2 * r + q] = vld1q_f64(&out[r][2 * q]);
+                    simd[2 * r + q] = vld1q_f64(&out[r][static_cast<std::ptrdiff_t>(2 * q)]);
                 }
             }
         }

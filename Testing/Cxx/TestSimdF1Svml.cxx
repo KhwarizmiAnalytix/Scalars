@@ -24,13 +24,12 @@
 namespace
 {
 
-#define SCALARS_SIMD_UNARY_TAG(Scalar, name) \
+#define SCALARS_SIMD_UNARY_TAG(Scalar, name)                                                       \
     ((std::is_same_v<Scalar, float>) ? (#name ".f32") : (#name ".f64"))
 
 inline constexpr int kRandomTrials = 256;
 
-template <typename value_t>
-double scalar_as_double(value_t x)
+template <typename value_t> double scalar_as_double(value_t x)
 {
     return static_cast<double>(x);
 }
@@ -67,13 +66,13 @@ void unary_random_vs_std(
 
     std::array<value_t, n> xs{};
     std::array<value_t, n> out{};
-    std::mt19937            gen(5489u);
+    // NOLINTNEXTLINE(bugprone-random-generator-seed): fixed seed for reproducibility
+    std::mt19937 gen(5489u);
 
     for (int trial = 0; trial < kRandomTrials; ++trial)
     {
-        SCOPED_TRACE(
-            ::testing::Message() << "failing_function=" << case_tag << " trial=" << trial
-                                 << " (unary vs std)");
+        SCOPED_TRACE(::testing::Message()
+                     << "failing_function=" << case_tag << " trial=" << trial << " (unary vs std)");
         fill_xs(xs, gen);
         simd_t a = simd<value_t>::loadu(xs.data());
         simd_t c = simd<value_t>::setzero();
@@ -95,13 +94,12 @@ void unary_random_vs_std(
 }
 
 template <typename value_t, typename SimdUnary, typename RefUnary>
-void unary_uniform_vs_std(
-    char const* case_tag,
-    value_t     tolerance,
-    value_t     lo,
-    value_t     hi,
-    SimdUnary&& simd_op,
-    RefUnary&&  ref_op)
+void unary_uniform_vs_std(char const* case_tag,
+    value_t                           tolerance,
+    value_t                           lo,
+    value_t                           hi,
+    SimdUnary&&                       simd_op,
+    RefUnary&&                        ref_op)
 {
     unary_random_vs_std<value_t>(
         case_tag,
@@ -112,8 +110,7 @@ void unary_uniform_vs_std(
         std::forward<RefUnary>(ref_op));
 }
 
-template <typename value_t>
-void test_exp(value_t tolerance)
+template <typename value_t> void test_exp(value_t tolerance)
 {
     using simd_t = typename simd<value_t>::simd_t;
     unary_uniform_vs_std<value_t>(
@@ -125,8 +122,7 @@ void test_exp(value_t tolerance)
         [](value_t x) { return std::exp(x); });
 }
 
-template <typename value_t>
-void test_expm1(value_t tolerance)
+template <typename value_t> void test_expm1(value_t tolerance)
 {
     using simd_t = typename simd<value_t>::simd_t;
     unary_uniform_vs_std<value_t>(
@@ -138,8 +134,7 @@ void test_expm1(value_t tolerance)
         [](value_t x) { return std::expm1(x); });
 }
 
-template <typename value_t>
-void test_exp2(value_t tolerance)
+template <typename value_t> void test_exp2(value_t tolerance)
 {
     using simd_t = typename simd<value_t>::simd_t;
     unary_uniform_vs_std<value_t>(
@@ -151,8 +146,7 @@ void test_exp2(value_t tolerance)
         [](value_t x) { return std::exp2(x); });
 }
 
-template <typename value_t>
-void test_log(value_t tolerance)
+template <typename value_t> void test_log(value_t tolerance)
 {
     using simd_t = typename simd<value_t>::simd_t;
     unary_uniform_vs_std<value_t>(
@@ -164,8 +158,7 @@ void test_log(value_t tolerance)
         [](value_t x) { return std::log(x); });
 }
 
-template <typename value_t>
-void test_log1p(value_t tolerance)
+template <typename value_t> void test_log1p(value_t tolerance)
 {
     using simd_t = typename simd<value_t>::simd_t;
     unary_uniform_vs_std<value_t>(
@@ -177,8 +170,7 @@ void test_log1p(value_t tolerance)
         [](value_t x) { return std::log1p(x); });
 }
 
-template <typename value_t>
-void test_log2(value_t tolerance)
+template <typename value_t> void test_log2(value_t tolerance)
 {
     using simd_t = typename simd<value_t>::simd_t;
     unary_uniform_vs_std<value_t>(
@@ -190,8 +182,7 @@ void test_log2(value_t tolerance)
         [](value_t x) { return std::log2(x); });
 }
 
-template <typename value_t>
-void test_sin(value_t tolerance)
+template <typename value_t> void test_sin(value_t tolerance)
 {
     using simd_t = typename simd<value_t>::simd_t;
     unary_uniform_vs_std<value_t>(
@@ -203,8 +194,7 @@ void test_sin(value_t tolerance)
         [](value_t x) { return std::sin(x); });
 }
 
-template <typename value_t>
-void test_cos(value_t tolerance)
+template <typename value_t> void test_cos(value_t tolerance)
 {
     using simd_t = typename simd<value_t>::simd_t;
     unary_uniform_vs_std<value_t>(
@@ -216,8 +206,7 @@ void test_cos(value_t tolerance)
         [](value_t x) { return std::cos(x); });
 }
 
-template <typename value_t>
-void test_tan(value_t tolerance)
+template <typename value_t> void test_tan(value_t tolerance)
 {
     using simd_t = typename simd<value_t>::simd_t;
     unary_uniform_vs_std<value_t>(
@@ -229,8 +218,7 @@ void test_tan(value_t tolerance)
         [](value_t x) { return std::tan(x); });
 }
 
-template <typename value_t>
-void test_asin(value_t tolerance)
+template <typename value_t> void test_asin(value_t tolerance)
 {
     using simd_t = typename simd<value_t>::simd_t;
     unary_uniform_vs_std<value_t>(
@@ -242,8 +230,7 @@ void test_asin(value_t tolerance)
         [](value_t x) { return std::asin(x); });
 }
 
-template <typename value_t>
-void test_acos(value_t tolerance)
+template <typename value_t> void test_acos(value_t tolerance)
 {
     using simd_t = typename simd<value_t>::simd_t;
     unary_uniform_vs_std<value_t>(
@@ -255,8 +242,7 @@ void test_acos(value_t tolerance)
         [](value_t x) { return std::acos(x); });
 }
 
-template <typename value_t>
-void test_atan(value_t tolerance)
+template <typename value_t> void test_atan(value_t tolerance)
 {
     using simd_t = typename simd<value_t>::simd_t;
     unary_uniform_vs_std<value_t>(
@@ -268,8 +254,7 @@ void test_atan(value_t tolerance)
         [](value_t x) { return std::atan(x); });
 }
 
-template <typename value_t>
-void test_sinh(value_t tolerance)
+template <typename value_t> void test_sinh(value_t tolerance)
 {
     using simd_t = typename simd<value_t>::simd_t;
     unary_uniform_vs_std<value_t>(
@@ -281,8 +266,7 @@ void test_sinh(value_t tolerance)
         [](value_t x) { return std::sinh(x); });
 }
 
-template <typename value_t>
-void test_cosh(value_t tolerance)
+template <typename value_t> void test_cosh(value_t tolerance)
 {
     using simd_t = typename simd<value_t>::simd_t;
     unary_uniform_vs_std<value_t>(
@@ -294,8 +278,7 @@ void test_cosh(value_t tolerance)
         [](value_t x) { return std::cosh(x); });
 }
 
-template <typename value_t>
-void test_tanh(value_t tolerance)
+template <typename value_t> void test_tanh(value_t tolerance)
 {
     using simd_t = typename simd<value_t>::simd_t;
     unary_uniform_vs_std<value_t>(
@@ -307,8 +290,7 @@ void test_tanh(value_t tolerance)
         [](value_t x) { return std::tanh(x); });
 }
 
-template <typename value_t>
-void test_asinh(value_t tolerance)
+template <typename value_t> void test_asinh(value_t tolerance)
 {
     using simd_t = typename simd<value_t>::simd_t;
     unary_uniform_vs_std<value_t>(
@@ -320,8 +302,7 @@ void test_asinh(value_t tolerance)
         [](value_t x) { return std::asinh(x); });
 }
 
-template <typename value_t>
-void test_acosh(value_t tolerance)
+template <typename value_t> void test_acosh(value_t tolerance)
 {
     using simd_t = typename simd<value_t>::simd_t;
     unary_uniform_vs_std<value_t>(
@@ -333,8 +314,7 @@ void test_acosh(value_t tolerance)
         [](value_t x) { return std::acosh(x); });
 }
 
-template <typename value_t>
-void test_atanh(value_t tolerance)
+template <typename value_t> void test_atanh(value_t tolerance)
 {
     using simd_t = typename simd<value_t>::simd_t;
     unary_uniform_vs_std<value_t>(
@@ -346,8 +326,7 @@ void test_atanh(value_t tolerance)
         [](value_t x) { return std::atanh(x); });
 }
 
-template <typename value_t>
-void test_cbrt(value_t tolerance)
+template <typename value_t> void test_cbrt(value_t tolerance)
 {
     using simd_t = typename simd<value_t>::simd_t;
     unary_uniform_vs_std<value_t>(
@@ -359,8 +338,7 @@ void test_cbrt(value_t tolerance)
         [](value_t x) { return std::cbrt(x); });
 }
 
-template <typename value_t>
-void test_cdf(value_t tolerance)
+template <typename value_t> void test_cdf(value_t tolerance)
 {
     using simd_t = typename simd<value_t>::simd_t;
     unary_uniform_vs_std<value_t>(
@@ -372,8 +350,7 @@ void test_cdf(value_t tolerance)
         [](value_t x) { return std::cdf(x); });
 }
 
-template <typename value_t>
-void test_inv_cdf(value_t tolerance)
+template <typename value_t> void test_inv_cdf(value_t tolerance)
 {
     using simd_t = typename simd<value_t>::simd_t;
     unary_random_vs_std<value_t>(
@@ -385,8 +362,7 @@ void test_inv_cdf(value_t tolerance)
         [](value_t x) { return std::inv_cdf(x); });
 }
 
-template <typename value_t>
-void test_all_simd_f1_svml(value_t tolerance)
+template <typename value_t> void test_all_simd_f1_svml(value_t tolerance)
 {
     test_exp(tolerance);
     test_expm1(tolerance);

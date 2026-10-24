@@ -1,4 +1,4 @@
-#include "core/scalar_type.h"
+#include "common/scalar_type.h"
 namespace scalars
 {
 std::string_view scalar_type_name(scalar_type t) noexcept

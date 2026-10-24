@@ -14,6 +14,9 @@
 
 namespace std
 {
+// NOLINTBEGIN(bugprone-std-namespace-modification) -- deliberate, see file
+// comment above: these overloads must live in std for the uniform
+// std::op(...) call convention used by the CPU/GPU expression macros.
 template <typename T, std::enable_if_t<std::is_fundamental<T>::value, int> = 0>
 SCALARS_FUNCTION_ATTRIBUTE auto signcopy(T a, T b)
 {
@@ -212,4 +215,5 @@ SCALARS_FUNCTION_ATTRIBUTE auto if_else(bool a, T1 b, T2 c)
 {
     return a ? b : c;
 }
+// NOLINTEND(bugprone-std-namespace-modification)
 }  // namespace std

@@ -3,6 +3,7 @@
 #include <arm_neon.h>
 
 #include <cmath>
+#include <cstddef>
 #include <cstdint>
 #include <type_traits>
 
@@ -41,6 +42,7 @@ struct simd<float>
     static constexpr int size      = 4;
     static constexpr int half_size = 2;
 
+    // NOLINTNEXTLINE(bugprone-throwing-static-initialization): NEON intrinsic, cannot throw.
     inline static uint32x4_t const sign_mask = vdupq_n_u32(0x80000000u);
 
     SCALARS_SIMD_RETURN_TYPE prefetch(const value_t* addr) { __builtin_prefetch(addr, 0, 3); }
@@ -196,23 +198,25 @@ struct simd<float>
 
     SCALARS_SIMD_METHOD simd_t gather(value_t const* from, int stride)
     {
-        alignas(16) value_t tmp[4] = {
+        const std::ptrdiff_t s = stride;
+        alignas(16) value_t  tmp[4] = {
             from[0],
-            from[1 * stride],
-            from[2 * stride],
-            from[3 * stride],
+            from[s],
+            from[2 * s],
+            from[3 * s],
         };
         return vld1q_f32(tmp);
     }
 
     SCALARS_SIMD_RETURN_TYPE scatter(simd_t from, int stride, value_t* to)
     {
-        alignas(16) float b[4];
+        const std::ptrdiff_t s = stride;
+        alignas(16) float    b[4];
         vst1q_f32(b, from);
-        to[0]          = b[0];
-        to[stride]     = b[1];
-        to[stride * 2] = b[2];
-        to[stride * 3] = b[3];
+        to[0]     = b[0];
+        to[s]     = b[1];
+        to[2 * s] = b[2];
+        to[3 * s] = b[3];
     }
 
     SCALARS_SIMD_METHOD simd_t gather(value_t const* from, const int* strides)
@@ -339,7 +343,7 @@ struct simd<float>
             {
                 for (int q = 0; q < 2; ++q)
                 {
-                    simd[2 * r + q] = vld1q_f32(&out[r][4 * q]);
+                    simd[2 * r + q] = vld1q_f32(&out[r][static_cast<std::ptrdiff_t>(4) * q]);
                 }
             }
         }
@@ -362,7 +366,7 @@ struct simd<float>
             {
                 for (int q = 0; q < 4; ++q)
                 {
-                    simd[4 * r + q] = vld1q_f32(&out[r][4 * q]);
+                    simd[4 * r + q] = vld1q_f32(&out[r][static_cast<std::ptrdiff_t>(4) * q]);
                 }
             }
         }

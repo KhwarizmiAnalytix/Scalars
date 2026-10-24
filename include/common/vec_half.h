@@ -1,6 +1,6 @@
 #pragma once
 
-#include "detail/intrinsics.h"
+#include "common/intrinsics.h"
 #include "scalars_macros.h"
 
 namespace scalars::vec {

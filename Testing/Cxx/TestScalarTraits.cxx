@@ -1,5 +1,5 @@
-#include "core/accumulate_type.h"
-#include "core/scalar_traits.h"
+#include "common/accumulate_type.h"
+#include "common/scalar_traits.h"
 
 #include <complex>
 #include <cstdint>
@@ -78,10 +78,16 @@ TEST(ScalarTraits, AccumulateType)
             EXPECT_EQ(gpu, scalar_type::complex_float);
         }
         if (type == scalar_type::float16 || type == scalar_type::bfloat16)
+        {
             EXPECT_EQ(cpu, scalar_type::float32);
+        }
         if (type == scalar_type::float64 || type == scalar_type::complex_double)
+        {
             EXPECT_EQ(gpu, type);
+        }
         if (type == scalar_type::complex_half || type == scalar_type::complex_bf16)
+        {
             EXPECT_EQ(cpu, scalar_type::complex_float);
+        }
     }
 }

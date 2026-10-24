@@ -1,4 +1,4 @@
-#include "core/scalar_type.h"
+#include "common/scalar_type.h"
 
 #include <cstdint>
 

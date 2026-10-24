@@ -1,7 +1,7 @@
 #pragma once
 
 #include "scalars_macros.h"
-#include "detail/bit_cast.h"
+#include "common/bit_cast.h"
 #include <cstdint>
 
 namespace scalars::detail {

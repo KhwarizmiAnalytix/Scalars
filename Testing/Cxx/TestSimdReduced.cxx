@@ -15,11 +15,11 @@
 
 namespace
 {
-template <class T> class SimdReduced : public ::testing::Test
+template <class T> class simd_reduced : public ::testing::Test
 {
 };
-using ReducedTypes = ::testing::Types<scalars::half, scalars::bfloat16>;
-TYPED_TEST_SUITE(SimdReduced, ReducedTypes);
+using reduced_types = ::testing::Types<scalars::half, scalars::bfloat16>;
+TYPED_TEST_SUITE(simd_reduced, reduced_types);
 
 template <class T> T from_bits(uint16_t bits)
 {
@@ -31,9 +31,13 @@ template <class T> void expect_value(T actual, T expected, float ulps = 0)
     const float a = static_cast<float>(actual);
     const float e = static_cast<float>(expected);
     if (std::isnan(e))
+    {
         EXPECT_TRUE(std::isnan(a));
+    }
     else if (std::isinf(e) || ulps == 0 || e == 0)
+    {
         EXPECT_EQ(actual.x, expected.x);
+    }
     else
     {
         const float eps  = std::is_same_v<T, scalars::half> ? 0x1p-10f : 0x1p-7f;
@@ -42,9 +46,9 @@ template <class T> void expect_value(T actual, T expected, float ulps = 0)
     }
 }
 
-TYPED_TEST(SimdReduced, DenseDistinctPackets)
+TYPED_TEST(simd_reduced, DenseDistinctPackets)
 {
-    using S = simd<TypeParam>;
+    using S = simd<TypeParam>;  // NOLINT(readability-identifier-naming)
     static_assert(S::size == 2 * simd<float>::size);
     static_assert(S::half_size == simd<float>::size);
     static_assert(sizeof(typename S::simd_t) == S::size * sizeof(TypeParam));
@@ -54,16 +58,18 @@ TYPED_TEST(SimdReduced, DenseDistinctPackets)
     static_assert(std::is_same_v<decltype(S::accumulate(S::setzero())), float>);
 }
 
-TYPED_TEST(SimdReduced, ExhaustiveEncodingWideningAndMemory)
+TYPED_TEST(simd_reduced, ExhaustiveEncodingWideningAndMemory)
 {
-    using T = TypeParam;
-    using S = simd<T>;
+    using T = TypeParam;  // NOLINT(readability-identifier-naming)
+    using S = simd<T>;    // NOLINT(readability-identifier-naming)
     std::array<T, S::size>     input, output;
     std::array<float, S::size> widened;
     for (uint32_t first = 0; first < 65536; first += S::size)
     {
         for (int i = 0; i < S::size; ++i)
+        {
             input[i] = from_bits<T>(static_cast<uint16_t>(first + i));
+        }
         const auto packet = S::loadu(input.data());
         S::storeu(packet, output.data());
         const auto f = S::to_float_pair(packet);
@@ -74,7 +80,9 @@ TYPED_TEST(SimdReduced, ExhaustiveEncodingWideningAndMemory)
             ASSERT_EQ(output[i].x, input[i].x);
             const float expected = static_cast<float>(input[i]);
             if (std::isnan(expected))
+            {
                 ASSERT_TRUE(std::isnan(widened[i]));
+            }
             else
             {
                 ASSERT_EQ(widened[i], expected) << first + i;
@@ -84,10 +92,10 @@ TYPED_TEST(SimdReduced, ExhaustiveEncodingWideningAndMemory)
     }
 }
 
-TYPED_TEST(SimdReduced, NarrowingMidpointsAndExceptionalValues)
+TYPED_TEST(simd_reduced, NarrowingMidpointsAndExceptionalValues)
 {
-    using T = TypeParam;
-    using S = simd<T>;
+    using T = TypeParam;  // NOLINT(readability-identifier-naming)
+    using S = simd<T>;    // NOLINT(readability-identifier-naming)
     std::vector<float> cases;
     const uint32_t     max_finite = std::is_same_v<T, scalars::half> ? 0x7bff : 0x7f7f;
     for (uint32_t bits = 0; bits < max_finite; ++bits)
@@ -118,9 +126,12 @@ TYPED_TEST(SimdReduced, NarrowingMidpointsAndExceptionalValues)
         cases.push_back(value);
         cases.push_back(-value);
     }
+    // NOLINTNEXTLINE(bugprone-random-generator-seed): fixed seed for reproducibility
     std::mt19937 rng(41267);
     for (int i = 0; i < 65536; ++i)
+    {
         cases.push_back(scalars::bit_cast<float>(static_cast<uint32_t>(rng())));
+    }
     cases.resize((cases.size() + S::size - 1) / S::size * S::size, 0.f);
     std::array<T, S::size> output;
     for (std::size_t offset = 0; offset < cases.size(); offset += S::size)
@@ -135,18 +146,23 @@ TYPED_TEST(SimdReduced, NarrowingMidpointsAndExceptionalValues)
             {
                 ASSERT_TRUE(std::isnan(static_cast<float>(output[i])));
                 if constexpr (std::is_same_v<T, scalars::bfloat16>)
+                {
                     ASSERT_EQ(output[i].x, 0x7fc0);
+                }
             }
             else
+            {
                 ASSERT_EQ(output[i].x, expected.x) << "input=" << cases[offset + i];
+            }
         }
     }
 }
 
-TYPED_TEST(SimdReduced, ArithmeticAndFloatAccumulation)
+TYPED_TEST(simd_reduced, ArithmeticAndFloatAccumulation)
 {
-    using T = TypeParam;
-    using S = simd<T>;
+    using T = TypeParam;  // NOLINT(readability-identifier-naming)
+    using S = simd<T>;    // NOLINT(readability-identifier-naming)
+    // NOLINTNEXTLINE(bugprone-random-generator-seed): fixed seed for reproducibility
     std::mt19937                          rng(87291);
     std::uniform_real_distribution<float> dist(-5, 5);
     std::array<T, S::size>                x, y, z, out;
@@ -189,20 +205,24 @@ TYPED_TEST(SimdReduced, ArithmeticAndFloatAccumulation)
     // For bf16, 256 + 1 cannot be represented as a stored bf16 result.
     x.fill(T(std::is_same_v<T, scalars::half> ? 10000.f : 1.f));
     if constexpr (std::is_same_v<T, scalars::bfloat16>)
+    {
         x[0] = T(256.f);
+    }
     const float expected =
         std::is_same_v<T, scalars::half> ? 10000.f * S::size : 256.f + S::size - 1;
     EXPECT_EQ(S::accumulate(S::loadu(x.data())), expected);
     for (int i = 0; i < S::size; ++i)
+    {
         x[i] = T(float(i - S::half_size));
+    }
     expect_value(S::hmin(S::loadu(x.data())), x.front());
     expect_value(S::hmax(S::loadu(x.data())), x.back());
 }
 
-TYPED_TEST(SimdReduced, MasksComparisonsAndBitPreservingSelect)
+TYPED_TEST(simd_reduced, MasksComparisonsAndBitPreservingSelect)
 {
-    using T = TypeParam;
-    using S = simd<T>;
+    using T = TypeParam;  // NOLINT(readability-identifier-naming)
+    using S = simd<T>;    // NOLINT(readability-identifier-naming)
     std::array<T, S::size>                 x, y, out;
     std::array<typename S::int_t, S::size> mask;
     const T nan = from_bits<T>(std::is_same_v<T, scalars::half> ? 0x7e35 : 0x7fc5);
@@ -212,10 +232,14 @@ TYPED_TEST(SimdReduced, MasksComparisonsAndBitPreservingSelect)
         y[i] = T(float(2 - i % 4));
     }
     const auto a = S::loadu(x.data()), b = S::loadu(y.data());
+// NOLINTBEGIN(bugprone-macro-parentheses): `name` and `op` substitute an
+// identifier and an operator token, not an expression, so they cannot be
+// parenthesized.
 #define CHECK_COMPARE(name, op)                                                                    \
     S::storeu(S::name(a, b), mask.data());                                                         \
     for (int i = 0; i < S::size; ++i)                                                              \
         EXPECT_EQ(mask[i], (static_cast<float>(x[i]) op static_cast<float>(y[i])) ? 0xffff : 0);
+    // NOLINTEND(bugprone-macro-parentheses)
     CHECK_COMPARE(eq, ==)
     CHECK_COMPARE(neq, !=)
     CHECK_COMPARE(gt, >)
@@ -226,57 +250,81 @@ TYPED_TEST(SimdReduced, MasksComparisonsAndBitPreservingSelect)
     const auto m = S::neq(a, b);
     S::storeu(S::if_else(m, a, b), out.data());
     for (int i = 0; i < S::size; ++i)
+    {
         EXPECT_EQ(out[i].x, (static_cast<float>(x[i]) != static_cast<float>(y[i]) ? x[i] : y[i]).x);
+    }
     S::storeu(S::not_mask(S::not_mask(m)), mask.data());
     const auto loaded = S::load(mask.data());
     S::store(S::xor_mask(loaded, m), mask.data());
     for (auto bits : mask)
+    {
         EXPECT_EQ(bits, 0);
+    }
     S::storeu(S::and_mask(m, S::not_mask(m)), mask.data());
     for (auto bits : mask)
+    {
         EXPECT_EQ(bits, 0);
+    }
     S::storeu(S::or_mask(m, S::not_mask(m)), mask.data());
     for (auto bits : mask)
+    {
         EXPECT_EQ(bits, 0xffff);
+    }
     S::storeu(S::set(typename S::int_t(1)), mask.data());
     for (auto bits : mask)
+    {
         EXPECT_EQ(bits, 0xffff);
+    }
 }
 
-TYPED_TEST(SimdReduced, SignedZerosNaNsAndMinMax)
+TYPED_TEST(simd_reduced, SignedZerosNaNsAndMinMax)
 {
-    using T = TypeParam;
-    using S = simd<T>;
+    using T = TypeParam;  // NOLINT(readability-identifier-naming)
+    using S = simd<T>;    // NOLINT(readability-identifier-naming)
     std::array<T, S::size> out;
     const auto             plus = S::set(T(0.f)), minus = S::set(from_bits<T>(0x8000));
     S::storeu(S::min(plus, minus), out.data());
     for (auto v : out)
+    {
         EXPECT_EQ(v.x, 0x8000);
+    }
     S::storeu(S::max(minus, plus), out.data());
     for (auto v : out)
+    {
         EXPECT_EQ(v.x, 0);
+    }
     EXPECT_EQ(S::hmin(minus).x, 0x8000);
     EXPECT_EQ(S::hmax(minus).x, 0x8000);
     const T nan = from_bits<T>(std::is_same_v<T, scalars::half> ? 0xfe35 : 0xffc5);
     S::storeu(S::neg(S::set(nan)), out.data());
     for (auto v : out)
+    {
         EXPECT_EQ(v.x, (nan.x ^ 0x8000));
+    }
     S::storeu(S::fabs(S::set(nan)), out.data());
     for (auto v : out)
+    {
         EXPECT_EQ(v.x, (nan.x & 0x7fff));
+    }
     S::storeu(S::signcopy(S::set(nan), plus), out.data());
     for (auto v : out)
+    {
         EXPECT_EQ(v.x, (nan.x & 0x7fff));
+    }
     for (bool left : {false, true})
     {
         auto a = left ? S::set(nan) : S::set(1.f);
         auto b = left ? S::set(1.f) : S::set(nan);
         S::storeu(S::min(a, b), out.data());
         for (auto v : out)
+        {
             EXPECT_TRUE(std::isnan(static_cast<float>(v)));
+        }
         S::storeu(S::max(a, b), out.data());
         for (auto v : out)
+        {
             EXPECT_TRUE(std::isnan(static_cast<float>(v)));
+        }
     }
     out.fill(T(1.f));
     out[S::size / 2] = nan;
@@ -284,30 +332,42 @@ TYPED_TEST(SimdReduced, SignedZerosNaNsAndMinMax)
     EXPECT_TRUE(std::isnan(static_cast<float>(S::hmax(S::loadu(out.data())))));
     S::storeu(S::invsqrt(plus), out.data());
     for (auto v : out)
+    {
         EXPECT_EQ(static_cast<float>(v), std::numeric_limits<float>::infinity());
+    }
     S::storeu(S::invsqrt(S::set(std::numeric_limits<float>::infinity())), out.data());
     for (auto v : out)
+    {
         EXPECT_EQ(v.x, 0);
+    }
 }
 
-TYPED_TEST(SimdReduced, MemoryTailsBroadcastAndGatherScatter)
+TYPED_TEST(simd_reduced, MemoryTailsBroadcastAndGatherScatter)
 {
-    using T = TypeParam;
-    using S = simd<T>;
+    using T = TypeParam;  // NOLINT(readability-identifier-naming)
+    using S = simd<T>;    // NOLINT(readability-identifier-naming)
     alignas(64) std::array<T, S::size + 2> input, out;
     for (int i = 0; i < S::size + 2; ++i)
+    {
         input[i] = from_bits<T>(static_cast<uint16_t>(i * 719));
+    }
     S::prefetch(input.data());
     S::copy(input.data() + 1, out.data());
     for (int i = 0; i < S::size; ++i)
+    {
         EXPECT_EQ(out[i].x, input[i + 1].x);
+    }
     S::store(S::load(input.data()), out.data());
     for (int i = 0; i < S::size; ++i)
+    {
         EXPECT_EQ(out[i].x, input[i].x);
+    }
     S::storeu(S::setzero(), nullptr, 0);
     S::storeu(S::loadu(nullptr, 0), out.data());
     for (int i = 0; i < S::size; ++i)
+    {
         EXPECT_EQ(out[i].x, 0);
+    }
     for (int count = 0; count <= S::size; ++count)
     {
         // An exact allocation makes an inactive-lane overread visible to ASan.
@@ -317,12 +377,18 @@ TYPED_TEST(SimdReduced, MemoryTailsBroadcastAndGatherScatter)
         S::storeu(packet, out.data() + 1, count);
         EXPECT_EQ(out[0].x, 0x4567);
         for (int i = 0; i < count; ++i)
+        {
             EXPECT_EQ(out[i + 1].x, input[i].x);
+        }
         for (int i = count + 1; i < S::size + 2; ++i)
+        {
             EXPECT_EQ(out[i].x, 0x4567);
+        }
         S::storeu(packet, out.data());
         for (int i = count; i < S::size; ++i)
+        {
             EXPECT_EQ(out[i].x, 0);
+        }
     }
     std::array<typename S::simd_t, 4> broadcast;
     S::broadcast(input.data(), broadcast[0], broadcast[1], broadcast[2], broadcast[3]);
@@ -330,26 +396,38 @@ TYPED_TEST(SimdReduced, MemoryTailsBroadcastAndGatherScatter)
     {
         S::storeu(broadcast[k], out.data());
         for (int i = 0; i < S::size; ++i)
+        {
             EXPECT_EQ(out[i].x, input[k].x);
+        }
     }
     S::storeu(S::ploadquad(input.data()), out.data());
     for (int i = 0; i < S::size; ++i)
+    {
         EXPECT_EQ(out[i].x, input[i / 4].x);
+    }
     std::array<int, S::size> indices;
     for (int i = 0; i < S::size; ++i)
+    {
         indices[i] = S::size - 1 - i;
+    }
     S::storeu(S::gather(input.data() + S::size - 1, -1), out.data());
     for (int i = 0; i < S::size; ++i)
+    {
         EXPECT_EQ(out[i].x, input[S::size - 1 - i].x);
+    }
     const auto gathered = S::gather(input.data(), indices.data());
     S::scatter(gathered, indices.data(), out.data());
     for (int i = 0; i < S::size; ++i)
+    {
         EXPECT_EQ(out[i].x, input[i].x);
+    }
     std::array<T, 2 * S::size> strided;
     S::scatter(gathered, 2, strided.data());
     S::storeu(S::gather(strided.data(), 2), out.data());
     for (int i = 0; i < S::size; ++i)
+    {
         EXPECT_EQ(out[i].x, input[indices[i]].x);
+    }
     indices.fill(0);
     S::scatter(gathered, indices.data(), out.data());
     EXPECT_EQ(out[0].x, input[0].x);  // last logical lane wins
@@ -357,69 +435,93 @@ TYPED_TEST(SimdReduced, MemoryTailsBroadcastAndGatherScatter)
 
 template <class T, int Rows> void check_transpose()
 {
-    using S = simd<T>;
+    using S = simd<T>;  // NOLINT(readability-identifier-naming)
     std::array<T, Rows * S::size> values, output;
     typename S::simd_t            packets[Rows];
     for (int i = 0; i < Rows * S::size; ++i)
+    {
         values[i] = from_bits<T>(static_cast<uint16_t>(i * 191));
+    }
     for (int row = 0; row < Rows; ++row)
+    {
         packets[row] = S::loadu(values.data() + row * S::size);
+    }
     S::template ptranspose<Rows>(packets);
     for (int row = 0; row < Rows; ++row)
+    {
         S::storeu(packets[row], output.data() + row * S::size);
+    }
     for (int row = 0; row < Rows; ++row)
+    {
         for (int col = 0; col < S::size; ++col)
+        {
             EXPECT_EQ(output[col * Rows + row].x, values[row * S::size + col].x);
+        }
+    }
 }
 
-TYPED_TEST(SimdReduced, TransposeAndHalfWidthUtilities)
+TYPED_TEST(simd_reduced, TransposeAndHalfWidthUtilities)
 {
-    using T = TypeParam;
-    using S = simd<T>;
+    using T = TypeParam;  // NOLINT(readability-identifier-naming)
+    using S = simd<T>;    // NOLINT(readability-identifier-naming)
     check_transpose<T, S::size>();
     check_transpose<T, 4>();
     check_transpose<T, 2 * S::size>();
     std::array<T, S::size> x, out;
     for (int i = 0; i < S::size; ++i)
+    {
         x[i] = T(float(i));
+    }
     const auto a = S::loadu_half(x.data());
     const auto b = S::gather_half(x.data(), 2);
     S::scatter(S::add(a, b), 1, out.data());
     for (int i = 0; i < S::half_size; ++i)
+    {
         expect_value(out[i], T(float(i * 3)));
+    }
     const auto c = S::set(x.data() + 1);
     S::scatter(S::fma(a, b, c), 1, out.data());
     for (int i = 0; i < S::half_size; ++i)
+    {
         expect_value(out[i], T(float(i * i * 2 + 1)));
+    }
     S::scatter(S::predux_downto4(S::loadu(x.data())), 1, out.data());
     for (int i = 0; i < S::half_size; ++i)
+    {
         expect_value(out[i], T(float(i * 2 + S::half_size)));
+    }
     const auto f = S::load_float_pair(x.data());
     S::store_float_pair(f.low, f.high, out.data());
     for (int i = 0; i < S::size; ++i)
+    {
         EXPECT_EQ(out[i].x, x[i].x);
+    }
 }
 
 template <class T, class Op, class Ref>
 void check_math(const char* name, Op op, Ref ref, float lo, float hi)
 {
     SCOPED_TRACE(name);
-    using S = simd<T>;
+    using S = simd<T>;  // NOLINT(readability-identifier-naming)
     std::array<T, S::size> input, output;
     for (int trial = 0; trial < 16; ++trial)
     {
         for (int i = 0; i < S::size; ++i)
+        {
             input[i] = T(lo + (hi - lo) * float(trial * S::size + i) / float(16 * S::size - 1));
+        }
         S::storeu(op(S::loadu(input.data())), output.data());
         for (int i = 0; i < S::size; ++i)
+        {
             expect_value(output[i], T(ref(static_cast<float>(input[i]))), 2.f);
+        }
     }
 }
 
-TYPED_TEST(SimdReduced, CompleteRealMathSurface)
+TYPED_TEST(simd_reduced, CompleteRealMathSurface)
 {
-    using T = TypeParam;
-    using S = simd<T>;
+    using T = TypeParam;  // NOLINT(readability-identifier-naming)
+    using S = simd<T>;    // NOLINT(readability-identifier-naming)
 #define CHECK_MATH(name, expression, lo, hi)                                                       \
     check_math<T>(                                                                                 \
         #name, [](auto v) { return S::name(v); }, [](float x) { return expression; }, lo, hi);

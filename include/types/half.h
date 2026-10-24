@@ -9,8 +9,8 @@
 /// If you are writing a compute bound kernel, you can use the CUDA half
 /// intrinsics directly on the half type from device code.
 
-#include "detail/bit_cast.h"
-#include "detail/floating_point_utils.h"
+#include "common/bit_cast.h"
+#include "common/floating_point_utils.h"
 #include "scalars_macros.h"
 
 #if defined(__cplusplus)
@@ -42,7 +42,7 @@
 #endif
 
 #if (defined(SCALARS_CPU_CAPABILITY_AVX2) || defined(SCALARS_CPU_CAPABILITY_AVX512)) && !defined(__APPLE__)
-#include "detail/vec_half.h"
+#include "common/vec_half.h"
 #endif
 
 #if defined(__aarch64__) && !defined(__CUDACC__)

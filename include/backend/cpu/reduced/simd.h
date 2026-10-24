@@ -3,6 +3,7 @@
 #include <array>
 #include <cassert>
 #include <cmath>
+#include <cstddef>
 #include <cstdint>
 #include <cstring>
 #include <type_traits>
@@ -347,7 +348,7 @@ public:
     {
         simd_t out;
         for (int i = 0; i < size; ++i) {
-            out.bits[i] = from[i * stride].x;
+            out.bits[i] = from[static_cast<std::ptrdiff_t>(i) * stride].x;
         }
         return out;
     }
@@ -362,7 +363,7 @@ public:
     SCALARS_FORCE_INLINE static void scatter(simd_t from, int stride, value_t* to)
     {
         for (int i = 0; i < size; ++i) {
-            to[i * stride] = value_t(from.bits[i], value_t::from_bits());
+            to[static_cast<std::ptrdiff_t>(i) * stride] = value_t(from.bits[i], value_t::from_bits());
         }
     }
     SCALARS_FORCE_INLINE static void scatter(simd_t from, const int* indices, value_t* to)
@@ -418,7 +419,7 @@ public:
     {
         simd_half_t out;
         for (int i = 0; i < half_size; ++i) {
-            out.bits[i] = from[i * stride].x;
+            out.bits[i] = from[static_cast<std::ptrdiff_t>(i) * stride].x;
         }
         return out;
     }
@@ -455,7 +456,7 @@ public:
     SCALARS_FORCE_INLINE static void scatter(simd_half_t from, int stride, value_t* to)
     {
         for (int i = 0; i < half_size; ++i) {
-            to[i * stride] = value_t(from.bits[i], value_t::from_bits());
+            to[static_cast<std::ptrdiff_t>(i) * stride] = value_t(from.bits[i], value_t::from_bits());
         }
     }
 };
