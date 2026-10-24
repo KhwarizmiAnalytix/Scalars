@@ -149,13 +149,13 @@ template <class T> void check_matrix_scalar_extremes()
     EXPECT_NEAR((tiny_root.real() - tiny_root.imag()) / tiny_root.real(),
         T(0),
         std::numeric_limits<T>::epsilon() * 4);
-    const auto lower_branch = scalars::sqrt(C(T(-4), T(-0.0)));
+    const auto lower_branch = scalars::sqrt(c(T(-4), T(-0.0)));
     EXPECT_EQ(lower_branch.real(), T(0));
     EXPECT_EQ(lower_branch.imag(), T(-2));
-    EXPECT_EQ(scalars::abs(C(T(3), T(4))), T(5));
-    EXPECT_EQ(scalars::norm(C(T(3), T(4))), T(25));
-    EXPECT_EQ(scalars::conj(C(T(1), T(2))).imag(), T(-2));
-    EXPECT_FALSE(scalars::isfinite(C(maximum, std::numeric_limits<T>::infinity())));
+    EXPECT_EQ(scalars::abs(c(T(3), T(4))), T(5));
+    EXPECT_EQ(scalars::norm(c(T(3), T(4))), T(25));
+    EXPECT_EQ(scalars::conj(c(T(1), T(2))).imag(), T(-2));
+    EXPECT_FALSE(scalars::isfinite(c(maximum, std::numeric_limits<T>::infinity())));
 }
 
 TEST(ComplexMath, MatrixScalarExtremes)
