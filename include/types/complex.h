@@ -139,9 +139,9 @@ namespace scalars
 //
 //
 //
-// TODO(@zasdfgbnm): scalars::complex<scalars::Half> is not currently supported,
+// TODO(@zasdfgbnm): scalars::complex<scalars::half> is not currently supported,
 // because:
-//  - lots of members and functions of scalars::Half are not constexpr
+//  - lots of members and functions of scalars::half are not constexpr
 //  - thrust::complex only support float and double
 
 template <typename T> struct alignas(sizeof(T) * 2) complex
@@ -558,16 +558,16 @@ template <typename T> SCALARS_HOST_DEVICE complex<T> polar(const T& r, const T& 
 #endif
 }
 
-template <> struct alignas(4) complex<Half>
+template <> struct alignas(4) complex<half>
 {
-    Half real_;
-    Half imag_;
+    half real_;
+    half imag_;
 
     // Constructors
     complex() = default;
-    // Half constructor is not constexpr so the following constructor can't
+    // half constructor is not constexpr so the following constructor can't
     // be constexpr
-    SCALARS_HOST_DEVICE explicit inline complex(const Half& real, const Half& imag)
+    SCALARS_HOST_DEVICE explicit inline complex(const half& real, const half& imag)
         : real_(real), imag_(imag)
     {
     }
@@ -579,24 +579,24 @@ template <> struct alignas(4) complex<Half>
     // Conversion operator
     inline SCALARS_HOST_DEVICE operator scalars::complex<float>() const { return {real_, imag_}; }
 
-    constexpr SCALARS_HOST_DEVICE Half real() const { return real_; }
-    constexpr SCALARS_HOST_DEVICE Half imag() const { return imag_; }
+    constexpr SCALARS_HOST_DEVICE half real() const { return real_; }
+    constexpr SCALARS_HOST_DEVICE half imag() const { return imag_; }
 
-    SCALARS_HOST_DEVICE complex<Half>& operator+=(const complex<Half>& other)
+    SCALARS_HOST_DEVICE complex<half>& operator+=(const complex<half>& other)
     {
         real_ = static_cast<float>(real_) + static_cast<float>(other.real_);
         imag_ = static_cast<float>(imag_) + static_cast<float>(other.imag_);
         return *this;
     }
 
-    SCALARS_HOST_DEVICE complex<Half>& operator-=(const complex<Half>& other)
+    SCALARS_HOST_DEVICE complex<half>& operator-=(const complex<half>& other)
     {
         real_ = static_cast<float>(real_) - static_cast<float>(other.real_);
         imag_ = static_cast<float>(imag_) - static_cast<float>(other.imag_);
         return *this;
     }
 
-    SCALARS_HOST_DEVICE complex<Half>& operator*=(const complex<Half>& other)
+    SCALARS_HOST_DEVICE complex<half>& operator*=(const complex<half>& other)
     {
         auto a = static_cast<float>(real_);
         auto b = static_cast<float>(imag_);

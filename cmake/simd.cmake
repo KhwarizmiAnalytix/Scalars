@@ -47,6 +47,13 @@ option(SCALARS_ENABLE_SVML "Enable Intel SVML short vector math library for Scal
 mark_as_advanced(SCALARS_ENABLE_SVML)
 option(SCALARS_ENABLE_MKL "Enable Intel MKL VML vector math backend (x86 only, static link)" OFF)
 mark_as_advanced(SCALARS_ENABLE_MKL)
+option(SCALARS_ENABLE_SLEEF
+       "Enable SLEEF SIMD math library (SSE/AVX/AVX2/AVX512/NEON); mutually exclusive with SVML"
+       OFF
+)
+mark_as_advanced(SCALARS_ENABLE_SLEEF)
+option(SCALARS_ENABLE_ACCELERATE "Enable Apple Accelerate vForce on AArch64 NEON" OFF)
+mark_as_advanced(SCALARS_ENABLE_ACCELERATE)
 
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_LIST_DIR}/packages")
 
@@ -139,14 +146,14 @@ if(_scalars_simd_is_x86)
     if(MSVC)
         set(CMAKE_REQUIRED_FLAGS "/arch:AVX2 /D__F16C__")
     else()
-        set(CMAKE_REQUIRED_FLAGS "-mavx2 -mf16c")
+        set(CMAKE_REQUIRED_FLAGS "-mavx2 -mf16c -mfma")
     endif()
     check_cxx_source_compiles(
         "#include <immintrin.h>
          int main() {
            __m256i a = _mm256_set1_epi8(1);
            _mm256_add_epi8(a, a);
-           __m256i x; _mm256_extract_epi64(x, 0);
+           __m256 x = _mm256_set1_ps(1.f); _mm256_fmadd_ps(x, x, x);
            return 0;
          }"
         SCALARS_COMPILER_SUPPORTS_AVX2
@@ -164,7 +171,7 @@ if(_scalars_simd_is_x86)
     if(MSVC)
         set(CMAKE_REQUIRED_FLAGS "/arch:AVX512 /D__F16C__")
     else()
-        set(CMAKE_REQUIRED_FLAGS "-mavx512f -mavx512dq -mavx512vl -mavx512bw -mavx512cd -mf16c")
+        set(CMAKE_REQUIRED_FLAGS "-mavx512f -mavx512dq -mavx512vl -mavx512bw -mavx512cd -mf16c -mfma")
     endif()
     check_cxx_source_compiles(
         "#if defined(_MSC_VER)
@@ -234,6 +241,58 @@ if(_scalars_simd_is_aarch64)
         endif()
     endif()
     cmake_pop_check_state()
+
+    # Probe Apple Accelerate vForce (vvexpf/vvsinf/vvcosf/vvlogf) -- ported from
+    # Vectorization's include/Cmake/utils.cmake. include/backend/cpu/neon/svml.h
+    # reuses the same wrappers for SVE (fixed 128-bit lane layout), so either tier
+    # triggers the probe. When Accelerate is absent (Linux/Android AArch64, old SDK,
+    # non-Apple toolchain) SLEEF is auto-enabled so the caller never has to set the
+    # flag manually.
+    if(_scalars_has_neon OR _scalars_has_sve)
+        if(APPLE AND NOT SCALARS_ENABLE_SLEEF)
+            cmake_push_check_state(RESET)
+            set(CMAKE_REQUIRED_LIBRARIES "-framework Accelerate")
+            check_cxx_source_compiles(
+                "#include <Accelerate/Accelerate.h>
+                 int main() {
+                   const int n = 4;
+                   float x[4] = {1.f, 2.f, 3.f, 4.f};
+                   float y[4];
+                   vvexpf(y, x, &n);
+                   vvsinf(y, x, &n);
+                   vvcosf(y, x, &n);
+                   vvlogf(y, x, &n);
+                   return 0;
+                 }"
+                SCALARS_COMPILER_SUPPORTS_ACCELERATE
+            )
+            cmake_pop_check_state()
+            if(SCALARS_COMPILER_SUPPORTS_ACCELERATE)
+                message(STATUS "Scalars: Accelerate vForce available -- "
+                               "auto-enabling SCALARS_ENABLE_ACCELERATE."
+                )
+                set(SCALARS_ENABLE_ACCELERATE ON
+                    CACHE BOOL "Enable Apple Accelerate vForce on AArch64 NEON (auto-enabled)" FORCE
+                )
+            else()
+                message(STATUS "Scalars: Accelerate vForce unavailable -- "
+                               "auto-enabling SCALARS_ENABLE_SLEEF."
+                )
+                set(SCALARS_ENABLE_SLEEF ON
+                    CACHE BOOL "Enable SLEEF SIMD math library (auto-enabled: Accelerate vForce unavailable)"
+                    FORCE
+                )
+            endif()
+        elseif(NOT APPLE AND NOT SCALARS_ENABLE_SLEEF)
+            message(STATUS "Scalars: non-Apple AArch64 detected -- Accelerate vForce is "
+                           "unavailable, auto-enabling SCALARS_ENABLE_SLEEF."
+            )
+            set(SCALARS_ENABLE_SLEEF ON
+                CACHE BOOL "Enable SLEEF SIMD math library (auto-enabled: Accelerate unavailable on non-Apple)"
+                FORCE
+            )
+        endif()
+    endif()
 endif()
 
 if(NOT SCALARS_CPU_BACKEND STREQUAL "no" AND NOT _scalars_has_sse AND NOT _scalars_has_avx
@@ -254,6 +313,33 @@ set(SCALARS_HAS_AVX2 ${_scalars_has_avx2})
 set(SCALARS_HAS_AVX512 ${_scalars_has_avx512})
 set(SCALARS_HAS_NEON ${_scalars_has_neon})
 set(SCALARS_HAS_SVE ${_scalars_has_sve})
+
+# Build/link ThirdParty SLEEF (vendored submodule) when requested, or auto-enabled
+# above for a NEON/SVE host without Apple Accelerate. Ported from Vectorization's
+# include/CMakeLists.txt; include/backend/cpu/{sse,avx,avx512,neon}/svml.h and
+# backend/cpu/x86/math_fallback.h branch on SCALARS_HAS_SLEEF.
+set(SCALARS_HAS_SLEEF 0)
+if(SCALARS_ENABLE_SLEEF)
+    include("${CMAKE_CURRENT_LIST_DIR}/scalars_dependencies.cmake")
+    scalars_setup_sleef()
+    if(TARGET Sleef::sleef)
+        set(SCALARS_HAS_SLEEF 1)
+    endif()
+endif()
+
+# Apple Accelerate vForce is a system framework -- no ThirdParty build needed,
+# just a link flag applied in scalars_apply_simd_compile_definitions() below.
+set(SCALARS_HAS_ACCELERATE 0)
+if(SCALARS_ENABLE_ACCELERATE)
+    if(NOT APPLE)
+        message(WARNING "SCALARS_ENABLE_ACCELERATE=ON is only supported on Apple platforms; disabling.")
+        set(SCALARS_ENABLE_ACCELERATE OFF
+            CACHE BOOL "Enable Apple Accelerate vForce on AArch64 NEON" FORCE
+        )
+    else()
+        set(SCALARS_HAS_ACCELERATE 1)
+    endif()
+endif()
 
 # 1 when any CPU SIMD backend/cpu/* tree is active (GPU does not affect this) --
 # gates backend/simd.h's system-intrinsic-header include block.
@@ -292,6 +378,8 @@ function(scalars_apply_simd_compile_definitions target)
                SCALARS_HAS_SVE=${SCALARS_HAS_SVE}
                SCALARS_HAS_SVML=${SCALARS_HAS_SVML}
                SCALARS_HAS_MKL=${SCALARS_HAS_MKL}
+               SCALARS_HAS_SLEEF=${SCALARS_HAS_SLEEF}
+               SCALARS_HAS_ACCELERATE=${SCALARS_HAS_ACCELERATE}
                SCALARS_VECTORIZED=${SCALARS_VECTORIZED}
                SCALARS_PACKET_SIZE=${SCALARS_PACKET_SIZE}
     )
@@ -306,6 +394,12 @@ function(scalars_apply_simd_compile_definitions target)
     endif()
     if(SCALARS_HAS_MKL AND TARGET MKL::MKL)
         target_link_libraries(${target} PUBLIC MKL::MKL)
+    endif()
+    if(SCALARS_HAS_SLEEF AND TARGET Sleef::sleef)
+        target_link_libraries(${target} PUBLIC Sleef::sleef)
+    endif()
+    if(SCALARS_HAS_ACCELERATE)
+        target_link_libraries(${target} PUBLIC "-framework Accelerate")
     endif()
     if(SCALARS_SIMD_COMPILER_FLAGS)
         if(MSVC)

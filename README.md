@@ -137,6 +137,63 @@ int main() {
 }
 ```
 
+## CPU SIMD
+
+Include `<backend/simd.h>` for `simd<float>`, `simd<double>`,
+`simd<scalars::half>`, and `simd<scalars::bfloat16>`. Select a CPU backend with
+`-DSCALARS_CPU_BACKEND=sse|avx|avx2|avx512|neon|sve`; `no` leaves the host SIMD
+interface unavailable. The existing SVE path requires a fixed 128-bit vector
+length and reuses NEON packets.
+
+Transcendental math (`exp`, `log`, `sin`, `pow`, ...) is provided by whichever
+vector math library is enabled, in priority order per architecture: on x86, Intel
+SVML (`-DSCALARS_ENABLE_SVML=ON`) or Intel MKL VML (`-DSCALARS_ENABLE_MKL=ON`),
+then the bundled [SLEEF](https://sleef.org) (`-DSCALARS_ENABLE_SLEEF=ON`, built
+from the `ThirdParty/sleef` submodule); on AArch64 NEON/SVE, Apple Accelerate
+vForce (`-DSCALARS_ENABLE_ACCELERATE=ON`) then SLEEF. When Apple Accelerate is
+unavailable on a NEON/SVE host and SLEEF has not been explicitly requested, or
+when a non-Apple AArch64 host is detected, SLEEF is auto-enabled so the library
+never falls further back than it needs to. Without any of these, transcendental
+functions fall back to scalar `std::` calls applied per lane.
+
+half and bfloat16 use dense 16-bit storage: 8 lanes on SSE/NEON, 16 on AVX/AVX2,
+and 32 on AVX-512. Following the architecture of PyTorch's CPU reduced-precision
+vectors, each packet widens into two float packets, computes in float, then
+rounds back to the stored format. half uses hardware conversion where available
+and an SSE2 software SIMD conversion otherwise. Bfloat16 conversion uses
+round-to-nearest-even and canonicalizes narrowed NaNs to `0x7fc0`.
+
+The reduced types provide the float backend's real arithmetic/math surface,
+comparisons, masks, selection, gather/scatter, horizontal reductions, broadcast,
+transpose, and half-width packet utilities. `accumulate` returns float and keeps
+float intermediates. Reduced `min`/`max` and their horizontal variants propagate
+NaNs and choose `-0` for minimum zero ties, `+0` for maximum zero ties. Masks use
+one `uint16_t` per lane: all bits set for true, zero for false. Bitwise sign,
+memory, selection, and permutation operations preserve stored NaN payloads.
+`ploadquad` repeats each input four times. `ptranspose<N>` transposes an
+`N * size` block and repacks the result into `N` packets; one dimension must
+divide the other. The legacy `predux_downto4` helper adds the lower and upper
+halves, returning `half_size` reduced lanes.
+
+`loadu(ptr, count)` zero-fills inactive lanes, and `storeu(packet, ptr, count)`
+writes only active lanes, for `0 <= count <= size`. The full-packet and
+half-width memory operations accept scalar-aligned addresses. For kernels that
+explicitly retain float intermediates across several operations, use
+`to_float_pair` / `from_float_pair` or `load_float_pair` / `store_float_pair`;
+the returned pair has `low` and `high` float packets. These helpers round only
+when narrowing, so their results can differ from chaining reduced operations.
+
+Math functions reuse the selected float backend/provider, including its accuracy
+limits and scalar mappings. X86 builds without SVML/SLEEF use standard-library
+scalar mappings for transcendental functions. FMA follows the float backend's
+fused/nonfused behavior and narrows once. The numerical contract assumes the
+default floating-point rounding environment. GPU reduced specializations and
+complex SIMD packets are not implemented by this CPU extension.
+
+Reference architecture:
+[PyTorch reduced CPU packets](https://github.com/pytorch/pytorch/blob/main/aten/src/ATen/cpu/vec/vec256/vec256_16bit_float.h)
+and [widened functional helpers](https://github.com/pytorch/pytorch/blob/main/aten/src/ATen/cpu/vec/functional_bfloat16.h).
+
 ## Scope and limitations
 
 - Portable CPU implementation; **CUDA/HIP kernels are not implemented yet**. This release does not claim host/device parity with PyTorch.
@@ -150,8 +207,8 @@ int main() {
 
 ## Reference code investigated
 
-- https://github.com/pytorch/pytorch/blob/main/torch/headeronly/util/Half.h
-- https://github.com/pytorch/pytorch/blob/main/torch/headeronly/util/BFloat16.h
+- https://github.com/pytorch/pytorch/blob/main/torch/headeronly/util/half.h
+- https://github.com/pytorch/pytorch/blob/main/torch/headeronly/util/bfloat16.h
 - https://github.com/pytorch/pytorch/blob/main/torch/headeronly/util/complex.h
 - https://github.com/pytorch/pytorch/blob/main/c10/util/complex_math.h
 - https://github.com/pytorch/pytorch/blob/main/c10/util/TypeCast.h

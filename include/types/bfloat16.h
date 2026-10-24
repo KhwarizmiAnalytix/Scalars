@@ -25,15 +25,15 @@
 namespace scalars
 {
 
-struct alignas(2) BFloat16
+struct alignas(2) bfloat16
 {
     uint16_t x;
 
     // HIP wants __host__ __device__ tag, CUDA does not
 #if defined(SCALARS_USE_HIP) && defined(__HIPCC__)
-    SCALARS_HOST_DEVICE BFloat16() = default;
+    SCALARS_HOST_DEVICE bfloat16() = default;
 #else
-    BFloat16() = default;
+    bfloat16() = default;
 #endif
 
     struct from_bits_t
@@ -41,22 +41,22 @@ struct alignas(2) BFloat16
     };
     static constexpr SCALARS_HOST_DEVICE from_bits_t from_bits() { return from_bits_t(); }
 
-    constexpr SCALARS_HOST_DEVICE BFloat16(unsigned short bits, from_bits_t /*unused*/) : x(bits) {}
-    /* implicit */ inline SCALARS_HOST_DEVICE BFloat16(float value);
+    constexpr SCALARS_HOST_DEVICE bfloat16(unsigned short bits, from_bits_t /*unused*/) : x(bits) {}
+    /* implicit */ inline SCALARS_HOST_DEVICE bfloat16(float value);
     inline SCALARS_HOST_DEVICE                operator float() const;
 
 #if defined(__CUDACC__) && (!defined(SCALARS_USE_HIP) || (SCALARS_HIP_VERSION >= 702))
-    inline SCALARS_HOST_DEVICE          BFloat16(const __nv_bfloat16& value);
+    inline SCALARS_HOST_DEVICE          bfloat16(const __nv_bfloat16& value);
     explicit inline SCALARS_HOST_DEVICE operator __nv_bfloat16() const;
 #endif
 
 #if defined(SYCL_EXT_ONEAPI_BFLOAT16_MATH_FUNCTIONS)
-    inline SCALARS_HOST_DEVICE          BFloat16(const sycl::ext::oneapi::bfloat16& value);
+    inline SCALARS_HOST_DEVICE          bfloat16(const sycl::ext::oneapi::bfloat16& value);
     explicit inline SCALARS_HOST_DEVICE operator sycl::ext::oneapi::bfloat16() const;
 #endif
 };
 
-inline std::ostream& operator<<(std::ostream& out, const BFloat16& value)
+inline std::ostream& operator<<(std::ostream& out, const bfloat16& value)
 {
     out << (float)value;
     return out;
@@ -124,14 +124,14 @@ inline SCALARS_HOST_DEVICE uint16_t round_to_nearest_even(float src)
 
 }  // namespace detail
 
-//-------- the following is copied from c10/util/BFloat16-inl.h ---------//
+//-------- the following is copied from c10/util/bfloat16-inl.h ---------//
 SCALARS_CLANG_DIAGNOSTIC_PUSH()
 #if SCALARS_CLANG_HAS_WARNING("-Wimplicit-int-float-conversion")
 SCALARS_CLANG_DIAGNOSTIC_IGNORE("-Wimplicit-int-float-conversion")
 #endif
 
 /// Constructors
-inline SCALARS_HOST_DEVICE BFloat16::BFloat16(float value)
+inline SCALARS_HOST_DEVICE bfloat16::bfloat16(float value)
     :
 #if defined(__CUDACC__) &&                                                                         \
     (!defined(SCALARS_USE_HIP) && defined(__CUDA_ARCH__) && __CUDA_ARCH__ >= 800 ||                       \
@@ -147,7 +147,7 @@ inline SCALARS_HOST_DEVICE BFloat16::BFloat16(float value)
 }
 
 /// Implicit conversions
-inline SCALARS_HOST_DEVICE BFloat16::operator float() const
+inline SCALARS_HOST_DEVICE bfloat16::operator float() const
 {
 #if defined(__CUDACC__) && (!defined(SCALARS_USE_HIP) || (SCALARS_HIP_VERSION >= 702))
     return __bfloat162float(*reinterpret_cast<const __nv_bfloat16*>(&x));
@@ -159,22 +159,22 @@ inline SCALARS_HOST_DEVICE BFloat16::operator float() const
 }
 
 #if defined(__CUDACC__) && (!defined(SCALARS_USE_HIP) || (SCALARS_HIP_VERSION >= 702))
-inline SCALARS_HOST_DEVICE BFloat16::BFloat16(const __nv_bfloat16& value)
+inline SCALARS_HOST_DEVICE bfloat16::bfloat16(const __nv_bfloat16& value)
 {
     x = *reinterpret_cast<const unsigned short*>(&value);
 }
-inline SCALARS_HOST_DEVICE BFloat16::operator __nv_bfloat16() const
+inline SCALARS_HOST_DEVICE bfloat16::operator __nv_bfloat16() const
 {
     return *reinterpret_cast<const __nv_bfloat16*>(&x);
 }
 #endif
 
 #if defined(SYCL_EXT_ONEAPI_BFLOAT16_MATH_FUNCTIONS)
-inline SCALARS_HOST_DEVICE BFloat16::BFloat16(const sycl::ext::oneapi::bfloat16& value)
+inline SCALARS_HOST_DEVICE bfloat16::bfloat16(const sycl::ext::oneapi::bfloat16& value)
 {
     x = *reinterpret_cast<const unsigned short*>(&value);
 }
-inline SCALARS_HOST_DEVICE BFloat16::operator sycl::ext::oneapi::bfloat16() const
+inline SCALARS_HOST_DEVICE bfloat16::operator sycl::ext::oneapi::bfloat16() const
 {
     return *reinterpret_cast<const sycl::ext::oneapi::bfloat16*>(&x);
 }
@@ -183,7 +183,7 @@ inline SCALARS_HOST_DEVICE BFloat16::operator sycl::ext::oneapi::bfloat16() cons
 // CUDA intrinsics
 
 #if defined(__CUDACC__) || defined(__HIPCC__)
-inline SCALARS_DEVICE BFloat16 __ldg(const BFloat16* ptr)
+inline SCALARS_DEVICE bfloat16 __ldg(const bfloat16* ptr)
 {
 #if !defined(SCALARS_USE_HIP) && defined(__CUDA_ARCH__) && __CUDA_ARCH__ >= 800
     return __ldg(reinterpret_cast<const __nv_bfloat16*>(ptr));
@@ -195,69 +195,69 @@ inline SCALARS_DEVICE BFloat16 __ldg(const BFloat16* ptr)
 
 /// Arithmetic
 
-inline SCALARS_HOST_DEVICE BFloat16 operator+(const BFloat16& a, const BFloat16& b)
+inline SCALARS_HOST_DEVICE bfloat16 operator+(const bfloat16& a, const bfloat16& b)
 {
     return static_cast<float>(a) + static_cast<float>(b);
 }
 
-inline SCALARS_HOST_DEVICE BFloat16 operator-(const BFloat16& a, const BFloat16& b)
+inline SCALARS_HOST_DEVICE bfloat16 operator-(const bfloat16& a, const bfloat16& b)
 {
     return static_cast<float>(a) - static_cast<float>(b);
 }
 
-inline SCALARS_HOST_DEVICE BFloat16 operator*(const BFloat16& a, const BFloat16& b)
+inline SCALARS_HOST_DEVICE bfloat16 operator*(const bfloat16& a, const bfloat16& b)
 {
     return static_cast<float>(a) * static_cast<float>(b);
 }
 
-inline SCALARS_HOST_DEVICE BFloat16 operator/(
-    const BFloat16& a, const BFloat16& b) __ubsan_ignore_float_divide_by_zero__
+inline SCALARS_HOST_DEVICE bfloat16 operator/(
+    const bfloat16& a, const bfloat16& b) __ubsan_ignore_float_divide_by_zero__
 {
     return static_cast<float>(a) / static_cast<float>(b);
 }
 
-inline SCALARS_HOST_DEVICE BFloat16 operator-(const BFloat16& a)
+inline SCALARS_HOST_DEVICE bfloat16 operator-(const bfloat16& a)
 {
     return -static_cast<float>(a);
 }
 
-inline SCALARS_HOST_DEVICE BFloat16& operator+=(BFloat16& a, const BFloat16& b)
+inline SCALARS_HOST_DEVICE bfloat16& operator+=(bfloat16& a, const bfloat16& b)
 {
     a = a + b;
     return a;
 }
 
-inline SCALARS_HOST_DEVICE BFloat16& operator-=(BFloat16& a, const BFloat16& b)
+inline SCALARS_HOST_DEVICE bfloat16& operator-=(bfloat16& a, const bfloat16& b)
 {
     a = a - b;
     return a;
 }
 
-inline SCALARS_HOST_DEVICE BFloat16& operator*=(BFloat16& a, const BFloat16& b)
+inline SCALARS_HOST_DEVICE bfloat16& operator*=(bfloat16& a, const bfloat16& b)
 {
     a = a * b;
     return a;
 }
 
-inline SCALARS_HOST_DEVICE BFloat16& operator/=(BFloat16& a, const BFloat16& b)
+inline SCALARS_HOST_DEVICE bfloat16& operator/=(bfloat16& a, const bfloat16& b)
 {
     a = a / b;
     return a;
 }
 
-inline SCALARS_HOST_DEVICE BFloat16& operator|(BFloat16& a, const BFloat16& b)
+inline SCALARS_HOST_DEVICE bfloat16& operator|(bfloat16& a, const bfloat16& b)
 {
     a.x = a.x | b.x;
     return a;
 }
 
-inline SCALARS_HOST_DEVICE BFloat16& operator^(BFloat16& a, const BFloat16& b)
+inline SCALARS_HOST_DEVICE bfloat16& operator^(bfloat16& a, const bfloat16& b)
 {
     a.x = a.x ^ b.x;
     return a;
 }
 
-inline SCALARS_HOST_DEVICE BFloat16& operator&(BFloat16& a, const BFloat16& b)
+inline SCALARS_HOST_DEVICE bfloat16& operator&(bfloat16& a, const bfloat16& b)
 {
     a.x = a.x & b.x;
     return a;
@@ -265,189 +265,189 @@ inline SCALARS_HOST_DEVICE BFloat16& operator&(BFloat16& a, const BFloat16& b)
 
 /// Arithmetic with floats
 
-inline SCALARS_HOST_DEVICE float operator+(BFloat16 a, float b)
+inline SCALARS_HOST_DEVICE float operator+(bfloat16 a, float b)
 {
     return static_cast<float>(a) + b;
 }
-inline SCALARS_HOST_DEVICE float operator-(BFloat16 a, float b)
+inline SCALARS_HOST_DEVICE float operator-(bfloat16 a, float b)
 {
     return static_cast<float>(a) - b;
 }
-inline SCALARS_HOST_DEVICE float operator*(BFloat16 a, float b)
+inline SCALARS_HOST_DEVICE float operator*(bfloat16 a, float b)
 {
     return static_cast<float>(a) * b;
 }
-inline SCALARS_HOST_DEVICE float operator/(BFloat16 a, float b)
+inline SCALARS_HOST_DEVICE float operator/(bfloat16 a, float b)
 {
     return static_cast<float>(a) / b;
 }
 
-inline SCALARS_HOST_DEVICE float operator+(float a, BFloat16 b)
+inline SCALARS_HOST_DEVICE float operator+(float a, bfloat16 b)
 {
     return a + static_cast<float>(b);
 }
-inline SCALARS_HOST_DEVICE float operator-(float a, BFloat16 b)
+inline SCALARS_HOST_DEVICE float operator-(float a, bfloat16 b)
 {
     return a - static_cast<float>(b);
 }
-inline SCALARS_HOST_DEVICE float operator*(float a, BFloat16 b)
+inline SCALARS_HOST_DEVICE float operator*(float a, bfloat16 b)
 {
     return a * static_cast<float>(b);
 }
-inline SCALARS_HOST_DEVICE float operator/(float a, BFloat16 b)
+inline SCALARS_HOST_DEVICE float operator/(float a, bfloat16 b)
 {
     return a / static_cast<float>(b);
 }
 
-inline SCALARS_HOST_DEVICE float& operator+=(float& a, const BFloat16& b)
+inline SCALARS_HOST_DEVICE float& operator+=(float& a, const bfloat16& b)
 {
     return a += static_cast<float>(b);
 }
-inline SCALARS_HOST_DEVICE float& operator-=(float& a, const BFloat16& b)
+inline SCALARS_HOST_DEVICE float& operator-=(float& a, const bfloat16& b)
 {
     return a -= static_cast<float>(b);
 }
-inline SCALARS_HOST_DEVICE float& operator*=(float& a, const BFloat16& b)
+inline SCALARS_HOST_DEVICE float& operator*=(float& a, const bfloat16& b)
 {
     return a *= static_cast<float>(b);
 }
-inline SCALARS_HOST_DEVICE float& operator/=(float& a, const BFloat16& b)
+inline SCALARS_HOST_DEVICE float& operator/=(float& a, const bfloat16& b)
 {
     return a /= static_cast<float>(b);
 }
 
 /// Arithmetic with doubles
 
-inline SCALARS_HOST_DEVICE double operator+(BFloat16 a, double b)
+inline SCALARS_HOST_DEVICE double operator+(bfloat16 a, double b)
 {
     return static_cast<double>(a) + b;
 }
-inline SCALARS_HOST_DEVICE double operator-(BFloat16 a, double b)
+inline SCALARS_HOST_DEVICE double operator-(bfloat16 a, double b)
 {
     return static_cast<double>(a) - b;
 }
-inline SCALARS_HOST_DEVICE double operator*(BFloat16 a, double b)
+inline SCALARS_HOST_DEVICE double operator*(bfloat16 a, double b)
 {
     return static_cast<double>(a) * b;
 }
-inline SCALARS_HOST_DEVICE double operator/(BFloat16 a, double b)
+inline SCALARS_HOST_DEVICE double operator/(bfloat16 a, double b)
 {
     return static_cast<double>(a) / b;
 }
 
-inline SCALARS_HOST_DEVICE double operator+(double a, BFloat16 b)
+inline SCALARS_HOST_DEVICE double operator+(double a, bfloat16 b)
 {
     return a + static_cast<double>(b);
 }
-inline SCALARS_HOST_DEVICE double operator-(double a, BFloat16 b)
+inline SCALARS_HOST_DEVICE double operator-(double a, bfloat16 b)
 {
     return a - static_cast<double>(b);
 }
-inline SCALARS_HOST_DEVICE double operator*(double a, BFloat16 b)
+inline SCALARS_HOST_DEVICE double operator*(double a, bfloat16 b)
 {
     return a * static_cast<double>(b);
 }
-inline SCALARS_HOST_DEVICE double operator/(double a, BFloat16 b)
+inline SCALARS_HOST_DEVICE double operator/(double a, bfloat16 b)
 {
     return a / static_cast<double>(b);
 }
 
 /// Arithmetic with ints
 
-inline SCALARS_HOST_DEVICE BFloat16 operator+(BFloat16 a, int b)
+inline SCALARS_HOST_DEVICE bfloat16 operator+(bfloat16 a, int b)
 {
     // NOLINTNEXTLINE(bugprone-narrowing-conversions,cppcoreguidelines-narrowing-conversions)
-    return a + static_cast<BFloat16>(b);
+    return a + static_cast<bfloat16>(b);
 }
-inline SCALARS_HOST_DEVICE BFloat16 operator-(BFloat16 a, int b)
+inline SCALARS_HOST_DEVICE bfloat16 operator-(bfloat16 a, int b)
 {
     // NOLINTNEXTLINE(bugprone-narrowing-conversions,cppcoreguidelines-narrowing-conversions)
-    return a - static_cast<BFloat16>(b);
+    return a - static_cast<bfloat16>(b);
 }
-inline SCALARS_HOST_DEVICE BFloat16 operator*(BFloat16 a, int b)
+inline SCALARS_HOST_DEVICE bfloat16 operator*(bfloat16 a, int b)
 {
     // NOLINTNEXTLINE(bugprone-narrowing-conversions,cppcoreguidelines-narrowing-conversions)
-    return a * static_cast<BFloat16>(b);
+    return a * static_cast<bfloat16>(b);
 }
-inline SCALARS_HOST_DEVICE BFloat16 operator/(BFloat16 a, int b)
+inline SCALARS_HOST_DEVICE bfloat16 operator/(bfloat16 a, int b)
 {
     // NOLINTNEXTLINE(bugprone-narrowing-conversions,cppcoreguidelines-narrowing-conversions)
-    return a / static_cast<BFloat16>(b);
+    return a / static_cast<bfloat16>(b);
 }
 
-inline SCALARS_HOST_DEVICE BFloat16 operator+(int a, BFloat16 b)
+inline SCALARS_HOST_DEVICE bfloat16 operator+(int a, bfloat16 b)
 {
     // NOLINTNEXTLINE(bugprone-narrowing-conversions,cppcoreguidelines-narrowing-conversions)
-    return static_cast<BFloat16>(a) + b;
+    return static_cast<bfloat16>(a) + b;
 }
-inline SCALARS_HOST_DEVICE BFloat16 operator-(int a, BFloat16 b)
+inline SCALARS_HOST_DEVICE bfloat16 operator-(int a, bfloat16 b)
 {
     // NOLINTNEXTLINE(bugprone-narrowing-conversions,cppcoreguidelines-narrowing-conversions)
-    return static_cast<BFloat16>(a) - b;
+    return static_cast<bfloat16>(a) - b;
 }
-inline SCALARS_HOST_DEVICE BFloat16 operator*(int a, BFloat16 b)
+inline SCALARS_HOST_DEVICE bfloat16 operator*(int a, bfloat16 b)
 {
     // NOLINTNEXTLINE(bugprone-narrowing-conversions,cppcoreguidelines-narrowing-conversions)
-    return static_cast<BFloat16>(a) * b;
+    return static_cast<bfloat16>(a) * b;
 }
-inline SCALARS_HOST_DEVICE BFloat16 operator/(int a, BFloat16 b)
+inline SCALARS_HOST_DEVICE bfloat16 operator/(int a, bfloat16 b)
 {
     // NOLINTNEXTLINE(bugprone-narrowing-conversions,cppcoreguidelines-narrowing-conversions)
-    return static_cast<BFloat16>(a) / b;
+    return static_cast<bfloat16>(a) / b;
 }
 
 //// Arithmetic with int64_t
 
-inline SCALARS_HOST_DEVICE BFloat16 operator+(BFloat16 a, int64_t b)
+inline SCALARS_HOST_DEVICE bfloat16 operator+(bfloat16 a, int64_t b)
 {
     // NOLINTNEXTLINE(bugprone-narrowing-conversions,cppcoreguidelines-narrowing-conversions)
-    return a + static_cast<BFloat16>(b);
+    return a + static_cast<bfloat16>(b);
 }
-inline SCALARS_HOST_DEVICE BFloat16 operator-(BFloat16 a, int64_t b)
+inline SCALARS_HOST_DEVICE bfloat16 operator-(bfloat16 a, int64_t b)
 {
     // NOLINTNEXTLINE(bugprone-narrowing-conversions,cppcoreguidelines-narrowing-conversions)
-    return a - static_cast<BFloat16>(b);
+    return a - static_cast<bfloat16>(b);
 }
-inline SCALARS_HOST_DEVICE BFloat16 operator*(BFloat16 a, int64_t b)
+inline SCALARS_HOST_DEVICE bfloat16 operator*(bfloat16 a, int64_t b)
 {
     // NOLINTNEXTLINE(bugprone-narrowing-conversions,cppcoreguidelines-narrowing-conversions)
-    return a * static_cast<BFloat16>(b);
+    return a * static_cast<bfloat16>(b);
 }
-inline SCALARS_HOST_DEVICE BFloat16 operator/(BFloat16 a, int64_t b)
+inline SCALARS_HOST_DEVICE bfloat16 operator/(bfloat16 a, int64_t b)
 {
     // NOLINTNEXTLINE(bugprone-narrowing-conversions,cppcoreguidelines-narrowing-conversions)
-    return a / static_cast<BFloat16>(b);
+    return a / static_cast<bfloat16>(b);
 }
 
-inline SCALARS_HOST_DEVICE BFloat16 operator+(int64_t a, BFloat16 b)
+inline SCALARS_HOST_DEVICE bfloat16 operator+(int64_t a, bfloat16 b)
 {
     // NOLINTNEXTLINE(bugprone-narrowing-conversions,cppcoreguidelines-narrowing-conversions)
-    return static_cast<BFloat16>(a) + b;
+    return static_cast<bfloat16>(a) + b;
 }
-inline SCALARS_HOST_DEVICE BFloat16 operator-(int64_t a, BFloat16 b)
+inline SCALARS_HOST_DEVICE bfloat16 operator-(int64_t a, bfloat16 b)
 {
     // NOLINTNEXTLINE(bugprone-narrowing-conversions,cppcoreguidelines-narrowing-conversions)
-    return static_cast<BFloat16>(a) - b;
+    return static_cast<bfloat16>(a) - b;
 }
-inline SCALARS_HOST_DEVICE BFloat16 operator*(int64_t a, BFloat16 b)
+inline SCALARS_HOST_DEVICE bfloat16 operator*(int64_t a, bfloat16 b)
 {
     // NOLINTNEXTLINE(bugprone-narrowing-conversions,cppcoreguidelines-narrowing-conversions)
-    return static_cast<BFloat16>(a) * b;
+    return static_cast<bfloat16>(a) * b;
 }
-inline SCALARS_HOST_DEVICE BFloat16 operator/(int64_t a, BFloat16 b)
+inline SCALARS_HOST_DEVICE bfloat16 operator/(int64_t a, bfloat16 b)
 {
     // NOLINTNEXTLINE(bugprone-narrowing-conversions,cppcoreguidelines-narrowing-conversions)
-    return static_cast<BFloat16>(a) / b;
+    return static_cast<bfloat16>(a) / b;
 }
 
 // Overloading < and > operators, because std::max and std::min use them.
 
-inline SCALARS_HOST_DEVICE bool operator>(BFloat16& lhs, BFloat16& rhs)
+inline SCALARS_HOST_DEVICE bool operator>(bfloat16& lhs, bfloat16& rhs)
 {
     return float(lhs) > float(rhs);
 }
 
-inline SCALARS_HOST_DEVICE bool operator<(BFloat16& lhs, BFloat16& rhs)
+inline SCALARS_HOST_DEVICE bool operator<(bfloat16& lhs, bfloat16& rhs)
 {
     return float(lhs) < float(rhs);
 }
@@ -458,7 +458,7 @@ SCALARS_CLANG_DIAGNOSTIC_POP()
 namespace std
 {
 
-template <> class numeric_limits<scalars::BFloat16>
+template <> class numeric_limits<scalars::bfloat16>
 {
 public:
     static constexpr bool is_signed         = true;
@@ -485,41 +485,41 @@ public:
     static constexpr auto traps             = numeric_limits<float>::traps;
     static constexpr auto tinyness_before   = numeric_limits<float>::tinyness_before;
 
-    static constexpr scalars::BFloat16 min()
+    static constexpr scalars::bfloat16 min()
     {
-        return scalars::BFloat16(0x0080, scalars::BFloat16::from_bits());
+        return scalars::bfloat16(0x0080, scalars::bfloat16::from_bits());
     }
-    static constexpr scalars::BFloat16 lowest()
+    static constexpr scalars::bfloat16 lowest()
     {
-        return scalars::BFloat16(0xFF7F, scalars::BFloat16::from_bits());
+        return scalars::bfloat16(0xFF7F, scalars::bfloat16::from_bits());
     }
-    static constexpr scalars::BFloat16 max()
+    static constexpr scalars::bfloat16 max()
     {
-        return scalars::BFloat16(0x7F7F, scalars::BFloat16::from_bits());
+        return scalars::bfloat16(0x7F7F, scalars::bfloat16::from_bits());
     }
-    static constexpr scalars::BFloat16 epsilon()
+    static constexpr scalars::bfloat16 epsilon()
     {
-        return scalars::BFloat16(0x3C00, scalars::BFloat16::from_bits());
+        return scalars::bfloat16(0x3C00, scalars::bfloat16::from_bits());
     }
-    static constexpr scalars::BFloat16 round_error()
+    static constexpr scalars::bfloat16 round_error()
     {
-        return scalars::BFloat16(0x3F00, scalars::BFloat16::from_bits());
+        return scalars::bfloat16(0x3F00, scalars::bfloat16::from_bits());
     }
-    static constexpr scalars::BFloat16 infinity()
+    static constexpr scalars::bfloat16 infinity()
     {
-        return scalars::BFloat16(0x7F80, scalars::BFloat16::from_bits());
+        return scalars::bfloat16(0x7F80, scalars::bfloat16::from_bits());
     }
-    static constexpr scalars::BFloat16 quiet_NaN()
+    static constexpr scalars::bfloat16 quiet_NaN()
     {
-        return scalars::BFloat16(0x7FC0, scalars::BFloat16::from_bits());
+        return scalars::bfloat16(0x7FC0, scalars::bfloat16::from_bits());
     }
-    static constexpr scalars::BFloat16 signaling_NaN()
+    static constexpr scalars::bfloat16 signaling_NaN()
     {
-        return scalars::BFloat16(0x7F80, scalars::BFloat16::from_bits());
+        return scalars::bfloat16(0x7F80, scalars::bfloat16::from_bits());
     }
-    static constexpr scalars::BFloat16 denorm_min()
+    static constexpr scalars::bfloat16 denorm_min()
     {
-        return scalars::BFloat16(0x0001, scalars::BFloat16::from_bits());
+        return scalars::bfloat16(0x0001, scalars::bfloat16::from_bits());
     }
 };
 
@@ -527,5 +527,5 @@ public:
 
 namespace scalars
 {
-using bfloat16 = scalars::BFloat16;
+using bfloat16 = scalars::bfloat16;
 }

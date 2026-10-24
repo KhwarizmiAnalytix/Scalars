@@ -76,6 +76,72 @@ function(scalars_setup_gtest)
     endforeach()
 endfunction()
 
+function(scalars_setup_sleef)
+    if(NOT TARGET sleef AND NOT TARGET Sleef::sleef)
+        set(_sleef_src "${SCALARS_THIRD_PARTY_DIR}/sleef")
+        if(NOT EXISTS "${_sleef_src}/CMakeLists.txt")
+            message(WARNING
+                "SCALARS_ENABLE_SLEEF=ON but ${_sleef_src} is missing (run "
+                "'git submodule update --init -- ThirdParty/sleef'). Disabling SLEEF."
+            )
+            set(SCALARS_ENABLE_SLEEF OFF
+                CACHE BOOL
+                "Enable SLEEF SIMD math library (SSE/AVX/AVX2/AVX512/NEON); mutually exclusive with SVML"
+                FORCE
+            )
+            return()
+        endif()
+
+        # SLEEF's install() rules read CMAKE_INSTALL_PREFIX unconditionally, even for an
+        # EXCLUDE_FROM_ALL subdirectory build, so it requires a non-default prefix.
+        if(CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)
+            set(CMAKE_INSTALL_PREFIX "${SCALARS_BINARY_DIR}/ThirdParty/install"
+                CACHE PATH "Install path prefix, prepended onto install directories." FORCE
+            )
+            set(CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT FALSE)
+        endif()
+
+        set(SLEEF_BUILD_TESTS OFF CACHE BOOL "Disable SLEEF tests" FORCE)
+        set(SLEEF_BUILD_DFT OFF CACHE BOOL "Disable SLEEF DFT library" FORCE)
+        set(SLEEF_BUILD_SCALAR_LIB OFF CACHE BOOL "Disable SLEEF scalar library" FORCE)
+        set(SLEEF_BUILD_QUAD OFF CACHE BOOL "Disable SLEEF quad library" FORCE)
+        set(SLEEF_BUILD_GNUABI_LIBS OFF CACHE BOOL "Disable SLEEF GNU ABI variants" FORCE)
+        set(SLEEF_DISABLE_OPENMP ON CACHE BOOL "Disable SLEEF OpenMP usage" FORCE)
+        set(SLEEF_BUILD_INLINE_HEADERS OFF CACHE BOOL "Disable SLEEF inline headers" FORCE)
+        set(SLEEF_ENABLE_TESTER OFF CACHE BOOL "Disable SLEEF tester binaries" FORCE)
+        set(SLEEF_ENABLE_TESTER4 OFF CACHE BOOL "Disable SLEEF tester4 binaries" FORCE)
+        # SLEEF 3.x gates OpenSSL behind SLEEF_DISABLE_SSL (the old SLEEF_ENABLE_SSL name no
+        # longer exists). Without this, a system OpenSSL makes src/common register
+        # test_psha/test_psha_capi in CTest even though SLEEF_BUILD_TESTS is OFF -- those
+        # phantom third-party tests then fail as "Not Run" in Scalars' own ctest run.
+        set(SLEEF_DISABLE_SSL ON CACHE BOOL "Disable SLEEF SSL-backed tester checks" FORCE)
+        set(SLEEF_SHOW_CONFIG OFF CACHE BOOL "Suppress SLEEF config output" FORCE)
+        set(SLEEF_BUILD_SHARED_LIBS OFF CACHE BOOL "Build SLEEF as a static library" FORCE)
+
+        scalars_add_dependency_subdirectory(
+            "${_sleef_src}" "${SCALARS_BINARY_DIR}/ThirdParty/sleef_build" EXCLUDE_FROM_ALL
+        )
+    endif()
+
+    if(TARGET sleef AND NOT TARGET Sleef::sleef)
+        add_library(Sleef::sleef ALIAS sleef)
+        # SLEEF's own CMakeLists.txt defaults sleef_BINARY_DIR to CMAKE_BINARY_DIR when built
+        # as a subdirectory (see ThirdParty/sleef/CMakeLists.txt), so the generated sleef.h
+        # lands at <top-level-build-dir>/include/sleef.h, not under the sleef_build tree.
+        # sleef.h also checks SLEEF_STATIC_LIBS to suppress __declspec(dllimport) on Windows;
+        # the generated sleef-config.h defines it but sleef.h never includes that header, so
+        # propagate the definition explicitly to all consumers.
+        # Wrapped in $<BUILD_INTERFACE:...> because SLEEF's own CMakeLists.txt installs
+        # and exports the "sleef" target; CMake rejects a raw build-tree absolute path in
+        # an exported target's INTERFACE_INCLUDE_DIRECTORIES.
+        target_include_directories(sleef INTERFACE "$<BUILD_INTERFACE:${SCALARS_BINARY_DIR}/include>")
+        target_compile_definitions(sleef INTERFACE SLEEF_STATIC_LIBS)
+    endif()
+    if(NOT TARGET Sleef::sleef)
+        message(FATAL_ERROR "SLEEF must provide a 'sleef' target")
+    endif()
+endfunction()
+
 function(scalars_setup_benchmark)
     if(NOT TARGET benchmark AND NOT TARGET benchmark::benchmark)
         set(_bench_src "")

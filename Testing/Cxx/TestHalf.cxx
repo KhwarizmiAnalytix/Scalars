@@ -9,7 +9,7 @@
 
 using namespace scalars;
 
-TEST(Half, Representation)
+TEST(half, Representation)
 {
     static_assert(sizeof(half) == 2);
     EXPECT_EQ(half(1.0f).x, 0x3c00);
@@ -19,7 +19,7 @@ TEST(Half, Representation)
     EXPECT_EQ((-half(1.0f)).x, half(-1.0f).x);
 }
 
-TEST(Half, Arithmetic)
+TEST(half, Arithmetic)
 {
     half value(1.0f);
     value += half(2.0f);
@@ -76,7 +76,7 @@ TEST(Half, Arithmetic)
     EXPECT_EQ((std::int64_t{6} / half(2.0f)).x, half(3.0f).x);
 }
 
-TEST(Half, NumericLimitsAndStream)
+TEST(half, NumericLimitsAndStream)
 {
     using limits = std::numeric_limits<half>;
     EXPECT_TRUE(limits::is_specialized);
@@ -99,7 +99,7 @@ TEST(Half, NumericLimitsAndStream)
     EXPECT_NE(stream.str().find('1'), std::string::npos);
 }
 
-TEST(Half, SoftwareIeeeConversion)
+TEST(half, SoftwareIeeeConversion)
 {
     std::uint32_t mix = 0;
     for (std::uint32_t bits = 0; bits < 65536; ++bits)
@@ -128,7 +128,7 @@ TEST(Half, SoftwareIeeeConversion)
     EXPECT_NE(mix, 0u);
 }
 
-TEST(Half, ExhaustiveEncodingRoundTrip)
+TEST(half, ExhaustiveEncodingRoundTrip)
 {
     for (std::uint32_t bits = 0; bits < 65536; ++bits)
     {
@@ -146,7 +146,7 @@ TEST(Half, ExhaustiveEncodingRoundTrip)
 }
 
 #if defined(__aarch64__) && !defined(__CUDACC__)
-TEST(Half, NativeBitCast)
+TEST(half, NativeBitCast)
 {
     EXPECT_FLOAT_EQ(detail::native_fp16_to_fp32_value(0x3c00), 1.0f);
     EXPECT_EQ(detail::native_fp16_from_fp32_value(1.0f), 0x3c00);

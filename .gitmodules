@@ -4,3 +4,6 @@
 [submodule "ThirdParty/benchmark"]
 	path = ThirdParty/benchmark
 	url = https://github.com/google/benchmark.git
+[submodule "ThirdParty/sleef"]
+	path = ThirdParty/sleef
+	url = https://github.com/shibatch/sleef.git

@@ -43,8 +43,8 @@ TEST(ScalarTraits, ComplexRealAndAccumulation)
 
 TEST(ScalarTraits, AccumulateType)
 {
-    expect_accumulate<Half, float, float>();
-    expect_accumulate<BFloat16, float, float>();
+    expect_accumulate<half, float, float>();
+    expect_accumulate<bfloat16, float, float>();
     expect_accumulate<float, double, float>();
     expect_accumulate<double, double, double>();
     expect_accumulate<std::int8_t, std::int64_t, std::int64_t>();
@@ -54,7 +54,7 @@ TEST(ScalarTraits, AccumulateType)
     expect_accumulate<std::int32_t, std::int64_t, std::int64_t>();
     expect_accumulate<std::int64_t, std::int64_t, std::int64_t>();
     expect_accumulate<bool, bool, bool>();
-    expect_accumulate<complex<Half>, complex<float>, complex<float>>();
+    expect_accumulate<complex<half>, complex<float>, complex<float>>();
     expect_accumulate<complex<float>, complex<double>, complex<float>>();
     expect_accumulate<complex<double>, complex<double>, complex<double>>();
 

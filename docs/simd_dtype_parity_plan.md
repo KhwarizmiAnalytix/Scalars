@@ -29,10 +29,10 @@ are unsupported because this library defines no complex ordering.
 | Dispatch | `include/backend/simd.h` includes only float/double specializations | Add dtype dispatch after the underlying real packets are defined |
 | CPU backends | SSE, shared AVX/AVX2, AVX-512, NEON | All four implementation families need the new dtypes |
 | SVE | `cpu/sve/{float,double}/simd.h` requires 128-bit SVE and includes NEON | Reuse the same new NEON packets under this existing restriction; do not claim scalable SVE |
-| Reduced storage | `Half` and `BFloat16` are aligned two-byte wrappers | Existing scalar storage and public aliases can be preserved |
-| Half conversion | `detail/vec_half.h` contains scalar conversion helpers under AVX capability macros | Introduce packet conversion separately; gate by actual conversion features |
+| Reduced storage | `half` and `bfloat16` are aligned two-byte wrappers | Existing scalar storage and public aliases can be preserved |
+| half conversion | `detail/vec_half.h` contains scalar conversion helpers under AVX capability macros | Introduce packet conversion separately; gate by actual conversion features |
 | Complex storage | Interleaved public `real_`, `imag_`; alignment is twice component size | Verify layout, then preserve it in vector memory operations |
-| Reduced complex | `complex<Half>` has a limited specialization; bf16 uses the general template | Repair the scalar contract before using it as a SIMD oracle |
+| Reduced complex | `complex<half>` has a limited specialization; bf16 uses the general template | Repair the scalar contract before using it as a SIMD oracle |
 | Accumulation | `acc_type` promotes half/bf16 to float and CPU complex<float> to complex<double> | Add missing complex<bf16> specializations and distinguish computation from accumulation |
 | Existing float reduction | For example, AVX float `accumulate` sums in float and then returns double | A double return type alone is not evidence of double accumulation |
 | Tests | SIMD F1/F2/H/utility suites are instantiated for float/double | Add dtype-aware coverage and numerical references |
@@ -215,7 +215,7 @@ existing scalar tests, and a new SIMD traits header.
    make bf16 multiplication/division follow the same widened policy as half.
    Provide a reliable promoted scalar math path instead of requiring
    `std::complex<half>` or `std::complex<bf16>` math implementations.
-3. Add missing CPU/GPU `AccumulateTypeDevice<complex<BFloat16>, ...>` entries.
+3. Add missing CPU/GPU `AccumulateTypeDevice<complex<bfloat16>, ...>` entries.
    Check promotion and runtime accumulation metadata agree for all eight dtypes.
 4. Verify layout and add traits for current float/double backends. Record
    exceptional-value behavior for functions that new packets will reuse.
@@ -231,7 +231,7 @@ Files: proposed `backend/detail/reduced_convert.h` plus architecture conversion
 helpers; `cmake/simd.cmake`, exported configuration, and `cmake/summary.cmake`.
 
 1. Implement exact 16-bit storage moves and packet widening/narrowing.
-2. Half: use F16C on supported x86 targets, AVX-512 conversion when available,
+2. half: use F16C on supported x86 targets, AVX-512 conversion when available,
    and ARM conversion instructions behind exact feature checks. Provide SIMD
    software conversions for SSE2 and targets lacking hardware conversion.
    A temporary scalar reference fallback is marked as such and is not the

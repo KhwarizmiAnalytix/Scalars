@@ -9,7 +9,7 @@
 
 using namespace scalars;
 
-TEST(BFloat16, Representation)
+TEST(bfloat16, Representation)
 {
     static_assert(sizeof(bfloat16) == 2);
     EXPECT_EQ(bfloat16(1.0f).x, 0x3f80);
@@ -25,7 +25,7 @@ TEST(BFloat16, Representation)
     EXPECT_NE(detail::round_to_nearest_even(1.1f), detail::round_to_nearest_even(-1.1f));
 }
 
-TEST(BFloat16, Arithmetic)
+TEST(bfloat16, Arithmetic)
 {
     bfloat16 value(1.0f);
     value += bfloat16(2.0f);
@@ -81,7 +81,7 @@ TEST(BFloat16, Arithmetic)
     EXPECT_EQ((std::int64_t{6} / bfloat16(2.0f)).x, bfloat16(3.0f).x);
 }
 
-TEST(BFloat16, BitwiseAndComparison)
+TEST(bfloat16, BitwiseAndComparison)
 {
     bfloat16 left(1.0f);
     bfloat16 right(2.0f);
@@ -97,7 +97,7 @@ TEST(BFloat16, BitwiseAndComparison)
     EXPECT_EQ(bits.x, static_cast<std::uint16_t>(bfloat16(1.0f).x & left.x));
 }
 
-TEST(BFloat16, NumericLimitsStreamAndRoundTrip)
+TEST(bfloat16, NumericLimitsStreamAndRoundTrip)
 {
     using limits = std::numeric_limits<bfloat16>;
     EXPECT_TRUE(limits::is_specialized);
