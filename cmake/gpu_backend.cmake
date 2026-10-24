@@ -105,6 +105,8 @@ if(SCALARS_GPU_BACKEND STREQUAL "metal")
     find_library(SCALARS_METAL_FRAMEWORK Metal REQUIRED)
     find_library(SCALARS_FOUNDATION_FRAMEWORK Foundation REQUIRED)
 
+    set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
+                 "${SCALARS_SOURCE_DIR}/include/backend/gpu/metal/kernels.metal")
     file(READ "${SCALARS_SOURCE_DIR}/include/backend/gpu/metal/kernels.metal" SCALARS_METAL_KERNEL_SOURCE)
     configure_file(
         "${SCALARS_SOURCE_DIR}/include/backend/gpu/metal/metal_kernels_source.h.in"

@@ -14,6 +14,15 @@
 
 namespace scalars::metal_backend
 {
+// Reduced buffers contain the two-byte encodings of scalars::half/bfloat16.
+// All operation math and reduction partials use float.
+enum class dtype
+{
+    float32,
+    half,
+    bfloat16
+};
+
 bool device_available();
 
 // Allocates n_bytes of Metal shared-storage memory and returns a host-visible
@@ -26,12 +35,11 @@ void  deallocate(void* ptr);
 // threads. in_buffers holds n_in input pointers, consumed in the same order the
 // corresponding .metal kernel declares its [[buffer(k)]] arguments. Synchronous
 // (waits for GPU completion before returning).
-void dispatch(
-    const char*        kernel_name,
-    const void* const* in_buffers,
-    int                n_in,
-    void*              out_buffer,
-    std::size_t        n_elems);
+void dispatch(const char* kernel_name,
+    const void* const*    in_buffers,
+    int                   n_in,
+    void*                 out_buffer,
+    std::size_t           n_elems);
 
 void dispatch_fill(void* out_buffer, float value, std::size_t n_elems);
 
@@ -39,21 +47,43 @@ void dispatch_fill(void* out_buffer, float value, std::size_t n_elems);
 // leaves bind as device buffers 0..n_in-1, scalars as constant buffers
 // n_in..n_in+n_scalars-1 (setBytes), then out and n. The kernel function
 // must be named fused_float. Source is compiled once and cached.
-void dispatch_fused(
-    std::string const& kernel_source,
-    const void* const* in_buffers,
-    int                n_in,
-    float const*       scalars,
-    int                n_scalars,
-    void*              out_buffer,
-    std::size_t        n_elems);
+void dispatch_fused(std::string const& kernel_source,
+    const void* const*                 in_buffers,
+    int                                n_in,
+    float const*                       scalars,
+    int                                n_scalars,
+    void*                              out_buffer,
+    std::size_t                        n_elems);
 
 // Multi-block reductions. Each threadgroup writes one partial; the host
 // launcher ping-pongs until a single value remains. n_elems is not limited
 // to maxTotalThreadsPerThreadgroup. Empty input returns the matching
-// accumulate / hmin / hmax identity (0, +FLT_MAX, -FLT_MAX).
+// accumulate / hmin / hmax identity (0, +infinity, -infinity).
 float reduce_sum(const void* buffer, std::size_t n_elems);
 float reduce_min(const void* buffer, std::size_t n_elems);
 float reduce_max(const void* buffer, std::size_t n_elems);
+
+// Typed variants preserve the float-only entry points above. The type applies
+// to every input and the output; fill values and fused scalar arguments stay
+// FP32. A fused source must define fused_float, fused_half, or fused_bfloat16.
+void dispatch(const char* kernel_name,
+    const void* const*    in_buffers,
+    int                   n_in,
+    void*                 out_buffer,
+    std::size_t           n_elems,
+    dtype                 type);
+void dispatch_fill(void* out_buffer, float value, std::size_t n_elems, dtype type);
+void dispatch_fused(std::string const& kernel_source,
+    const void* const*                 in_buffers,
+    int                                n_in,
+    float const*                       scalars,
+    int                                n_scalars,
+    void*                              out_buffer,
+    std::size_t                        n_elems,
+    dtype                              type);
+// Reduced sums are never narrowed between threadgroups. All return FP32.
+float reduce_sum(const void* buffer, std::size_t n_elems, dtype type);
+float reduce_min(const void* buffer, std::size_t n_elems, dtype type);
+float reduce_max(const void* buffer, std::size_t n_elems, dtype type);
 
 }  // namespace scalars::metal_backend

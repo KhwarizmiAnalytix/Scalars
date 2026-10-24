@@ -11,7 +11,7 @@ if(SCALARS_ENABLE_GTEST)
          "${CMAKE_CURRENT_SOURCE_DIR}/Test*.cxx"
     )
 
-    # TestGpuSimd.cu exercises backend/gpu/{float,double}/simd.h directly (no tensor<T>
+    # TestGpuSimd.cu exercises backend/gpu/{float,double,reduced}/simd.h directly (no tensor<T>
     # expression templates, so none of Vectorization's ODR cross-TU tagging applies here) --
     # only compiled in when a GPU backend is actually active.
     set(_scalars_gpu_test_sources "")
@@ -39,6 +39,7 @@ if(SCALARS_ENABLE_GTEST)
                                            CUDA_ARCHITECTURES "${SCALARS_CUDA_ARCHITECTURES}"
             )
         elseif(SCALARS_GPU_BACKEND STREQUAL "hip")
+            set_source_files_properties(${_scalars_gpu_test_sources} PROPERTIES LANGUAGE HIP)
             set_target_properties(
                 ScalarsCxxTests PROPERTIES HIP_STANDARD ${SCALARS_CXX_STANDARD}
                                            HIP_ARCHITECTURES "${SCALARS_GPU_ARCHITECTURES}"

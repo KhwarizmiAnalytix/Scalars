@@ -63,6 +63,7 @@ struct simd
 // being set already guarantees nvcc or hipcc is doing the device pass.
 #include "backend/gpu/double/simd.h"
 #include "backend/gpu/float/simd.h"
+#include "backend/gpu/reduced/simd.h"
 
 #else
 // --- CPU host code: SIMD or scalar fallback ---

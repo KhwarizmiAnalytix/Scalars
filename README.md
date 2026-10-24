@@ -187,16 +187,58 @@ Math functions reuse the selected float backend/provider, including its accuracy
 limits and scalar mappings. X86 builds without SVML/SLEEF use standard-library
 scalar mappings for transcendental functions. FMA follows the float backend's
 fused/nonfused behavior and narrows once. The numerical contract assumes the
-default floating-point rounding environment. GPU reduced specializations and
-complex SIMD packets are not implemented by this CPU extension.
+default floating-point rounding environment. Complex SIMD packets are not
+implemented by this CPU extension.
 
 Reference architecture:
 [PyTorch reduced CPU packets](https://github.com/pytorch/pytorch/blob/main/aten/src/ATen/cpu/vec/vec256/vec256_16bit_float.h)
 and [widened functional helpers](https://github.com/pytorch/pytorch/blob/main/aten/src/ATen/cpu/vec/functional_bfloat16.h).
 
+## GPU backends
+
+Select `-DSCALARS_GPU_BACKEND=cuda|hip|metal` independently of the CPU backend.
+CUDA/HIP device compilation of `<backend/simd.h>` provides `simd<float>`,
+`simd<double>`, `simd<scalars::half>`, and `simd<scalars::bfloat16>`. Each packet
+has `size == 1`, with one logical lane per GPU thread. Reduced packets retain
+their distinct two-byte storage, compute through the float GPU backend, and
+round once per operation. FMA uses a float fused operation before narrowing;
+`accumulate` returns float. This follows PyTorch's
+[operation-math policy](https://github.com/pytorch/pytorch/blob/main/aten/src/ATen/OpMathType.h).
+
+Reduced device packets support the float backend's math surface, 16-bit
+comparison masks, bitwise selection/sign operations, gather/scatter, and
+counted load/store with counts zero or one. `min`/`max` propagate NaNs and use
+the CPU reduced packets' signed-zero policy. `to_float` / `from_float` and
+`load_float` / `store_float` let kernels retain FP32 intermediates explicitly.
+Gather/scatter's integer argument is the thread's absolute element index.
+CPU packet transpose and half-width utilities have no one-lane GPU counterpart.
+
+Metal uses `<backend/gpu/metal/metal_dispatch.h>` rather than the C++ device
+dispatcher. Pass `metal_backend::dtype::half` or `dtype::bfloat16` as the final
+argument to `dispatch`, `dispatch_fill`, `dispatch_fused`, and reductions;
+existing calls continue to use float. All buffers in an element-wise launch
+use the selected storage type. Fill values and fused scalar arguments remain
+float. Allocate buffers with `allocate(n * sizeof(T))` and release them with
+`deallocate`. For example, after allocating half buffers `a`, `b`, and `out`:
+
+```cpp
+namespace mb = scalars::metal_backend;
+const void* inputs[] = {a, b};
+mb::dispatch("add", inputs, 2, out, n, mb::dtype::half);
+float sum = mb::reduce_sum(out, n, mb::dtype::half);
+```
+
+Metal supplies reduced fill, add/sub/mul/div, min/max, FMA, sqrt/exp/log,
+sin/cos/tanh, fabs/neg, and sum/min/max reductions. All reduction passes use
+FP32 partials; empty reductions return zero, positive infinity, or negative
+infinity respectively. BF16 uses software bit conversion with round-to-nearest-even
+and canonical narrowed NaNs, without requiring native MSL bfloat support.
+Fused sources define `fused_float`, `fused_half`, or `fused_bfloat16` for the
+selected type and are responsible for their own storage conversions.
+
 ## Scope and limitations
 
-- Portable CPU implementation; **CUDA/HIP kernels are not implemented yet**. This release does not claim host/device parity with PyTorch.
+- CUDA/HIP device tests require the corresponding compiler and GPU. Metal tests run on a Mac with a Metal device. This release does not claim full host/device parity with PyTorch.
 - Arithmetic for half/bfloat16 uses float intermediates and rounds the result to the stored format.
 - Scalar casts from complex to real discard the imaginary component by explicit request; review this policy for strict applications.
 - complex division and transcendental functions delegate to `std::complex`, with intermediate float for reduced precision.

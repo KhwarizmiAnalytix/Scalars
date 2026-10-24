@@ -45,7 +45,7 @@
 #include "common/vec_half.h"
 #endif
 
-#if defined(__aarch64__) && !defined(__CUDACC__)
+#if defined(__aarch64__) && !defined(__CUDACC__) && !defined(__HIPCC__)
 #include <arm_neon.h>
 #endif
 
@@ -80,7 +80,7 @@ struct alignas(2) half
 #endif
 
     constexpr SCALARS_HOST_DEVICE half(unsigned short bits, from_bits_t /*unused*/) : x(bits) {}
-#if defined(__aarch64__) && !defined(__CUDACC__)
+#if defined(__aarch64__) && !defined(__CUDACC__) && !defined(__HIPCC__)
     inline half(float16_t value);
     inline operator float16_t() const;
 #else
@@ -395,7 +395,7 @@ inline uint32_t fp16_ieee_to_fp32_bits(uint16_t h)
 #undef SCALARS_X86_F16
 #endif  // SCALARS_X86_F16
 
-#if defined(__aarch64__) && !defined(__CUDACC__)
+#if defined(__aarch64__) && !defined(__CUDACC__) && !defined(__HIPCC__)
 inline float16_t fp16_from_bits(uint16_t h)
 {
     return scalars::bit_cast<float16_t>(h);
@@ -427,7 +427,7 @@ SCALARS_CLANG_DIAGNOSTIC_PUSH()
 SCALARS_CLANG_DIAGNOSTIC_IGNORE("-Wimplicit-int-float-conversion")
 #endif
 
-#if defined(__aarch64__) && !defined(__CUDACC__)
+#if defined(__aarch64__) && !defined(__CUDACC__) && !defined(__HIPCC__)
 /// Constructors
 inline half::half(float16_t value) : x(detail::fp16_to_bits(value)) {}
 inline half::operator float16_t() const
@@ -460,7 +460,7 @@ inline SCALARS_HOST_DEVICE half::operator float() const
     return float(scalars::bit_cast<sycl::half>(x));
 #elif (defined(SCALARS_CPU_CAPABILITY_AVX2) || defined(SCALARS_CPU_CAPABILITY_AVX512)) && !defined(__APPLE__)
     return scalars::vec::half2float_scalar(x);
-#elif defined(__aarch64__) && !defined(__CUDACC__)
+#elif defined(__aarch64__) && !defined(__CUDACC__) && !defined(__HIPCC__)
     return detail::native_fp16_to_fp32_value(x);
 #else
     return detail::fp16_ieee_to_fp32_value(x);

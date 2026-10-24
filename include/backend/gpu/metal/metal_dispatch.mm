@@ -19,6 +19,20 @@ namespace scalars::metal_backend
 {
 namespace
 {
+const char* dtype_suffix(dtype type)
+{
+    switch (type)
+    {
+    case dtype::float32:
+        return "float";
+    case dtype::half:
+        return "half";
+    case dtype::bfloat16:
+        return "bfloat16";
+    }
+    throw std::invalid_argument("Metal dispatch: unsupported dtype");
+}
+
 // Minimal reduce-kind tag + identity element, local to this translation unit
 // (Scalars has no expressions/ layer to import these from).
 enum class reduce_kind
@@ -37,11 +51,11 @@ constexpr float reduce_identity()
     }
     else if constexpr (Kind == reduce_kind::min)
     {
-        return std::numeric_limits<float>::max();
+        return std::numeric_limits<float>::infinity();
     }
     else
     {
-        return -std::numeric_limits<float>::max();
+        return -std::numeric_limits<float>::infinity();
     }
 }
 
@@ -57,6 +71,24 @@ id<MTLCommandQueue> command_queue()
     return q;
 }
 
+MTLCompileOptions* compile_options()
+{
+    MTLCompileOptions* options = [MTLCompileOptions new];
+#if __MAC_OS_X_VERSION_MAX_ALLOWED >= 150000
+    if (@available(macOS 15.0, *))
+    {
+        options.mathMode                   = MTLMathModeSafe;
+        options.mathFloatingPointFunctions = MTLMathFloatingPointFunctionsPrecise;
+        return options;
+    }
+#endif
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wdeprecated-declarations"
+    options.fastMathEnabled = NO;
+#pragma clang diagnostic pop
+    return options;
+}
+
 // Compiled once, lazily, from the embedded kernels.metal source (kMetalKernelSource).
 id<MTLLibrary> library()
 {
@@ -64,7 +96,7 @@ id<MTLLibrary> library()
     {
         NSString*      src = [NSString stringWithUTF8String:kMetalKernelSource];
         NSError*       err = nil;
-        id<MTLLibrary> l   = [device() newLibraryWithSource:src options:nil error:&err];
+        id<MTLLibrary> l = [device() newLibraryWithSource:src options:compile_options() error:&err];
         if (l == nil)
         {
             throw std::runtime_error(
@@ -202,11 +234,13 @@ void run(
     record_completed_command_buffer(event_name, cb);
 }
 
-id<MTLComputePipelineState> pipeline_for_fused_source(std::string const& source)
+id<MTLComputePipelineState> pipeline_for_fused_source(
+    std::string const& source, std::string const& function_name)
 {
     std::lock_guard<std::mutex> lock(pipeline_cache_mutex());
     auto&                       cache = pipeline_cache();
-    auto                        it    = cache.find(source);
+    const std::string           key   = function_name + "\n" + source;
+    auto                        it    = cache.find(key);
     if (it != cache.end())
     {
         return it->second;
@@ -214,17 +248,18 @@ id<MTLComputePipelineState> pipeline_for_fused_source(std::string const& source)
 
     NSString*      src = [NSString stringWithUTF8String:source.c_str()];
     NSError*       err = nil;
-    id<MTLLibrary> lib = [device() newLibraryWithSource:src options:nil error:&err];
+    id<MTLLibrary> lib = [device() newLibraryWithSource:src options:compile_options() error:&err];
     if (lib == nil)
     {
         throw std::runtime_error(
             "Metal fused kernel compile failed: " +
             std::string([[err localizedDescription] UTF8String]));
     }
-    id<MTLFunction> fn = [lib newFunctionWithName:@"fused_float"];
+    id<MTLFunction> fn =
+        [lib newFunctionWithName:[NSString stringWithUTF8String:function_name.c_str()]];
     if (fn == nil)
     {
-        throw std::runtime_error("Metal fused kernel function fused_float not found");
+        throw std::runtime_error("Metal fused kernel function not found: " + function_name);
     }
     id<MTLComputePipelineState> pso = [device() newComputePipelineStateWithFunction:fn error:&err];
     if (pso == nil)
@@ -233,7 +268,7 @@ id<MTLComputePipelineState> pipeline_for_fused_source(std::string const& source)
             "Metal fused pipeline creation failed: " +
             std::string([[err localizedDescription] UTF8String]));
     }
-    cache.emplace(source, pso);
+    cache.emplace(key, pso);
     return pso;
 }
 
@@ -262,7 +297,7 @@ std::size_t reduce_threadgroup_size(id<MTLComputePipelineState> pso, std::size_t
 }
 
 float reduce_buffer(
-    const char* kernel_name, const void* buffer, std::size_t n_elems, float identity)
+    const char* kernel_name, const void* buffer, std::size_t n_elems, float identity, dtype type)
 {
     if (n_elems == 0)
     {
@@ -273,12 +308,13 @@ float reduce_buffer(
         throw std::invalid_argument("Metal reduce: n_elems exceeds uint32 grid limit");
     }
 
+    std::string function_name = std::string(kernel_name) + "_" + dtype_suffix(type);
     const void* in    = buffer;
     void*       owned = nullptr;
 
     while (true)
     {
-        id<MTLComputePipelineState> pso      = pipeline_for(kernel_name);
+        id<MTLComputePipelineState> pso      = pipeline_for(function_name);
         std::size_t const           tg_size  = reduce_threadgroup_size(pso, n_elems);
         std::size_t const           n_groups = (n_elems + tg_size - 1) / tg_size;
         if (n_groups == 0)
@@ -330,6 +366,8 @@ float reduce_buffer(
         owned   = out;
         in      = out;
         n_elems = n_groups;
+        // Every subsequent pass reads the FP32 partials, never reduced storage.
+        function_name = std::string(kernel_name) + "_float";
     }
 }
 
@@ -369,19 +407,23 @@ void deallocate(void* ptr)
     buffer_registry().erase(ptr);
 }
 
-void dispatch(
-    const char*        kernel_name,
-    const void* const* in_buffers,
-    int                n_in,
-    void*              out_buffer,
-    std::size_t        n_elems)
+void dispatch(const char* kernel_name,
+    const void* const*    in_buffers,
+    int                   n_in,
+    void*                 out_buffer,
+    std::size_t           n_elems,
+    dtype                 type)
 {
     if (n_elems == 0)
     {
         return;
     }
+    if (n_elems > static_cast<std::size_t>(std::numeric_limits<uint32_t>::max()))
+    {
+        throw std::invalid_argument("Metal dispatch: n_elems exceeds uint32 grid limit");
+    }
 
-    std::string                 function_name = std::string(kernel_name) + "_float";
+    std::string                 function_name = std::string(kernel_name) + "_" + dtype_suffix(type);
     id<MTLComputePipelineState> pso           = pipeline_for(function_name);
 
     uint32_t n32 = static_cast<uint32_t>(n_elems);
@@ -402,14 +444,19 @@ void dispatch(
         function_name);
 }
 
-void dispatch_fill(void* out_buffer, float value, std::size_t n_elems)
+void dispatch_fill(void* out_buffer, float value, std::size_t n_elems, dtype type)
 {
     if (n_elems == 0)
     {
         return;
     }
+    if (n_elems > static_cast<std::size_t>(std::numeric_limits<uint32_t>::max()))
+    {
+        throw std::invalid_argument("Metal dispatch: n_elems exceeds uint32 grid limit");
+    }
 
-    id<MTLComputePipelineState> pso = pipeline_for("fill_float");
+    std::string                 function_name = std::string("fill_") + dtype_suffix(type);
+    id<MTLComputePipelineState> pso           = pipeline_for(function_name);
     uint32_t                    n32 = static_cast<uint32_t>(n_elems);
 
     run(
@@ -420,24 +467,29 @@ void dispatch_fill(void* out_buffer, float value, std::size_t n_elems)
           [enc setBytes:&n32 length:sizeof(n32) atIndex:2];
         },
         n_elems,
-        "fill_float");
+        function_name);
 }
 
-void dispatch_fused(
-    std::string const& kernel_source,
-    const void* const* in_buffers,
-    int                n_in,
-    float const*       scalars,
-    int                n_scalars,
-    void*              out_buffer,
-    std::size_t        n_elems)
+void dispatch_fused(std::string const& kernel_source,
+    const void* const*                 in_buffers,
+    int                                n_in,
+    float const*                       scalars,
+    int                                n_scalars,
+    void*                              out_buffer,
+    std::size_t                        n_elems,
+    dtype                              type)
 {
     if (n_elems == 0)
     {
         return;
     }
+    if (n_elems > static_cast<std::size_t>(std::numeric_limits<uint32_t>::max()))
+    {
+        throw std::invalid_argument("Metal dispatch: n_elems exceeds uint32 grid limit");
+    }
 
-    id<MTLComputePipelineState> pso = pipeline_for_fused_source(kernel_source);
+    std::string                 function_name = std::string("fused_") + dtype_suffix(type);
+    id<MTLComputePipelineState> pso = pipeline_for_fused_source(kernel_source, function_name);
     uint32_t                    n32 = static_cast<uint32_t>(n_elems);
 
     run(
@@ -458,22 +510,53 @@ void dispatch_fused(
           [enc setBytes:&n32 length:sizeof(n32) atIndex:idx];
         },
         n_elems,
-        "fused_float");
+        function_name);
 }
 
-float reduce_sum(const void* buffer, std::size_t n_elems)
+float reduce_sum(const void* buffer, std::size_t n_elems, dtype type)
 {
-    return reduce_buffer("reduce_sum_float", buffer, n_elems, reduce_identity<reduce_kind::sum>());
+    return reduce_buffer("reduce_sum", buffer, n_elems, reduce_identity<reduce_kind::sum>(), type);
 }
 
-float reduce_min(const void* buffer, std::size_t n_elems)
+float reduce_min(const void* buffer, std::size_t n_elems, dtype type)
 {
-    return reduce_buffer("reduce_min_float", buffer, n_elems, reduce_identity<reduce_kind::min>());
+    return reduce_buffer("reduce_min", buffer, n_elems, reduce_identity<reduce_kind::min>(), type);
 }
 
-float reduce_max(const void* buffer, std::size_t n_elems)
+float reduce_max(const void* buffer, std::size_t n_elems, dtype type)
 {
-    return reduce_buffer("reduce_max_float", buffer, n_elems, reduce_identity<reduce_kind::max>());
+    return reduce_buffer("reduce_max", buffer, n_elems, reduce_identity<reduce_kind::max>(), type);
+}
+
+void dispatch(const char* name, const void* const* inputs, int n_in, void* out, std::size_t n)
+{
+    dispatch(name, inputs, n_in, out, n, dtype::float32);
+}
+void dispatch_fill(void* out, float value, std::size_t n)
+{
+    dispatch_fill(out, value, n, dtype::float32);
+}
+void dispatch_fused(std::string const& source,
+    const void* const*                 inputs,
+    int                                n_in,
+    float const*                       scalars,
+    int                                n_scalars,
+    void*                              out,
+    std::size_t                        n)
+{
+    dispatch_fused(source, inputs, n_in, scalars, n_scalars, out, n, dtype::float32);
+}
+float reduce_sum(const void* buffer, std::size_t n)
+{
+    return reduce_sum(buffer, n, dtype::float32);
+}
+float reduce_min(const void* buffer, std::size_t n)
+{
+    return reduce_min(buffer, n, dtype::float32);
+}
+float reduce_max(const void* buffer, std::size_t n)
+{
+    return reduce_max(buffer, n, dtype::float32);
 }
 
 }  // namespace scalars::metal_backend

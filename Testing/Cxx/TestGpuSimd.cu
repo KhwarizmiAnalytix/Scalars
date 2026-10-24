@@ -5,7 +5,7 @@
 // std:: math. Tests are skipped automatically when no GPU device is present
 // at runtime. BackendProperties is a compile-time / host-side check that does
 // not require a GPU.
-#include "backend/simd.h"
+#include "scalars_macros.h"
 
 #if SCALARS_HAS_CUDA || SCALARS_HAS_HIP
 
@@ -21,8 +21,14 @@
 #include <type_traits>
 #include <vector>
 
+// Exercise device dispatch and use the same one-lane types in the host pass.
+// Including the CPU dispatcher on the host would redefine simd<float/double>.
+#if SCALARS_ON_GPU_DEVICE
+#include "backend/simd.h"
+#else
 #include "backend/gpu/double/simd.h"
-#include "backend/gpu/float/simd.h"
+#include "backend/gpu/reduced/simd.h"
+#endif
 #include "scalars_test.h"
 
 // ---- CUDA/HIP runtime API aliases -----------------------------------------
@@ -185,7 +191,10 @@ template <typename T>
 void run_gpu_simd_test()
 {
     constexpr size_t N    = 512;
-    constexpr double kRel = std::is_same_v<T, float> ? 5e-5 : 1e-11;
+    constexpr double kRel = std::is_same_v<T, scalars::bfloat16> ? 2e-2
+                            : std::is_same_v<T, scalars::half>   ? 2e-3
+                            : std::is_same_v<T, float>           ? 5e-5
+                                                                 : 1e-11;
     constexpr double kAbs = kRel;
 
     // a in [-2, 2), b in [0.5, 1.5) -- chosen so neither is zero and lt has a mix
@@ -307,6 +316,122 @@ void run_gpu_simd_test()
     }
 }
 
+// Raw encodings exercise subnormals, signed zeros, infinities, and every NaN
+// payload. Memory/sign/selection operations must not round these values.
+template <class T>
+__global__ void k_reduced_encoding_contract(
+    const T* input, T* output, uint16_t* masks, float* widened)
+{
+    using S     = simd<T>;
+    const int i = int(blockIdx.x * blockDim.x + threadIdx.x);
+    if (i >= 65536)
+        return;
+    const auto x        = S::gather(input, i);
+    const int  offset[] = {i};
+    S::scatter(S::loadu(input + i), offset, output);
+    S::scatter(S::gather(input, offset), i, output + 65536);
+    S::storeu(S::neg(x), output + 2 * 65536 + i);
+    S::storeu(S::fabs(x), output + 3 * 65536 + i);
+    S::storeu(S::signcopy(x, S::set(-1.f)), output + 4 * 65536 + i);
+    S::storeu(S::if_else(S::eq(S::set(1.f), S::set(1.f)), x, S::setzero()), output + 5 * 65536 + i);
+    S::storeu(S::if_else(S::not_mask(S::eq(S::set(1.f), S::set(1.f))), S::setzero(), x),
+        output + 6 * 65536 + i);
+    S::storeu(S::loadu(input + i, 1), output + 7 * 65536 + i, 1);
+    // Count zero permits a null pointer and must leave the destination alone.
+    S::storeu(S::loadu(static_cast<const T*>(nullptr), 0), static_cast<T*>(nullptr), 0);
+    S::storeu(S::eq(x, x), masks + i);
+    widened[i] = S::accumulate(x);
+}
+
+template <class T>
+__global__ void k_reduced_rounding_contract(T* out, uint16_t* masks, float* widened)
+{
+    using S         = simd<T>;
+    const float eps = std::is_same_v<T, scalars::half> ? 0x1p-10f : 0x1p-7f;
+    const auto  a = S::set(1.f + eps), b = S::set(1.f - eps), c = S::set(-1.f);
+    S::storeu(S::fma(a, b, c), out);
+    S::storeu(S::add(S::mul(a, b), c), out + 1);
+    widened[0] = S::to_float(a) * S::to_float(b) + S::to_float(c);
+    S::store_float(widened[0], out + 2);
+    const auto zero = S::setzero(), negzero = S::neg(zero);
+    S::storeu(S::min(zero, negzero), out + 3);
+    S::storeu(S::min(negzero, zero), out + 4);
+    S::storeu(S::max(zero, negzero), out + 5);
+    S::storeu(S::max(negzero, zero), out + 6);
+    const T nan(uint16_t(std::is_same_v<T, scalars::half> ? 0x7e15 : 0x7fc5), T::from_bits());
+    S::storeu(S::min(nan, zero), out + 7);
+    S::storeu(S::max(zero, nan), out + 8);
+    S::storeu(S::hmin(nan), out + 9);
+    S::storeu(S::hmax(nan), out + 10);
+    S::storeu(S::loadu(static_cast<const T*>(nullptr), 0), out + 11);
+    S::copy(&nan, out + 12);
+    const auto t = S::lt(c, a), f = S::ge(c, a);
+    masks[0] = t;
+    masks[1] = f;
+    masks[2] = S::le(a, a);
+    masks[3] = S::gt(a, c);
+    masks[4] = S::neq(nan, nan);
+    masks[5] = S::eq(nan, nan);
+    masks[6] = S::and_mask(t, S::not_mask(f));
+    masks[7] = S::or_mask(t, f);
+    masks[8] = S::xor_mask(t, f);
+}
+
+template <class T> void run_reduced_contract_test()
+{
+    constexpr size_t n = 65536;
+    std::vector<T>   values(n);
+    for (size_t i = 0; i < n; ++i)
+        values[i] = T(uint16_t(i), T::from_bits());
+    DevBuf<T>        input(n), output(8 * n);
+    DevBuf<uint16_t> masks(n);
+    DevBuf<float>    widened(n);
+    input.upload(values);
+    k_reduced_encoding_contract<<<512, 128>>>(input.d, output.d, masks.d, widened.d);
+    GPU_CHECK(gpuDeviceSynchronize());
+    const auto result = output.download();
+    const auto mask   = masks.download();
+    const auto fp32   = widened.download();
+    for (size_t i = 0; i < n; ++i)
+    {
+        for (int block : {0, 1, 5, 6, 7})
+            ASSERT_EQ(result[block * n + i].x, i);
+        ASSERT_EQ(result[2 * n + i].x, uint16_t(i ^ 0x8000));
+        ASSERT_EQ(result[3 * n + i].x, uint16_t(i & 0x7fff));
+        ASSERT_EQ(result[4 * n + i].x, uint16_t(i | 0x8000));
+        const float expected = static_cast<float>(values[i]);
+        ASSERT_EQ(mask[i], std::isnan(expected) ? 0 : 0xffff);
+        if (std::isnan(expected))
+            ASSERT_TRUE(std::isnan(fp32[i]));
+        else
+        {
+            ASSERT_EQ(fp32[i], expected);
+            if (expected == 0)
+                ASSERT_EQ(std::signbit(fp32[i]), std::signbit(expected));
+        }
+    }
+    k_reduced_rounding_contract<T><<<1, 1>>>(output.d, masks.d, widened.d);
+    GPU_CHECK(gpuDeviceSynchronize());
+    const auto  rounded = output.download();
+    const auto  cmp     = masks.download();
+    const float eps     = std::is_same_v<T, scalars::half> ? 0x1p-10f : 0x1p-7f;
+    EXPECT_EQ(rounded[0].x, T(-eps * eps).x);
+    EXPECT_EQ(rounded[1].x, 0);
+    EXPECT_EQ(rounded[2].x, rounded[0].x);
+    EXPECT_EQ(widened.download()[0], -eps * eps);
+    EXPECT_EQ(rounded[3].x, 0x8000);
+    EXPECT_EQ(rounded[4].x, 0x8000);
+    EXPECT_EQ(rounded[5].x, 0);
+    EXPECT_EQ(rounded[6].x, 0);
+    for (int i : {7, 8, 9, 10, 12})
+        EXPECT_EQ(rounded[i].x, std::is_same_v<T, scalars::half> ? 0x7e15 : 0x7fc5);
+    EXPECT_EQ(rounded[11].x, 0);
+    for (int i : {0, 2, 3, 4, 6, 7, 8})
+        EXPECT_EQ(cmp[i], 0xffff);
+    for (int i : {1, 5})
+        EXPECT_EQ(cmp[i], 0);
+}
+
 }  // namespace
 
 // --------------------------------------------------------------------------
@@ -316,6 +441,14 @@ TEST(GpuSimd, BackendProperties)
 {
     static_assert(simd<float>::size == 1, "GPU simd<float>::size must be 1");
     static_assert(simd<double>::size == 1, "GPU simd<double>::size must be 1");
+    static_assert(simd<scalars::half>::size == 1);
+    static_assert(simd<scalars::bfloat16>::size == 1);
+    static_assert(sizeof(simd<scalars::half>::simd_t) == 2);
+    static_assert(sizeof(simd<scalars::bfloat16>::simd_t) == 2);
+    static_assert(
+        std::is_same_v<decltype(simd<scalars::half>::accumulate(scalars::half{})), float>);
+    static_assert(
+        std::is_same_v<decltype(simd<scalars::bfloat16>::accumulate(scalars::bfloat16{})), float>);
     EXPECT_EQ(simd<float>::size, 1);
     EXPECT_EQ(simd<double>::size, 1);
 }
@@ -339,6 +472,26 @@ TEST(GpuSimd, ArithmeticAndMathDouble)
     if (ndev == 0)
         GTEST_SKIP() << "No GPU device -- skipping GpuSimd double test";
     run_gpu_simd_test<double>();
+}
+
+TEST(GpuSimd, ArithmeticAndMathHalf)
+{
+    int ndev = 0;
+    gpuGetDeviceCount(&ndev);
+    if (ndev == 0)
+        GTEST_SKIP() << "No GPU device";
+    run_gpu_simd_test<scalars::half>();
+    run_reduced_contract_test<scalars::half>();
+}
+
+TEST(GpuSimd, ArithmeticAndMathBFloat16)
+{
+    int ndev = 0;
+    gpuGetDeviceCount(&ndev);
+    if (ndev == 0)
+        GTEST_SKIP() << "No GPU device";
+    run_gpu_simd_test<scalars::bfloat16>();
+    run_reduced_contract_test<scalars::bfloat16>();
 }
 
 #endif  // SCALARS_HAS_CUDA || SCALARS_HAS_HIP
