@@ -1,0 +1,24 @@
+[project]
+name = "scalars"
+version = "0.1.0"
+description = "C++20 scalar types, traits, conversions, and math"
+
+[tool.ruff]
+line-length = 88
+target-version = "py312"
+
+[tool.ruff.format]
+
+[tool.codespell]
+skip = "ThirdParty,.git,build,build_*,build-*,.mkl-x86-env,.lintbin,__pycache__"
+
+[tool.lint-tool]
+# Third-party and in-tree modules the import linter should allow.
+# First-party C++ is include/ and src/; these names are Python-only.
+import-allowlist = [
+    "clang_format",
+    "colorama",
+    "coverage_tool",
+    "helpers",
+    "psutil",
+]

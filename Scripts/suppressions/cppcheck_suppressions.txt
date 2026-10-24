@@ -1,0 +1,3 @@
+// Public library entry points are used by downstream consumers and tests,
+// which are outside the include/ and src/ scan.
+unusedFunction

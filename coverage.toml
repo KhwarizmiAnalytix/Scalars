@@ -1,0 +1,16 @@
+# coverage-tool configuration, following LinearAlgebra's standalone layout.
+[coverage]
+filter = "."
+source_folder = "."
+output_format = "html-and-json"
+coverage_report_dir = "coverage_report"
+modules = ["Scalars"]
+test_exe_pattern = "{module}CxxTests"
+profraw_pattern = "{module}CxxTests.profraw"
+
+[coverage.exclude]
+patterns = ["*ThirdParty*", "*Testing*", "/usr/*"]
+llvm_ignore_regex = [".*Testing[/\\\\].*", ".*ThirdParty[/\\\\].*"]
+
+[coverage.gcc]
+lcov_ignore_errors = ["mismatch", "negative", "gcov", "unused"]

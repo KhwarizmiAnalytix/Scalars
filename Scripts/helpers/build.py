@@ -1,0 +1,102 @@
+"""
+Build Operations Helper Module
+
+Handles the build step (ninja / xcodebuild / msvc) for Scripts/setup.py.
+"""
+
+import os
+import subprocess
+from importlib import import_module
+from types import ModuleType
+
+resource: ModuleType | None
+
+try:
+    resource = import_module("resource")
+except ImportError:  # resource is POSIX-only; unavailable on Windows.
+    resource = None
+
+
+def _raise_stack_limit() -> None:
+    """Raise the process stack ulimit (soft) to the hard limit.
+
+    Some clang releases blow the default 8MB stack during optimization passes
+    (-O1 and above) on large translation units (e.g. vendored googletest),
+    crashing with an internal "stack smashing detected" / instruction-selection
+    segfault. Raising RLIMIT_STACK before spawning the build (inherited by
+    ninja's clang child processes) avoids the crash.
+    """
+    if resource is None:
+        return
+    try:
+        soft, hard = resource.getrlimit(resource.RLIMIT_STACK)
+        if hard == resource.RLIM_INFINITY or hard > soft:
+            resource.setrlimit(resource.RLIMIT_STACK, (hard, hard))
+    except (ValueError, OSError):
+        pass
+
+
+def get_logical_processor_count() -> int:
+    """Get the logical processor count, falling back to one if unavailable."""
+    try:
+        import psutil
+
+        count = psutil.cpu_count(logical=True)
+        if count is not None:
+            return int(count)
+    except ImportError:
+        pass
+
+    try:
+        return os.cpu_count() or 1
+    except AttributeError:
+        import multiprocessing
+
+        try:
+            return multiprocessing.cpu_count()
+        except NotImplementedError:
+            return 1
+
+
+def build_project(builder: str, build_enum: str, system: str, shell_flag: bool) -> int:
+    """
+    Build the project using the specified builder.
+
+    Args:
+        builder: Build system (ninja, xcodebuild, cmake)
+        build_enum: Build type (Release, Debug, RelWithDebInfo)
+        system: Operating system (Linux, Darwin, Windows)
+        shell_flag: Whether to use shell execution
+
+    Returns:
+        Exit code (0 for success, non-zero for failure)
+    """
+    try:
+        if system == "Linux" or builder == "ninja":
+            n = get_logical_processor_count()
+            cmake_cmd_build = [builder, "-j", str(n)]
+        elif builder == "xcodebuild":
+            n = get_logical_processor_count()
+            cmake_cmd_build = [
+                "xcodebuild",
+                "-configuration",
+                build_enum,
+                "-parallelizeTargets",
+                "-jobs",
+                str(n),
+            ]
+        elif system == "Windows":
+            cmake_cmd_build = [builder, "--build", ".", "--config", build_enum]
+        else:
+            return 1
+
+        _raise_stack_limit()
+        subprocess.check_call(
+            cmake_cmd_build, stderr=subprocess.STDOUT, shell=shell_flag
+        )
+        return 0
+
+    except subprocess.CalledProcessError:
+        return 1
+    except Exception:
+        return 1

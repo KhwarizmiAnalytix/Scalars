@@ -1,0 +1,120 @@
+"""
+Test Execution Helper Module
+
+Handles ctest / valgrind invocation for Scripts/setup.py.
+"""
+
+import os
+import shutil
+import subprocess
+from typing import Optional
+
+
+def _resolve_ctest() -> str:
+    """Return a real CMake ctest, not a same-named script earlier on PATH.
+
+    The pip ``cmake`` package can install a ``ctest.exe`` shim ahead of
+    CMake's own executable. That shim fails before any test runs. The
+    ``cmake`` used to configure the build is the matching ctest.
+    """
+    cmake = shutil.which("cmake")
+    if cmake:
+        sibling = os.path.join(
+            os.path.dirname(cmake), "ctest.exe" if os.name == "nt" else "ctest"
+        )
+        if os.path.isfile(sibling):
+            return sibling
+    return shutil.which("ctest") or "ctest"
+
+
+def run_ctest(
+    builder: str,
+    build_enum: str,
+    system: str,
+    verbosity: str,
+    shell_flag: bool,
+    sanitizer_type: Optional[str] = None,
+    source_path: Optional[str] = None,
+) -> int:
+    """
+    Run tests using ctest.
+
+    Args:
+        builder: Build system (ninja, xcodebuild, cmake)
+        build_enum: Build type (Release, Debug, RelWithDebInfo)
+        system: Operating system (Linux, Darwin, Windows)
+        verbosity: Verbosity flag
+        shell_flag: Whether to use shell execution
+        sanitizer_type: Type of sanitizer being used (address, thread, etc.)
+        source_path: Path to source directory
+
+    Returns:
+        Exit code (0 for success, non-zero for failure)
+    """
+    try:
+        ctest_cmd = [_resolve_ctest(), "--output-on-failure", "--no-tests=error"]
+
+        if system == "Windows" and builder != "ninja":
+            ctest_cmd.extend(["-C", build_enum])
+        if builder == "xcodebuild":
+            ctest_cmd.extend(["-C", build_enum])
+        if verbosity:
+            ctest_cmd.append(verbosity)
+
+        env = os.environ.copy()
+
+        if sanitizer_type and source_path:
+            suppressions_file = os.path.join(
+                source_path,
+                "Scripts",
+                "suppressions",
+                f"{sanitizer_type}san_suppressions.txt",
+            )
+            if os.path.exists(suppressions_file):
+                sanitizer_option = f"{sanitizer_type.upper()}SAN_OPTIONS"
+                env[sanitizer_option] = (
+                    f"suppressions={suppressions_file}:print_suppressions=1"
+                )
+
+        return subprocess.check_call(
+            ctest_cmd, stderr=subprocess.STDOUT, shell=shell_flag, env=env
+        )
+
+    except subprocess.CalledProcessError:
+        return 1
+    except Exception:
+        return 1
+
+
+def run_valgrind_test(
+    source_path: str, build_path: str, shell_flag: bool, build_enum: str = "Debug"
+) -> int:
+    """
+    Run tests with Valgrind memory checking.
+
+    Args:
+        source_path: Path to source directory
+        build_path: Path to build directory
+        shell_flag: Whether to use shell execution
+        build_enum: Configuration to test for multi-config generators
+
+    Returns:
+        Exit code (0 for success, non-zero for failure)
+    """
+    try:
+        return subprocess.call(
+            [
+                _resolve_ctest(),
+                "--test-dir",
+                build_path,
+                "-C",
+                build_enum,
+                "-T",
+                "memcheck",
+                "--output-on-failure",
+                "--no-tests=error",
+            ],
+            shell=shell_flag,
+        )
+    except Exception:
+        return 1

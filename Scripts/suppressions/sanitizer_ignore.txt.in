@@ -1,0 +1,4 @@
+# Clang sanitizer special case list, configured by cmake/sanitize.cmake
+# whenever SCALARS_ENABLE_SANITIZER is enabled with Clang.
+# Keep vendored code outside this library's sanitizer reports.
+src:*/ThirdParty/*

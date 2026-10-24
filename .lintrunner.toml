@@ -1,0 +1,877 @@
+# Linting configuration for Scalars.
+# First-party C++ lives in include/ and src/ (tests in Testing/).
+# Every check excludes ThirdParty/ and generated build directories.
+
+# ==============================================================================
+# C++ FORMATTING & ANALYSIS
+# ==============================================================================
+
+[[linter]]
+code = 'CLANGFORMAT'
+include_patterns = [
+    'include/**/*.h',
+    'include/**/*.hpp',
+    'include/**/*.hxx',
+    'include/**/*.cpp',
+    'include/**/*.cxx',
+    'include/**/*.c',
+    'include/**/*.cu',
+    'include/**/*.cuh',
+    'src/**/*.h',
+    'src/**/*.hpp',
+    'src/**/*.cpp',
+    'src/**/*.cxx',
+    'src/**/*.cu',
+    'src/**/*.cuh',
+    'Testing/**/*.h',
+    'examples/**/*.h',
+    'Testing/**/*.hpp',
+    'examples/**/*.hpp',
+    'Testing/**/*.cpp',
+    'examples/**/*.cpp',
+    'Testing/**/*.cxx',
+    'examples/**/*.cxx',
+]
+exclude_patterns = [
+    'ThirdParty/**',
+    '.mkl-x86-env/**',
+    '.lintbin/**',
+    'build-*/**',
+    '.git/**',
+    'bazel-*/**',
+    'build/**',
+    'build_*/**',
+]
+init_command = [
+    'python3',
+    '-m',
+    'lint_tool.adapters.s3_init',
+    '--linter=clang-format',
+    '--dry-run={{DRYRUN}}',
+    '--output-dir=.lintbin',
+    '--output-name=clang-format',
+]
+command = [
+    'python3',
+    '-m',
+    'lint_tool.adapters.clangformat_linter',
+    '--binary=.lintbin/clang-format',
+    '--',
+    '@{{PATHSFILE}}',
+]
+is_formatter = true
+
+[[linter]]
+code = 'CLANGTIDY'
+include_patterns = [
+    'include/**/*.h',
+    'include/**/*.hpp',
+    'include/**/*.cpp',
+    'include/**/*.cxx',
+    'include/**/*.cu',
+    'include/**/*.cuh',
+    'src/**/*.h',
+    'src/**/*.hpp',
+    'src/**/*.cpp',
+    'src/**/*.cxx',
+    'src/**/*.cu',
+    'src/**/*.cuh',
+    'Testing/**/*.h',
+    'examples/**/*.h',
+    'Testing/**/*.hpp',
+    'examples/**/*.hpp',
+    'Testing/**/*.cpp',
+    'examples/**/*.cpp',
+    'Testing/**/*.cxx',
+    'examples/**/*.cxx',
+]
+exclude_patterns = [
+    'ThirdParty/**',
+    '.mkl-x86-env/**',
+    '.lintbin/**',
+    'build-*/**',
+    '.git/**',
+    'bazel-*/**',
+]
+command = [
+    'python3',
+    '-m',
+    'lint_tool.adapters.clangtidy_linter',
+    '--binary=clang-tidy',
+    '--',
+    '@{{PATHSFILE}}',
+]
+
+# ==============================================================================
+# CMAKE CONFIGURATION
+# ==============================================================================
+
+[[linter]]
+code = 'CMAKE'
+include_patterns = [
+    'CMakeLists.txt',
+    'cmake/**/*.cmake',
+    'Testing/**/CMakeLists.txt',
+    'Testing/**/*.cmake',
+]
+exclude_patterns = [
+    'ThirdParty/**',
+    '.mkl-x86-env/**',
+    '.lintbin/**',
+    'build-*/**',
+    '.git/**',
+    'bazel-*/**',
+    'build/**',
+    'build_*/**',
+]
+command = [
+    'python3',
+    '-m',
+    'lint_tool.adapters.cmake_linter',
+    '--config=.cmakelintrc',
+    '--',
+    '@{{PATHSFILE}}',
+]
+
+[[linter]]
+code = 'CMAKEFORMAT'
+include_patterns = [
+    'CMakeLists.txt',
+    'cmake/**/*.cmake',
+    'Testing/**/CMakeLists.txt',
+    'Testing/**/*.cmake',
+]
+exclude_patterns = [
+    'ThirdParty/**',
+    '.mkl-x86-env/**',
+    '.lintbin/**',
+    'build-*/**',
+    '.git/**',
+    'bazel-*/**',
+    'build/**',
+    'build_*/**',
+]
+init_command = [
+    'python3',
+    '-m',
+    'lint_tool.adapters.pip_init',
+    '--dry-run={{DRYRUN}}',
+    'cmake-format>=0.6.0',
+]
+command = [
+    'python3',
+    '-m',
+    'lint_tool.adapters.cmake_format_linter',
+    '--config=.cmake-format.yaml',
+    '--',
+    '@{{PATHSFILE}}',
+]
+is_formatter = true
+
+[[linter]]
+code = 'CMAKE_MINIMUM_REQUIRED'
+include_patterns = ['CMakeLists.txt', 'Testing/**/CMakeLists.txt', 'cmake/**/CMakeLists.txt']
+exclude_patterns = [
+    'ThirdParty/**',
+    '.mkl-x86-env/**',
+    '.lintbin/**',
+    'build-*/**',
+    '.git/**',
+]
+command = [
+    'python3',
+    '-m',
+    'lint_tool.adapters.cmake_minimum_required_linter',
+    '--',
+    '@{{PATHSFILE}}',
+]
+
+# ==============================================================================
+# PYTHON LINTING & FORMATTING
+# ==============================================================================
+
+[[linter]]
+code = 'FLAKE8'
+include_patterns = ['Scripts/**/*.py']
+exclude_patterns = [
+    'ThirdParty/**',
+    '.mkl-x86-env/**',
+    '.lintbin/**',
+    'build-*/**',
+    '.git/**',
+    'build/**',
+    'build_*/**',
+    'bazel-*/**',
+    '**/__pycache__/**',
+]
+init_command = [
+    'python3',
+    '-m',
+    'lint_tool.adapters.pip_init',
+    '--dry-run={{DRYRUN}}',
+    'flake8==7.1.1',
+]
+command = [
+    'python3',
+    '-m',
+    'lint_tool.adapters.flake8_linter',
+    '--',
+    '@{{PATHSFILE}}',
+]
+
+[[linter]]
+code = 'MYPY'
+include_patterns = ['Scripts/**/*.py']
+exclude_patterns = [
+    'ThirdParty/**',
+    '.mkl-x86-env/**',
+    '.lintbin/**',
+    'build-*/**',
+    '.git/**',
+    'build/**',
+    'build_*/**',
+    '__pycache__/**',
+    'Scripts/setup.py',
+]
+init_command = [
+    'python3',
+    '-m',
+    'lint_tool.adapters.pip_init',
+    '--dry-run={{DRYRUN}}',
+    'mypy==1.14.1',
+]
+command = [
+    'python3',
+    '-m',
+    'lint_tool.adapters.mypy_linter',
+    '--config=mypy.ini',
+    '--',
+    '@{{PATHSFILE}}',
+]
+
+[[linter]]
+code = 'MYPYSTRICT'
+include_patterns = ['Scripts/**/*.py']
+exclude_patterns = [
+    'ThirdParty/**',
+    '.mkl-x86-env/**',
+    '.lintbin/**',
+    'build-*/**',
+    '.git/**',
+    'build/**',
+    'build_*/**',
+    '__pycache__/**',
+    'Scripts/setup.py',
+]
+init_command = [
+    'python3',
+    '-m',
+    'lint_tool.adapters.pip_init',
+    '--dry-run={{DRYRUN}}',
+    'mypy==1.14.1',
+]
+command = [
+    'python3',
+    '-m',
+    'lint_tool.adapters.mypy_linter',
+    '--config=mypy-strict.ini',
+    '--code=MYPYSTRICT',
+    '--',
+    '@{{PATHSFILE}}',
+]
+
+[[linter]]
+code = 'RUFF'
+include_patterns = ['Scripts/**/*.py']
+exclude_patterns = [
+    'ThirdParty/**',
+    '.mkl-x86-env/**',
+    '.lintbin/**',
+    'build-*/**',
+    '.git/**',
+    'build/**',
+    'build_*/**',
+    '__pycache__/**',
+]
+init_command = [
+    'python3',
+    '-m',
+    'lint_tool.adapters.pip_init',
+    '--dry-run={{DRYRUN}}',
+    'ruff>=0.8.0',
+]
+command = [
+    'python3',
+    '-m',
+    'lint_tool.adapters.ruff_linter',
+    '--',
+    '@{{PATHSFILE}}',
+]
+
+[[linter]]
+code = 'PYFMT'
+include_patterns = ['Scripts/**/*.py']
+exclude_patterns = [
+    'ThirdParty/**',
+    '.mkl-x86-env/**',
+    '.lintbin/**',
+    'build-*/**',
+    '.git/**',
+    'build/**',
+    'build_*/**',
+    '__pycache__/**',
+]
+init_command = [
+    'python3',
+    '-m',
+    'lint_tool.adapters.pip_init',
+    '--dry-run={{DRYRUN}}',
+    'black==24.10.0',
+]
+command = [
+    'python3',
+    '-m',
+    'lint_tool.adapters.pyfmt_linter',
+    '--',
+    '@{{PATHSFILE}}',
+]
+is_formatter = true
+
+# ==============================================================================
+# PYTHON TYPE & IMPORT CHECKING
+# ==============================================================================
+
+[[linter]]
+code = 'PYREFLY'
+include_patterns = ['Scripts/**/*.py']
+exclude_patterns = [
+    'ThirdParty/**',
+    '.mkl-x86-env/**',
+    '.lintbin/**',
+    'build-*/**',
+    '.git/**',
+    'build/**',
+    '__pycache__/**',
+]
+init_command = [
+    'python3',
+    '-m',
+    'lint_tool.adapters.pip_init',
+    '--dry-run={{DRYRUN}}',
+    'pyrefly>=0.0.50',
+]
+command = [
+    'python3',
+    '-m',
+    'lint_tool.adapters.pyrefly_linter',
+    '--config=pyrefly.toml',
+]
+
+[[linter]]
+code = 'IMPORT_LINTER'
+include_patterns = ['Scripts/**/*.py']
+exclude_patterns = [
+    'ThirdParty/**',
+    '.mkl-x86-env/**',
+    '.lintbin/**',
+    'build-*/**',
+    '.git/**',
+    'build/**',
+    '__pycache__/**',
+]
+init_command = [
+    'python3',
+    '-m',
+    'lint_tool.adapters.pip_init',
+    '--dry-run={{DRYRUN}}',
+    'import-linter>=2.0',
+]
+command = [
+    'python3',
+    '-m',
+    'lint_tool.adapters.import_linter',
+    '--',
+    '@{{PATHSFILE}}',
+]
+
+[[linter]]
+code = 'DOCSTRING_LINTER'
+include_patterns = ['Scripts/**/*.py']
+exclude_patterns = [
+    'ThirdParty/**',
+    '.mkl-x86-env/**',
+    '.lintbin/**',
+    'build-*/**',
+    '.git/**',
+    'build/**',
+    '__pycache__/**',
+]
+init_command = [
+    'python3',
+    '-m',
+    'lint_tool.adapters.pip_init',
+    '--dry-run={{DRYRUN}}',
+    'pydocstyle>=6.0.0',
+]
+command = [
+    'python3',
+    '-m',
+    'lint_tool.adapters.docstring_linter',
+    '--',
+    '@{{PATHSFILE}}',
+]
+
+# ==============================================================================
+# WHITESPACE & FORMATTING
+# ==============================================================================
+
+[[linter]]
+code = 'NEWLINE'
+include_patterns = ['**']
+exclude_patterns = [
+    '.lintrunner.toml',
+    'ThirdParty/**',
+    '.mkl-x86-env/**',
+    '.lintbin/**',
+    'build-*/**',
+    '.git/**',
+    'bazel-*/**',
+    'build/**',
+    'build_*/**',
+    '**/*.png',
+    '**/*.ico',
+    '**/*.o',
+    '**/*.a',
+]
+command = [
+    'python3',
+    '-m',
+    'lint_tool.adapters.newlines_linter',
+    '--',
+    '@{{PATHSFILE}}',
+]
+is_formatter = true
+
+[[linter]]
+code = 'SPACES'
+include_patterns = ['**']
+exclude_patterns = [
+    '.lintrunner.toml',
+    'ThirdParty/**',
+    '.mkl-x86-env/**',
+    '.lintbin/**',
+    'build-*/**',
+    '.git/**',
+    'bazel-*/**',
+    'build/**',
+    'build_*/**',
+    '**/*.png',
+    '**/*.ico',
+]
+command = [
+    'python3',
+    '-m',
+    'lint_tool.adapters.grep_linter',
+    '--pattern=[[:blank:]]$',
+    '--linter-name=SPACES',
+    '--error-name=trailing spaces',
+    '--replace-pattern=s/[[:blank:]]+$//',
+    '--error-description=This line has trailing spaces; please remove them.',
+    '--',
+    '@{{PATHSFILE}}',
+]
+
+[[linter]]
+code = 'TABS'
+include_patterns = ['**']
+exclude_patterns = [
+    '.lintrunner.toml',
+    'ThirdParty/**',
+    '.mkl-x86-env/**',
+    '.lintbin/**',
+    'build-*/**',
+    '.git/**',
+    'bazel-*/**',
+    'build/**',
+    'build_*/**',
+    '.gitmodules',
+    'Makefile',
+]
+command = [
+    'python3',
+    '-m',
+    'lint_tool.adapters.grep_linter',
+    '--pattern=	',
+    '--linter-name=TABS',
+    '--error-name=tabs in code',
+    '--replace-pattern=s/	/  /g',
+    '--error-description=Please use spaces instead of tabs.',
+    '--',
+    '@{{PATHSFILE}}',
+]
+
+# ==============================================================================
+# TEXT & SPELLING
+# ==============================================================================
+
+[[linter]]
+code = 'CODESPELL'
+include_patterns = ['**']
+exclude_patterns = [
+    '.lintrunner.toml',
+    'ThirdParty/**',
+    '.mkl-x86-env/**',
+    '.lintbin/**',
+    'build-*/**',
+    '.git/**',
+    'bazel-*/**',
+    'build/**',
+    'build_*/**',
+    'Scripts/suppressions/spell_suppressions.txt',
+]
+command = [
+    'python3',
+    '-m',
+    'lint_tool.adapters.codespell_linter',
+    '--',
+    '@{{PATHSFILE}}',
+]
+init_command = [
+    'python3',
+    '-m',
+    'lint_tool.adapters.pip_init',
+    '--dry-run={{DRYRUN}}',
+    'codespell[toml]==2.4.1',
+]
+
+# ==============================================================================
+# CONFIGURATION FILES
+# ==============================================================================
+
+[[linter]]
+code = 'EDITORCONFIG'
+include_patterns = ['**']
+exclude_patterns = [
+    'ThirdParty/**',
+    '.mkl-x86-env/**',
+    '.lintbin/**',
+    'build-*/**',
+    '.git/**',
+    'bazel-*/**',
+    'build/**',
+    'build_*/**',
+]
+init_command = [
+    'python3',
+    '-m',
+    'lint_tool.adapters.pip_init',
+    '--dry-run={{DRYRUN}}',
+    'editorconfig-checker>=3.0.0',
+]
+command = [
+    'python3',
+    '-m',
+    'lint_tool.adapters.editorconfig_checker_linter',
+    '--',
+    '@{{PATHSFILE}}',
+]
+
+[[linter]]
+code = 'PYPROJECT'
+include_patterns = ['pyproject.toml']
+exclude_patterns = [
+    'ThirdParty/**',
+    '.mkl-x86-env/**',
+    '.lintbin/**',
+    'build-*/**',
+    '.git/**',
+]
+command = [
+    'python3',
+    '-m',
+    'lint_tool.adapters.pyproject_linter',
+    '--',
+    '@{{PATHSFILE}}',
+]
+
+[[linter]]
+code = 'TPINCLUDE'
+include_patterns = [
+    'include/**/*.h',
+    'include/**/*.hpp',
+    'include/**/*.cpp',
+    'include/**/*.cu',
+    'include/**/*.cuh',
+    'src/**/*.h',
+    'src/**/*.hpp',
+    'src/**/*.cpp',
+    'src/**/*.cu',
+    'src/**/*.cuh',
+]
+exclude_patterns = [
+    'ThirdParty/**',
+    '.mkl-x86-env/**',
+    '.lintbin/**',
+    'build-*/**',
+    '.git/**',
+]
+command = [
+    'python3',
+    '-m',
+    'lint_tool.adapters.grep_linter',
+    '--pattern=#include.*ThirdParty',
+    '--linter-name=TPINCLUDE',
+    '--error-name=ThirdParty include path',
+    '--error-description=Use relative includes for ThirdParty; avoid direct paths.',
+    '--',
+    '@{{PATHSFILE}}',
+]
+
+[[linter]]
+code = 'COPYRIGHT'
+include_patterns = [
+    'include/**/*.h',
+    'include/**/*.hpp',
+    'include/**/*.cpp',
+    'include/**/*.cu',
+    'include/**/*.cuh',
+    'src/**/*.h',
+    'src/**/*.hpp',
+    'src/**/*.cpp',
+    'src/**/*.cxx',
+    'src/**/*.cu',
+    'src/**/*.cuh',
+    'Testing/**/*.h',
+    'examples/**/*.h',
+    'Testing/**/*.hpp',
+    'examples/**/*.hpp',
+    'Testing/**/*.cpp',
+    'examples/**/*.cpp',
+    'Testing/**/*.cxx',
+    'examples/**/*.cxx',
+]
+exclude_patterns = [
+    'ThirdParty/**',
+    '.mkl-x86-env/**',
+    '.lintbin/**',
+    'build-*/**',
+    '.git/**',
+    'bazel-*/**',
+    'build/**',
+    'build_*/**',
+]
+command = [
+    'python3',
+    '-m',
+    'lint_tool.adapters.grep_linter',
+    '--match-first-only',
+    '--pattern=Copyright|SPDX-License-Identifier',
+    '--linter-name=COPYRIGHT',
+    '--error-name=per-file copyright header',
+    '--error-description=Keep the project license in LICENSE. Do not add per-file Copyright or SPDX headers under include/, src/, or Testing/.',
+    '--',
+    '@{{PATHSFILE}}',
+]
+
+# ==============================================================================
+# CI/CD & SCRIPTS
+# ==============================================================================
+
+[[linter]]
+code = 'GHA'
+include_patterns = ['.github/workflows/**/*.yml', '.github/workflows/**/*.yaml']
+exclude_patterns = [
+    'ThirdParty/**',
+    '.mkl-x86-env/**',
+    '.lintbin/**',
+    'build-*/**',
+    '.git/**',
+]
+command = [
+    'python3',
+    '-m',
+    'lint_tool.adapters.gha_linter',
+    '--',
+    '@{{PATHSFILE}}',
+]
+
+[[linter]]
+code = 'ACTIONLINT'
+include_patterns = ['.github/workflows/**/*.yml', '.github/workflows/**/*.yaml']
+exclude_patterns = [
+    'ThirdParty/**',
+    '.mkl-x86-env/**',
+    '.lintbin/**',
+    'build-*/**',
+    '.git/**',
+]
+init_command = [
+    'python3',
+    '-m',
+    'lint_tool.adapters.s3_init',
+    '--linter=actionlint',
+    '--dry-run={{DRYRUN}}',
+    '--output-dir=.lintbin',
+    '--output-name=actionlint',
+]
+command = [
+    'python3',
+    '-m',
+    'lint_tool.adapters.actionlint_linter',
+    '--binary=.lintbin/actionlint',
+    '--',
+    '@{{PATHSFILE}}',
+]
+
+[[linter]]
+code = 'SHELLCHECK'
+include_patterns = ['Scripts/**/*.sh']
+exclude_patterns = [
+    'ThirdParty/**',
+    '.mkl-x86-env/**',
+    '.lintbin/**',
+    'build-*/**',
+    '.git/**',
+    'build/**',
+    'build_*/**',
+]
+init_command = [
+    'python3',
+    '-m',
+    'lint_tool.adapters.pip_init',
+    '--dry-run={{DRYRUN}}',
+    'shellcheck-py>=0.9.0',
+]
+command = [
+    'python3',
+    '-m',
+    'lint_tool.adapters.shellcheck_linter',
+    '--',
+    '@{{PATHSFILE}}',
+]
+
+[[linter]]
+code = 'EXEC'
+include_patterns = ['Scripts/**', 'tools/**', 'bin/**']
+exclude_patterns = [
+    'ThirdParty/**',
+    '.mkl-x86-env/**',
+    '.lintbin/**',
+    'build-*/**',
+    '.git/**',
+]
+command = [
+    'python3',
+    '-m',
+    'lint_tool.adapters.exec_linter',
+    '--',
+    '@{{PATHSFILE}}',
+]
+
+# ==============================================================================
+# METADATA & VERSIONING
+# ==============================================================================
+
+[[linter]]
+code = 'LINTRUNNER_VERSION'
+include_patterns = ['.lintrunner.toml']
+command = [
+    'python3',
+    '-m',
+    'lint_tool.adapters.lintrunner_version_linter',
+]
+
+[[linter]]
+code = 'BAZEL_LINTER'
+include_patterns = [
+    'BUILD',
+    'BUILD.bazel',
+    'WORKSPACE',
+    'WORKSPACE.bazel',
+    'MODULE.bazel',
+    'bazel/**/*.bzl',
+    '*.bzl',
+]
+exclude_patterns = [
+    'ThirdParty/**',
+    '.mkl-x86-env/**',
+    '.lintbin/**',
+    'build-*/**',
+    '.git/**',
+]
+command = [
+    'python3',
+    '-m',
+    'lint_tool.adapters.bazel_linter',
+    '--',
+    '@{{PATHSFILE}}',
+]
+
+# ==============================================================================
+# SPECIALIZED CHECKERS
+# ==============================================================================
+
+[[linter]]
+code = 'NOQA'
+include_patterns = ['Scripts/**/*.py']
+exclude_patterns = [
+    'ThirdParty/**',
+    '.mkl-x86-env/**',
+    '.lintbin/**',
+    'build-*/**',
+    '.git/**',
+    'build/**',
+    'build_*/**',
+    'bazel-*/**',
+    '**/__pycache__/**',
+]
+command = [
+    'python3',
+    '-m',
+    'lint_tool.adapters.grep_linter',
+    '--pattern=noqa|pylint:.*disable',
+    '--linter-name=NOQA',
+    '--error-name=suppression directive found',
+    '--error-description=Code has inline suppressions; review if necessary or remove.',
+    '--',
+    '@{{PATHSFILE}}',
+]
+
+[[linter]]
+code = 'TYPEIGNORE'
+include_patterns = ['Scripts/**/*.py']
+exclude_patterns = [
+    'ThirdParty/**',
+    '.mkl-x86-env/**',
+    '.lintbin/**',
+    'build-*/**',
+    '.git/**',
+    'build/**',
+    '__pycache__/**',
+]
+command = [
+    'python3',
+    '-m',
+    'lint_tool.adapters.grep_linter',
+    '--pattern=type:.*ignore',
+    '--linter-name=TYPEIGNORE',
+    '--error-name=type ignore directive',
+    '--error-description=Code has type ignore; review necessity.',
+    '--',
+    '@{{PATHSFILE}}',
+]
+
+[[linter]]
+code = 'TYPENOSKIP'
+include_patterns = ['mypy.ini']
+command = [
+    'python3',
+    '-m',
+    'lint_tool.adapters.grep_linter',
+    '--pattern=follow_imports\s*=\s*skip',
+    '--linter-name=TYPENOSKIP',
+    '--error-name=use of follow_imports = skip',
+    '--error-description=follow_imports = skip is forbidden from mypy.ini; it is too easy to accidentally turn off type checking. Use a top level # mypy: ignore-errors or per-site # type: ignore instead.',
+    '--',
+    '@{{PATHSFILE}}',
+]

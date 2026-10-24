@@ -1,0 +1,6 @@
+self-hosted-runner:
+  labels:
+    - gpu
+    - rocm
+    - appleclang-10
+    - appleclang-11

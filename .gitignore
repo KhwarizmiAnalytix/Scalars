@@ -1,4 +1,15 @@
 /build/
+/build_*/
+/build-*/
 /.cache/
+/.lintbin/
+/.venv*/
+/.mypy_cache/
+/.dmypy.json
+/.ruff_cache/
+/logs/
+**/__pycache__/
+*.profraw
+*.profdata
 *.user
 .DS_Store

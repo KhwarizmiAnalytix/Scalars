@@ -1,0 +1,32 @@
+# Every header in this repository uses #pragma once (a deliberate, universal
+# convention, not an oversight) — hence -portability-avoid-pragma-once below.
+# That check only becomes reachable once --header-filter actually matches
+# include/|src/ (see cmake/clang_tidy.cmake); it used to match nothing here.
+---
+Checks: >
+  -*,
+  bugprone-*,
+  performance-*,
+  portability-*,
+  modernize-use-nullptr,
+  modernize-use-override,
+  modernize-use-equals-default,
+  readability-braces-around-statements,
+  readability-identifier-naming,
+  -bugprone-easily-swappable-parameters,
+  -bugprone-narrowing-conversions,
+  -portability-avoid-pragma-once
+WarningsAsErrors: ''
+HeaderFilterRegex: ''
+FormatStyle: none
+CheckOptions:
+  - key: readability-identifier-naming.ClassCase
+    value: lower_case
+  - key: readability-identifier-naming.StructCase
+    value: lower_case
+  - key: readability-identifier-naming.EnumCase
+    value: lower_case
+  - key: readability-identifier-naming.EnumConstantCase
+    value: lower_case
+  - key: readability-identifier-naming.TypeAliasCase
+    value: lower_case

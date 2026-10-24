@@ -1,0 +1,4 @@
+[codespell]
+ignore-words = Scripts/suppressions/spell_suppressions.txt
+skip = .git,.github,.vscode,ThirdParty,build,build_*,build-*,.mkl-x86-env,.lintbin
+check-hidden = no
