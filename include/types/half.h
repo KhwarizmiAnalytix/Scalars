@@ -53,7 +53,7 @@
 #if defined(__x86_64__) || defined(_M_X64) || defined(__i386) || defined(_M_IX86)
 #if defined(__F16C__) &&                                                                           \
     !(defined(__CUDA_ARCH__) || defined(__CUDACC__) || defined(__HIP_DEVICE_COMPILE__))
-#define C10_X86_F16 1
+#define SCALARS_X86_F16 1
 #include <immintrin.h>  // import conversion ops from f16cintrin.h
 #endif                  // defined(__F16C__) && !(defined(__CUDA_ARCH__) || defined(__CUDACC__)
                         // || defined(__HIP_DEVICE_COMPILE__))
@@ -70,31 +70,31 @@ struct alignas(2) Half
     struct from_bits_t
     {
     };
-    C10_HOST_DEVICE static constexpr from_bits_t from_bits() { return from_bits_t(); }
+    SCALARS_HOST_DEVICE static constexpr from_bits_t from_bits() { return from_bits_t(); }
 
     // HIP wants __host__ __device__ tag, CUDA does not
 #if defined(USE_ROCM)
-    C10_HOST_DEVICE Half() = default;
+    SCALARS_HOST_DEVICE Half() = default;
 #else
     Half() = default;
 #endif
 
-    constexpr C10_HOST_DEVICE Half(unsigned short bits, from_bits_t /*unused*/) : x(bits) {}
+    constexpr SCALARS_HOST_DEVICE Half(unsigned short bits, from_bits_t /*unused*/) : x(bits) {}
 #if defined(__aarch64__) && !defined(__CUDACC__)
     inline Half(float16_t value);
     inline operator float16_t() const;
 #else
-    inline C10_HOST_DEVICE Half(float value);
-    inline C10_HOST_DEVICE operator float() const;
+    inline SCALARS_HOST_DEVICE Half(float value);
+    inline SCALARS_HOST_DEVICE operator float() const;
 #endif
 
 #if defined(__CUDACC__) || defined(__HIPCC__)
-    inline C10_HOST_DEVICE Half(const __half& value);
-    inline C10_HOST_DEVICE operator __half() const;
+    inline SCALARS_HOST_DEVICE Half(const __half& value);
+    inline SCALARS_HOST_DEVICE operator __half() const;
 #endif
 #ifdef SYCL_LANGUAGE_VERSION
-    inline C10_HOST_DEVICE Half(const sycl::half& value);
-    inline C10_HOST_DEVICE operator sycl::half() const;
+    inline SCALARS_HOST_DEVICE Half(const sycl::half& value);
+    inline SCALARS_HOST_DEVICE operator sycl::half() const;
 #endif
 };
 
@@ -115,9 +115,9 @@ namespace detail
  * mode and no operations on denormals) floating-point operations and bitcasts
  * between integer and floating-point variables.
  */
-C10_HOST_DEVICE inline float fp16_ieee_to_fp32_value(uint16_t h)
+SCALARS_HOST_DEVICE inline float fp16_ieee_to_fp32_value(uint16_t h)
 {
-#ifdef C10_X86_F16
+#ifdef SCALARS_X86_F16
     return _cvtsh_ss(h);
 #else
     /*
@@ -244,7 +244,7 @@ C10_HOST_DEVICE inline float fp16_ieee_to_fp32_value(uint16_t h)
     const uint32_t result = sign | (two_w < denormalized_cutoff ? fp32_to_bits(denormalized_value)
                                                                 : fp32_to_bits(normalized_value));
     return fp32_from_bits(result);
-#endif  // C10_X86_F16
+#endif  // SCALARS_X86_F16
 }
 
 /*
@@ -258,7 +258,7 @@ C10_HOST_DEVICE inline float fp16_ieee_to_fp32_value(uint16_t h)
  */
 inline uint16_t fp16_ieee_from_fp32_value(float f)
 {
-#ifdef C10_X86_F16
+#ifdef SCALARS_X86_F16
     return _cvtss_sh(f, _MM_FROUND_TO_NEAREST_INT);
 #else
     // const float scale_to_inf = 0x1.0p+112f;
@@ -293,7 +293,7 @@ inline uint16_t fp16_ieee_from_fp32_value(float f)
     const uint32_t nonsign       = exp_bits + mantissa_bits;
     return static_cast<uint16_t>(
         (sign >> 16) | (shl1_w > UINT32_C(0xFF000000) ? UINT16_C(0x7E00) : nonsign));
-#endif  // C10_X86_F16
+#endif  // SCALARS_X86_F16
 }
 
 /*
@@ -391,9 +391,9 @@ inline uint32_t fp16_ieee_to_fp32_bits(uint16_t h)
                ~zero_mask);
 }
 
-#ifdef C10_X86_F16
-#undef C10_X86_F16
-#endif  // C10_X86_F16
+#ifdef SCALARS_X86_F16
+#undef SCALARS_X86_F16
+#endif  // SCALARS_X86_F16
 
 #if defined(__aarch64__) && !defined(__CUDACC__)
 inline float16_t fp16_from_bits(uint16_t h)
@@ -422,9 +422,9 @@ inline uint16_t native_fp16_from_fp32_value(float f)
 }  // namespace detail
 
 //---------- below is copied from c10/util/Half-inl.h ----------------//
-C10_CLANG_DIAGNOSTIC_PUSH()
-#if C10_CLANG_HAS_WARNING("-Wimplicit-int-float-conversion")
-C10_CLANG_DIAGNOSTIC_IGNORE("-Wimplicit-int-float-conversion")
+SCALARS_CLANG_DIAGNOSTIC_PUSH()
+#if SCALARS_CLANG_HAS_WARNING("-Wimplicit-int-float-conversion")
+SCALARS_CLANG_DIAGNOSTIC_IGNORE("-Wimplicit-int-float-conversion")
 #endif
 
 #if defined(__aarch64__) && !defined(__CUDACC__)
@@ -436,7 +436,7 @@ inline Half::operator float16_t() const
 }
 #else
 
-inline C10_HOST_DEVICE Half::Half(float value)
+inline SCALARS_HOST_DEVICE Half::Half(float value)
     :
 #if defined(__CUDA_ARCH__) || defined(__HIP_DEVICE_COMPILE__)
       x(__half_as_short(__float2half(value)))
@@ -452,7 +452,7 @@ inline C10_HOST_DEVICE Half::Half(float value)
 
 /// Implicit conversions
 
-inline C10_HOST_DEVICE Half::operator float() const
+inline SCALARS_HOST_DEVICE Half::operator float() const
 {
 #if defined(__CUDA_ARCH__) || defined(__HIP_DEVICE_COMPILE__)
     return __half2float(*reinterpret_cast<const __half*>(&x));
@@ -471,22 +471,22 @@ inline C10_HOST_DEVICE Half::operator float() const
         */
 
 #if defined(__CUDACC__) || defined(__HIPCC__)
-inline C10_HOST_DEVICE Half::Half(const __half& value)
+inline SCALARS_HOST_DEVICE Half::Half(const __half& value)
 {
     x = *reinterpret_cast<const unsigned short*>(&value);
 }
-inline C10_HOST_DEVICE Half::operator __half() const
+inline SCALARS_HOST_DEVICE Half::operator __half() const
 {
     return *reinterpret_cast<const __half*>(&x);
 }
 #endif
 
 #ifdef SYCL_LANGUAGE_VERSION
-inline C10_HOST_DEVICE Half::Half(const sycl::half& value)
+inline SCALARS_HOST_DEVICE Half::Half(const sycl::half& value)
 {
     x = *reinterpret_cast<const unsigned short*>(&value);
 }
-inline C10_HOST_DEVICE Half::operator sycl::half() const
+inline SCALARS_HOST_DEVICE Half::operator sycl::half() const
 {
     return *reinterpret_cast<const sycl::half*>(&x);
 }
@@ -503,28 +503,28 @@ inline __device__ Half __ldg(const Half* ptr)
 
 /// Arithmetic
 
-inline C10_HOST_DEVICE Half operator+(const Half& a, const Half& b)
+inline SCALARS_HOST_DEVICE Half operator+(const Half& a, const Half& b)
 {
     return static_cast<float>(a) + static_cast<float>(b);
 }
 
-inline C10_HOST_DEVICE Half operator-(const Half& a, const Half& b)
+inline SCALARS_HOST_DEVICE Half operator-(const Half& a, const Half& b)
 {
     return static_cast<float>(a) - static_cast<float>(b);
 }
 
-inline C10_HOST_DEVICE Half operator*(const Half& a, const Half& b)
+inline SCALARS_HOST_DEVICE Half operator*(const Half& a, const Half& b)
 {
     return static_cast<float>(a) * static_cast<float>(b);
 }
 
-inline C10_HOST_DEVICE Half operator/(
+inline SCALARS_HOST_DEVICE Half operator/(
     const Half& a, const Half& b) __ubsan_ignore_float_divide_by_zero__
 {
     return static_cast<float>(a) / static_cast<float>(b);
 }
 
-inline C10_HOST_DEVICE Half operator-(const Half& a)
+inline SCALARS_HOST_DEVICE Half operator-(const Half& a)
 {
 #if (defined(__CUDA_ARCH__) && __CUDA_ARCH__ >= 530) || defined(__HIP_DEVICE_COMPILE__)
     return __hneg(a);
@@ -535,25 +535,25 @@ inline C10_HOST_DEVICE Half operator-(const Half& a)
 #endif
 }
 
-inline C10_HOST_DEVICE Half& operator+=(Half& a, const Half& b)
+inline SCALARS_HOST_DEVICE Half& operator+=(Half& a, const Half& b)
 {
     a = a + b;
     return a;
 }
 
-inline C10_HOST_DEVICE Half& operator-=(Half& a, const Half& b)
+inline SCALARS_HOST_DEVICE Half& operator-=(Half& a, const Half& b)
 {
     a = a - b;
     return a;
 }
 
-inline C10_HOST_DEVICE Half& operator*=(Half& a, const Half& b)
+inline SCALARS_HOST_DEVICE Half& operator*=(Half& a, const Half& b)
 {
     a = a * b;
     return a;
 }
 
-inline C10_HOST_DEVICE Half& operator/=(Half& a, const Half& b)
+inline SCALARS_HOST_DEVICE Half& operator/=(Half& a, const Half& b)
 {
     a = a / b;
     return a;
@@ -561,132 +561,132 @@ inline C10_HOST_DEVICE Half& operator/=(Half& a, const Half& b)
 
 /// Arithmetic with floats
 
-inline C10_HOST_DEVICE float operator+(Half a, float b)
+inline SCALARS_HOST_DEVICE float operator+(Half a, float b)
 {
     return static_cast<float>(a) + b;
 }
-inline C10_HOST_DEVICE float operator-(Half a, float b)
+inline SCALARS_HOST_DEVICE float operator-(Half a, float b)
 {
     return static_cast<float>(a) - b;
 }
-inline C10_HOST_DEVICE float operator*(Half a, float b)
+inline SCALARS_HOST_DEVICE float operator*(Half a, float b)
 {
     return static_cast<float>(a) * b;
 }
-inline C10_HOST_DEVICE float operator/(Half a, float b) __ubsan_ignore_float_divide_by_zero__
+inline SCALARS_HOST_DEVICE float operator/(Half a, float b) __ubsan_ignore_float_divide_by_zero__
 {
     return static_cast<float>(a) / b;
 }
 
-inline C10_HOST_DEVICE float operator+(float a, Half b)
+inline SCALARS_HOST_DEVICE float operator+(float a, Half b)
 {
     return a + static_cast<float>(b);
 }
-inline C10_HOST_DEVICE float operator-(float a, Half b)
+inline SCALARS_HOST_DEVICE float operator-(float a, Half b)
 {
     return a - static_cast<float>(b);
 }
-inline C10_HOST_DEVICE float operator*(float a, Half b)
+inline SCALARS_HOST_DEVICE float operator*(float a, Half b)
 {
     return a * static_cast<float>(b);
 }
-inline C10_HOST_DEVICE float operator/(float a, Half b) __ubsan_ignore_float_divide_by_zero__
+inline SCALARS_HOST_DEVICE float operator/(float a, Half b) __ubsan_ignore_float_divide_by_zero__
 {
     return a / static_cast<float>(b);
 }
 
-inline C10_HOST_DEVICE float& operator+=(float& a, const Half& b)
+inline SCALARS_HOST_DEVICE float& operator+=(float& a, const Half& b)
 {
     return a += static_cast<float>(b);
 }
-inline C10_HOST_DEVICE float& operator-=(float& a, const Half& b)
+inline SCALARS_HOST_DEVICE float& operator-=(float& a, const Half& b)
 {
     return a -= static_cast<float>(b);
 }
-inline C10_HOST_DEVICE float& operator*=(float& a, const Half& b)
+inline SCALARS_HOST_DEVICE float& operator*=(float& a, const Half& b)
 {
     return a *= static_cast<float>(b);
 }
-inline C10_HOST_DEVICE float& operator/=(float& a, const Half& b)
+inline SCALARS_HOST_DEVICE float& operator/=(float& a, const Half& b)
 {
     return a /= static_cast<float>(b);
 }
 
 /// Arithmetic with doubles
 
-inline C10_HOST_DEVICE double operator+(Half a, double b)
+inline SCALARS_HOST_DEVICE double operator+(Half a, double b)
 {
     return static_cast<double>(a) + b;
 }
-inline C10_HOST_DEVICE double operator-(Half a, double b)
+inline SCALARS_HOST_DEVICE double operator-(Half a, double b)
 {
     return static_cast<double>(a) - b;
 }
-inline C10_HOST_DEVICE double operator*(Half a, double b)
+inline SCALARS_HOST_DEVICE double operator*(Half a, double b)
 {
     return static_cast<double>(a) * b;
 }
-inline C10_HOST_DEVICE double operator/(Half a, double b) __ubsan_ignore_float_divide_by_zero__
+inline SCALARS_HOST_DEVICE double operator/(Half a, double b) __ubsan_ignore_float_divide_by_zero__
 {
     return static_cast<double>(a) / b;
 }
 
-inline C10_HOST_DEVICE double operator+(double a, Half b)
+inline SCALARS_HOST_DEVICE double operator+(double a, Half b)
 {
     return a + static_cast<double>(b);
 }
-inline C10_HOST_DEVICE double operator-(double a, Half b)
+inline SCALARS_HOST_DEVICE double operator-(double a, Half b)
 {
     return a - static_cast<double>(b);
 }
-inline C10_HOST_DEVICE double operator*(double a, Half b)
+inline SCALARS_HOST_DEVICE double operator*(double a, Half b)
 {
     return a * static_cast<double>(b);
 }
-inline C10_HOST_DEVICE double operator/(double a, Half b) __ubsan_ignore_float_divide_by_zero__
+inline SCALARS_HOST_DEVICE double operator/(double a, Half b) __ubsan_ignore_float_divide_by_zero__
 {
     return a / static_cast<double>(b);
 }
 
 /// Arithmetic with ints
 
-inline C10_HOST_DEVICE Half operator+(Half a, int b)
+inline SCALARS_HOST_DEVICE Half operator+(Half a, int b)
 {
     // NOLINTNEXTLINE(cppcoreguidelines-narrowing-conversions,bugprone-narrowing-conversions)
     return a + static_cast<Half>(b);
 }
-inline C10_HOST_DEVICE Half operator-(Half a, int b)
+inline SCALARS_HOST_DEVICE Half operator-(Half a, int b)
 {
     // NOLINTNEXTLINE(cppcoreguidelines-narrowing-conversions,bugprone-narrowing-conversions)
     return a - static_cast<Half>(b);
 }
-inline C10_HOST_DEVICE Half operator*(Half a, int b)
+inline SCALARS_HOST_DEVICE Half operator*(Half a, int b)
 {
     // NOLINTNEXTLINE(cppcoreguidelines-narrowing-conversions,bugprone-narrowing-conversions)
     return a * static_cast<Half>(b);
 }
-inline C10_HOST_DEVICE Half operator/(Half a, int b)
+inline SCALARS_HOST_DEVICE Half operator/(Half a, int b)
 {
     // NOLINTNEXTLINE(cppcoreguidelines-narrowing-conversions,bugprone-narrowing-conversions)
     return a / static_cast<Half>(b);
 }
 
-inline C10_HOST_DEVICE Half operator+(int a, Half b)
+inline SCALARS_HOST_DEVICE Half operator+(int a, Half b)
 {
     // NOLINTNEXTLINE(cppcoreguidelines-narrowing-conversions,bugprone-narrowing-conversions)
     return static_cast<Half>(a) + b;
 }
-inline C10_HOST_DEVICE Half operator-(int a, Half b)
+inline SCALARS_HOST_DEVICE Half operator-(int a, Half b)
 {
     // NOLINTNEXTLINE(cppcoreguidelines-narrowing-conversions,bugprone-narrowing-conversions)
     return static_cast<Half>(a) - b;
 }
-inline C10_HOST_DEVICE Half operator*(int a, Half b)
+inline SCALARS_HOST_DEVICE Half operator*(int a, Half b)
 {
     // NOLINTNEXTLINE(cppcoreguidelines-narrowing-conversions,bugprone-narrowing-conversions)
     return static_cast<Half>(a) * b;
 }
-inline C10_HOST_DEVICE Half operator/(int a, Half b)
+inline SCALARS_HOST_DEVICE Half operator/(int a, Half b)
 {
     // NOLINTNEXTLINE(cppcoreguidelines-narrowing-conversions,bugprone-narrowing-conversions)
     return static_cast<Half>(a) / b;
@@ -694,43 +694,43 @@ inline C10_HOST_DEVICE Half operator/(int a, Half b)
 
 //// Arithmetic with int64_t
 
-inline C10_HOST_DEVICE Half operator+(Half a, int64_t b)
+inline SCALARS_HOST_DEVICE Half operator+(Half a, int64_t b)
 {
     // NOLINTNEXTLINE(cppcoreguidelines-narrowing-conversions,bugprone-narrowing-conversions)
     return a + static_cast<Half>(b);
 }
-inline C10_HOST_DEVICE Half operator-(Half a, int64_t b)
+inline SCALARS_HOST_DEVICE Half operator-(Half a, int64_t b)
 {
     // NOLINTNEXTLINE(cppcoreguidelines-narrowing-conversions,bugprone-narrowing-conversions)
     return a - static_cast<Half>(b);
 }
-inline C10_HOST_DEVICE Half operator*(Half a, int64_t b)
+inline SCALARS_HOST_DEVICE Half operator*(Half a, int64_t b)
 {
     // NOLINTNEXTLINE(cppcoreguidelines-narrowing-conversions,bugprone-narrowing-conversions)
     return a * static_cast<Half>(b);
 }
-inline C10_HOST_DEVICE Half operator/(Half a, int64_t b)
+inline SCALARS_HOST_DEVICE Half operator/(Half a, int64_t b)
 {
     // NOLINTNEXTLINE(cppcoreguidelines-narrowing-conversions,bugprone-narrowing-conversions)
     return a / static_cast<Half>(b);
 }
 
-inline C10_HOST_DEVICE Half operator+(int64_t a, Half b)
+inline SCALARS_HOST_DEVICE Half operator+(int64_t a, Half b)
 {
     // NOLINTNEXTLINE(cppcoreguidelines-narrowing-conversions,bugprone-narrowing-conversions)
     return static_cast<Half>(a) + b;
 }
-inline C10_HOST_DEVICE Half operator-(int64_t a, Half b)
+inline SCALARS_HOST_DEVICE Half operator-(int64_t a, Half b)
 {
     // NOLINTNEXTLINE(cppcoreguidelines-narrowing-conversions,bugprone-narrowing-conversions)
     return static_cast<Half>(a) - b;
 }
-inline C10_HOST_DEVICE Half operator*(int64_t a, Half b)
+inline SCALARS_HOST_DEVICE Half operator*(int64_t a, Half b)
 {
     // NOLINTNEXTLINE(cppcoreguidelines-narrowing-conversions,bugprone-narrowing-conversions)
     return static_cast<Half>(a) * b;
 }
-inline C10_HOST_DEVICE Half operator/(int64_t a, Half b)
+inline SCALARS_HOST_DEVICE Half operator/(int64_t a, Half b)
 {
     // NOLINTNEXTLINE(cppcoreguidelines-narrowing-conversions,bugprone-narrowing-conversions)
     return static_cast<Half>(a) / b;
@@ -739,7 +739,7 @@ inline C10_HOST_DEVICE Half operator/(int64_t a, Half b)
 /// NOTE: we do not define comparisons directly and instead rely on the implicit
 /// conversion from scalars::Half to float.
 
-C10_CLANG_DIAGNOSTIC_POP()
+SCALARS_CLANG_DIAGNOSTIC_POP()
 
 }  // namespace scalars
 

@@ -1,4 +1,4 @@
-#if !defined(C10_INTERNAL_INCLUDE_COMPLEX_REMAINING_H)
+#if !defined(SCALARS_INTERNAL_INCLUDE_COMPLEX_REMAINING_H)
 #error \
     "math/complex_utils.h is not meant to be individually included. Include types/complex.h instead."
 #endif

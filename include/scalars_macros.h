@@ -47,9 +47,6 @@
 #define SCALARS_HOST
 #endif
 
-#define C10_HOST_DEVICE SCALARS_HOST_DEVICE
-#define C10_DEVICE SCALARS_DEVICE
-#define C10_HOST SCALARS_HOST
 
 #define _SCALARS_PRAGMA_IMPL(string) _Pragma(#string)
 #define _SCALARS_PRAGMA(string) _SCALARS_PRAGMA_IMPL(string)
@@ -65,42 +62,6 @@
 #define SCALARS_CLANG_DIAGNOSTIC_IGNORE(flag)
 #define SCALARS_CLANG_HAS_WARNING(flag) 0
 #endif
-
-#define C10_CLANG_DIAGNOSTIC_PUSH() SCALARS_CLANG_DIAGNOSTIC_PUSH()
-#define C10_CLANG_DIAGNOSTIC_POP() SCALARS_CLANG_DIAGNOSTIC_POP()
-#define C10_CLANG_DIAGNOSTIC_IGNORE(flag) SCALARS_CLANG_DIAGNOSTIC_IGNORE(flag)
-#define C10_CLANG_HAS_WARNING(flag) SCALARS_CLANG_HAS_WARNING(flag)
-
-#ifdef _WIN32
-#define SCALARS_HIDDEN
-#if defined(SCALARS_BUILD_SHARED_LIBS)
-#define SCALARS_EXPORT __declspec(dllexport)
-#define SCALARS_IMPORT __declspec(dllimport)
-#else
-#define SCALARS_EXPORT
-#define SCALARS_IMPORT
-#endif
-#else
-#if defined(__GNUC__)
-#define SCALARS_EXPORT __attribute__((__visibility__("default")))
-#define SCALARS_HIDDEN __attribute__((__visibility__("hidden")))
-#else
-#define SCALARS_EXPORT
-#define SCALARS_HIDDEN
-#endif
-#define SCALARS_IMPORT SCALARS_EXPORT
-#endif
-
-#ifdef SCALARS_BUILD_MAIN_LIB
-#define SCALARS_API SCALARS_EXPORT
-#else
-#define SCALARS_API SCALARS_IMPORT
-#endif
-
-#define C10_EXPORT SCALARS_EXPORT
-#define C10_IMPORT SCALARS_IMPORT
-#define C10_HIDDEN SCALARS_HIDDEN
-#define C10_API SCALARS_API
 
 #define _SCALARS_HIDDEN_NS_GET_MACRO(_1, _2, _3, NAME, ...) NAME
 #define _SCALARS_HIDDEN_NS_1(n1) namespace n1 __attribute__((visibility("hidden"))) {

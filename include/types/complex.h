@@ -9,12 +9,12 @@
 #include <thrust/complex.h>
 #endif
 
-C10_CLANG_DIAGNOSTIC_PUSH()
-#if C10_CLANG_HAS_WARNING("-Wimplicit-float-conversion")
-C10_CLANG_DIAGNOSTIC_IGNORE("-Wimplicit-float-conversion")
+SCALARS_CLANG_DIAGNOSTIC_PUSH()
+#if SCALARS_CLANG_HAS_WARNING("-Wimplicit-float-conversion")
+SCALARS_CLANG_DIAGNOSTIC_IGNORE("-Wimplicit-float-conversion")
 #endif
-#if C10_CLANG_HAS_WARNING("-Wfloat-conversion")
-C10_CLANG_DIAGNOSTIC_IGNORE("-Wfloat-conversion")
+#if SCALARS_CLANG_HAS_WARNING("-Wfloat-conversion")
+SCALARS_CLANG_DIAGNOSTIC_IGNORE("-Wfloat-conversion")
 #endif
 
 namespace scalars
@@ -152,32 +152,32 @@ template <typename T> struct alignas(sizeof(T) * 2) complex
     T imag_ = T(0);
 
     constexpr complex() = default;
-    C10_HOST_DEVICE constexpr complex(const T& re, const T& im = T()) : real_(re), imag_(im) {}
+    SCALARS_HOST_DEVICE constexpr complex(const T& re, const T& im = T()) : real_(re), imag_(im) {}
     template <typename U>
     explicit constexpr complex(const std::complex<U>& other) : complex(other.real(), other.imag())
     {
     }
 #if defined(__CUDACC__) || defined(__HIPCC__)
     template <typename U>
-    explicit C10_HOST_DEVICE complex(const thrust::complex<U>& other)
+    explicit SCALARS_HOST_DEVICE complex(const thrust::complex<U>& other)
         : real_(other.real()), imag_(other.imag())
     {
     }
 // NOTE can not be implemented as follow due to ROCm bug:
-//   explicit C10_HOST_DEVICE complex(const thrust::complex<U> &other):
+//   explicit SCALARS_HOST_DEVICE complex(const thrust::complex<U> &other):
 //   complex(other.real(), other.imag()) {}
 #endif
 
     // Use SFINAE to specialize casting constructor for scalars::complex<float> and
     // scalars::complex<double>
     template <typename U = T>
-    C10_HOST_DEVICE explicit constexpr complex(
+    SCALARS_HOST_DEVICE explicit constexpr complex(
         const std::enable_if_t<std::is_same_v<U, float>, complex<double>>& other)
         : real_(other.real_), imag_(other.imag_)
     {
     }
     template <typename U = T>
-    C10_HOST_DEVICE constexpr complex(
+    SCALARS_HOST_DEVICE constexpr complex(
         const std::enable_if_t<std::is_same_v<U, double>, complex<float>>& other)
         : real_(other.real_), imag_(other.imag_)
     {
@@ -309,7 +309,7 @@ template <typename T> struct alignas(sizeof(T) * 2) complex
     }
 
 #if defined(__CUDACC__) || defined(__HIPCC__)
-    template <typename U> C10_HOST_DEVICE complex<T>& operator=(const thrust::complex<U>& rhs)
+    template <typename U> SCALARS_HOST_DEVICE complex<T>& operator=(const thrust::complex<U>& rhs)
     {
         real_ = rhs.real();
         imag_ = rhs.imag();
@@ -323,7 +323,7 @@ template <typename T> struct alignas(sizeof(T) * 2) complex
     }
 
 #if defined(__CUDACC__) || defined(__HIPCC__)
-    template <typename U> C10_HOST_DEVICE explicit operator thrust::complex<U>() const
+    template <typename U> SCALARS_HOST_DEVICE explicit operator thrust::complex<U>() const
     {
         return static_cast<thrust::complex<U>>(thrust::complex<T>(real(), imag()));
     }
@@ -332,9 +332,9 @@ template <typename T> struct alignas(sizeof(T) * 2) complex
     // consistent with NumPy behavior
     explicit constexpr operator bool() const { return real() || imag(); }
 
-    C10_HOST_DEVICE constexpr T real() const { return real_; }
+    SCALARS_HOST_DEVICE constexpr T real() const { return real_; }
     constexpr void              real(T value) { real_ = value; }
-    C10_HOST_DEVICE constexpr T imag() const { return imag_; }
+    SCALARS_HOST_DEVICE constexpr T imag() const { return imag_; }
     constexpr void              imag(T value) { imag_ = value; }
 };
 
@@ -547,7 +547,7 @@ std::basic_istream<CharT, Traits>& operator>>(std::basic_istream<CharT, Traits>&
     return is;
 }
 
-template <typename T> C10_HOST_DEVICE complex<T> polar(const T& r, const T& theta = T())
+template <typename T> SCALARS_HOST_DEVICE complex<T> polar(const T& r, const T& theta = T())
 {
 #if defined(__CUDACC__) || defined(__HIPCC__)
     return static_cast<complex<T>>(thrust::polar(r, theta));
@@ -567,36 +567,36 @@ template <> struct alignas(4) complex<Half>
     complex() = default;
     // Half constructor is not constexpr so the following constructor can't
     // be constexpr
-    C10_HOST_DEVICE explicit inline complex(const Half& real, const Half& imag)
+    SCALARS_HOST_DEVICE explicit inline complex(const Half& real, const Half& imag)
         : real_(real), imag_(imag)
     {
     }
-    C10_HOST_DEVICE inline complex(const scalars::complex<float>& value)
+    SCALARS_HOST_DEVICE inline complex(const scalars::complex<float>& value)
         : real_(value.real()), imag_(value.imag())
     {
     }
 
     // Conversion operator
-    inline C10_HOST_DEVICE operator scalars::complex<float>() const { return {real_, imag_}; }
+    inline SCALARS_HOST_DEVICE operator scalars::complex<float>() const { return {real_, imag_}; }
 
-    constexpr C10_HOST_DEVICE Half real() const { return real_; }
-    constexpr C10_HOST_DEVICE Half imag() const { return imag_; }
+    constexpr SCALARS_HOST_DEVICE Half real() const { return real_; }
+    constexpr SCALARS_HOST_DEVICE Half imag() const { return imag_; }
 
-    C10_HOST_DEVICE complex<Half>& operator+=(const complex<Half>& other)
+    SCALARS_HOST_DEVICE complex<Half>& operator+=(const complex<Half>& other)
     {
         real_ = static_cast<float>(real_) + static_cast<float>(other.real_);
         imag_ = static_cast<float>(imag_) + static_cast<float>(other.imag_);
         return *this;
     }
 
-    C10_HOST_DEVICE complex<Half>& operator-=(const complex<Half>& other)
+    SCALARS_HOST_DEVICE complex<Half>& operator-=(const complex<Half>& other)
     {
         real_ = static_cast<float>(real_) - static_cast<float>(other.real_);
         imag_ = static_cast<float>(imag_) - static_cast<float>(other.imag_);
         return *this;
     }
 
-    C10_HOST_DEVICE complex<Half>& operator*=(const complex<Half>& other)
+    SCALARS_HOST_DEVICE complex<Half>& operator*=(const complex<Half>& other)
     {
         auto a = static_cast<float>(real_);
         auto b = static_cast<float>(imag_);
@@ -610,7 +610,7 @@ template <> struct alignas(4) complex<Half>
 
 }  // namespace scalars
 
-C10_CLANG_DIAGNOSTIC_POP()
+SCALARS_CLANG_DIAGNOSTIC_POP()
 
 // std functions
 //
@@ -629,7 +629,7 @@ template <typename T> constexpr T imag(const scalars::complex<T>& z)
     return z.imag();
 }
 
-template <typename T> C10_HOST_DEVICE T abs(const scalars::complex<T>& z)
+template <typename T> SCALARS_HOST_DEVICE T abs(const scalars::complex<T>& z)
 {
 #if defined(__CUDACC__) || defined(__HIPCC__)
     return thrust::abs(static_cast<thrust::complex<T>>(z));
@@ -644,7 +644,7 @@ template <typename T> C10_HOST_DEVICE T abs(const scalars::complex<T>& z)
 #define ROCm_Bug(x) x
 #endif
 
-template <typename T> C10_HOST_DEVICE T arg(const scalars::complex<T>& z)
+template <typename T> SCALARS_HOST_DEVICE T arg(const scalars::complex<T>& z)
 {
     return ROCm_Bug(std)::atan2(std::imag(z), std::real(z));
 }
@@ -677,12 +677,12 @@ template <typename T> constexpr scalars::complex<T> conj(const scalars::complex<
 
 }  // namespace std
 
-#define C10_INTERNAL_INCLUDE_COMPLEX_REMAINING_H
+#define SCALARS_INTERNAL_INCLUDE_COMPLEX_REMAINING_H
 // math functions are included in a separate file
 #include "math/complex_math.h"  // IWYU pragma: keep
 // utilities for complex types
 #include "math/complex_utils.h"  // IWYU pragma: keep
-#undef C10_INTERNAL_INCLUDE_COMPLEX_REMAINING_H
+#undef SCALARS_INTERNAL_INCLUDE_COMPLEX_REMAINING_H
 
 #include "types/bfloat16.h"
 

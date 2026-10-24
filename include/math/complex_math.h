@@ -1,14 +1,16 @@
-#if !defined(C10_INTERNAL_INCLUDE_COMPLEX_REMAINING_H)
+#if !defined(SCALARS_INTERNAL_INCLUDE_COMPLEX_REMAINING_H)
 #error                                                                                             \
     "math/complex_math.h is not meant to be individually included. Include types/complex.h instead."
 #endif
+
+#include "common/scalars_export.h"
 
 namespace scalars::complex_math
 {
 
 // Exponential functions
 
-template <typename T> C10_HOST_DEVICE inline scalars::complex<T> exp(const scalars::complex<T>& x)
+template <typename T> SCALARS_HOST_DEVICE inline scalars::complex<T> exp(const scalars::complex<T>& x)
 {
 #if defined(__CUDACC__) || defined(__HIPCC__)
     return static_cast<scalars::complex<T>>(thrust::exp(static_cast<thrust::complex<T>>(x)));
@@ -17,7 +19,7 @@ template <typename T> C10_HOST_DEVICE inline scalars::complex<T> exp(const scala
 #endif
 }
 
-template <typename T> C10_HOST_DEVICE inline scalars::complex<T> log(const scalars::complex<T>& x)
+template <typename T> SCALARS_HOST_DEVICE inline scalars::complex<T> log(const scalars::complex<T>& x)
 {
 #if defined(__CUDACC__) || defined(__HIPCC__)
     return static_cast<scalars::complex<T>>(thrust::log(static_cast<thrust::complex<T>>(x)));
@@ -26,7 +28,7 @@ template <typename T> C10_HOST_DEVICE inline scalars::complex<T> log(const scala
 #endif
 }
 
-template <typename T> C10_HOST_DEVICE inline scalars::complex<T> log10(const scalars::complex<T>& x)
+template <typename T> SCALARS_HOST_DEVICE inline scalars::complex<T> log10(const scalars::complex<T>& x)
 {
 #if defined(__CUDACC__) || defined(__HIPCC__)
     return static_cast<scalars::complex<T>>(thrust::log10(static_cast<thrust::complex<T>>(x)));
@@ -35,7 +37,7 @@ template <typename T> C10_HOST_DEVICE inline scalars::complex<T> log10(const sca
 #endif
 }
 
-template <typename T> C10_HOST_DEVICE inline scalars::complex<T> log2(const scalars::complex<T>& x)
+template <typename T> SCALARS_HOST_DEVICE inline scalars::complex<T> log2(const scalars::complex<T>& x)
 {
     const scalars::complex<T> log2 = scalars::complex<T>(::log(2.0), 0.0);
     return scalars::complex_math::log(x) / log2;
@@ -46,14 +48,14 @@ template <typename T> C10_HOST_DEVICE inline scalars::complex<T> log2(const scal
 #if defined(_LIBCPP_VERSION) || (defined(__GLIBCXX__) && !defined(_GLIBCXX11_USE_C99_COMPLEX))
 namespace _detail
 {
-C10_API scalars::complex<float> sqrt(const scalars::complex<float>& in);
-C10_API scalars::complex<double> sqrt(const scalars::complex<double>& in);
-C10_API scalars::complex<float> acos(const scalars::complex<float>& in);
-C10_API scalars::complex<double> acos(const scalars::complex<double>& in);
+SCALARS_API scalars::complex<float> sqrt(const scalars::complex<float>& in);
+SCALARS_API scalars::complex<double> sqrt(const scalars::complex<double>& in);
+SCALARS_API scalars::complex<float> acos(const scalars::complex<float>& in);
+SCALARS_API scalars::complex<double> acos(const scalars::complex<double>& in);
 }  // namespace _detail
 #endif
 
-template <typename T> C10_HOST_DEVICE inline scalars::complex<T> sqrt(const scalars::complex<T>& x)
+template <typename T> SCALARS_HOST_DEVICE inline scalars::complex<T> sqrt(const scalars::complex<T>& x)
 {
 #if defined(__CUDACC__) || defined(__HIPCC__)
     return static_cast<scalars::complex<T>>(thrust::sqrt(static_cast<thrust::complex<T>>(x)));
@@ -65,7 +67,7 @@ template <typename T> C10_HOST_DEVICE inline scalars::complex<T> sqrt(const scal
 }
 
 template <typename T>
-C10_HOST_DEVICE inline scalars::complex<T> pow(
+SCALARS_HOST_DEVICE inline scalars::complex<T> pow(
     const scalars::complex<T>& x, const scalars::complex<T>& y)
 {
 #if defined(__CUDACC__) || defined(__HIPCC__)
@@ -88,7 +90,7 @@ namespace detail
 // numerical precision loss in complex arithmetic.
 // The issue occurs when vectorizer packs scalar multiplies before backend
 // can form FMA instructions, resulting in double rounding instead of single.
-C10_HOST_DEVICE inline thrust::complex<float> complex_mul_fma(
+SCALARS_HOST_DEVICE inline thrust::complex<float> complex_mul_fma(
     thrust::complex<float> a, thrust::complex<float> b)
 {
     // Complex multiplication: (a.r + a.i*i) * (b.r + b.i*i)
@@ -103,7 +105,7 @@ C10_HOST_DEVICE inline thrust::complex<float> complex_mul_fma(
 }  // namespace detail
 
 template <>
-C10_HOST_DEVICE inline scalars::complex<float> pow(
+SCALARS_HOST_DEVICE inline scalars::complex<float> pow(
     const scalars::complex<float>& x, const scalars::complex<float>& y)
 {
     auto log_x   = thrust::log(static_cast<thrust::complex<float>>(x));
@@ -113,7 +115,7 @@ C10_HOST_DEVICE inline scalars::complex<float> pow(
 #endif
 
 template <typename T>
-C10_HOST_DEVICE inline scalars::complex<T> pow(const scalars::complex<T>& x, const T& y)
+SCALARS_HOST_DEVICE inline scalars::complex<T> pow(const scalars::complex<T>& x, const T& y)
 {
 #if defined(__CUDACC__) || defined(__HIPCC__)
     return static_cast<scalars::complex<T>>(thrust::pow(static_cast<thrust::complex<T>>(x), y));
@@ -123,7 +125,7 @@ C10_HOST_DEVICE inline scalars::complex<T> pow(const scalars::complex<T>& x, con
 }
 
 template <typename T>
-C10_HOST_DEVICE inline scalars::complex<T> pow(const T& x, const scalars::complex<T>& y)
+SCALARS_HOST_DEVICE inline scalars::complex<T> pow(const T& x, const scalars::complex<T>& y)
 {
 #if defined(__CUDACC__) || defined(__HIPCC__)
     return static_cast<scalars::complex<T>>(thrust::pow(x, static_cast<thrust::complex<T>>(y)));
@@ -133,7 +135,7 @@ C10_HOST_DEVICE inline scalars::complex<T> pow(const T& x, const scalars::comple
 }
 
 template <typename T, typename U>
-C10_HOST_DEVICE inline scalars::complex<decltype(T() * U())> pow(
+SCALARS_HOST_DEVICE inline scalars::complex<decltype(T() * U())> pow(
     const scalars::complex<T>& x, const scalars::complex<U>& y)
 {
 #if defined(__CUDACC__) || defined(__HIPCC__)
@@ -146,7 +148,7 @@ C10_HOST_DEVICE inline scalars::complex<decltype(T() * U())> pow(
 }
 
 template <typename T, typename U>
-C10_HOST_DEVICE inline scalars::complex<decltype(T() * U())> pow(
+SCALARS_HOST_DEVICE inline scalars::complex<decltype(T() * U())> pow(
     const scalars::complex<T>& x, const U& y)
 {
 #if defined(__CUDACC__) || defined(__HIPCC__)
@@ -157,7 +159,7 @@ C10_HOST_DEVICE inline scalars::complex<decltype(T() * U())> pow(
 }
 
 template <typename T, typename U>
-C10_HOST_DEVICE inline scalars::complex<decltype(T() * U())> pow(
+SCALARS_HOST_DEVICE inline scalars::complex<decltype(T() * U())> pow(
     const T& x, const scalars::complex<U>& y)
 {
 #if defined(__CUDACC__) || defined(__HIPCC__)
@@ -169,7 +171,7 @@ C10_HOST_DEVICE inline scalars::complex<decltype(T() * U())> pow(
 
 // Trigonometric functions
 
-template <typename T> C10_HOST_DEVICE inline scalars::complex<T> sin(const scalars::complex<T>& x)
+template <typename T> SCALARS_HOST_DEVICE inline scalars::complex<T> sin(const scalars::complex<T>& x)
 {
 #if defined(__CUDACC__) || defined(__HIPCC__)
     return static_cast<scalars::complex<T>>(thrust::sin(static_cast<thrust::complex<T>>(x)));
@@ -178,7 +180,7 @@ template <typename T> C10_HOST_DEVICE inline scalars::complex<T> sin(const scala
 #endif
 }
 
-template <typename T> C10_HOST_DEVICE inline scalars::complex<T> cos(const scalars::complex<T>& x)
+template <typename T> SCALARS_HOST_DEVICE inline scalars::complex<T> cos(const scalars::complex<T>& x)
 {
 #if defined(__CUDACC__) || defined(__HIPCC__)
     return static_cast<scalars::complex<T>>(thrust::cos(static_cast<thrust::complex<T>>(x)));
@@ -187,7 +189,7 @@ template <typename T> C10_HOST_DEVICE inline scalars::complex<T> cos(const scala
 #endif
 }
 
-template <typename T> C10_HOST_DEVICE inline scalars::complex<T> tan(const scalars::complex<T>& x)
+template <typename T> SCALARS_HOST_DEVICE inline scalars::complex<T> tan(const scalars::complex<T>& x)
 {
 #if defined(__CUDACC__) || defined(__HIPCC__)
     return static_cast<scalars::complex<T>>(thrust::tan(static_cast<thrust::complex<T>>(x)));
@@ -196,7 +198,7 @@ template <typename T> C10_HOST_DEVICE inline scalars::complex<T> tan(const scala
 #endif
 }
 
-template <typename T> C10_HOST_DEVICE inline scalars::complex<T> asin(const scalars::complex<T>& x)
+template <typename T> SCALARS_HOST_DEVICE inline scalars::complex<T> asin(const scalars::complex<T>& x)
 {
 #if defined(__CUDACC__) || defined(__HIPCC__)
     return static_cast<scalars::complex<T>>(thrust::asin(static_cast<thrust::complex<T>>(x)));
@@ -205,7 +207,7 @@ template <typename T> C10_HOST_DEVICE inline scalars::complex<T> asin(const scal
 #endif
 }
 
-template <typename T> C10_HOST_DEVICE inline scalars::complex<T> acos(const scalars::complex<T>& x)
+template <typename T> SCALARS_HOST_DEVICE inline scalars::complex<T> acos(const scalars::complex<T>& x)
 {
 #if defined(__CUDACC__) || defined(__HIPCC__)
     return static_cast<scalars::complex<T>>(thrust::acos(static_cast<thrust::complex<T>>(x)));
@@ -216,7 +218,7 @@ template <typename T> C10_HOST_DEVICE inline scalars::complex<T> acos(const scal
 #endif
 }
 
-template <typename T> C10_HOST_DEVICE inline scalars::complex<T> atan(const scalars::complex<T>& x)
+template <typename T> SCALARS_HOST_DEVICE inline scalars::complex<T> atan(const scalars::complex<T>& x)
 {
 #if defined(__CUDACC__) || defined(__HIPCC__)
     return static_cast<scalars::complex<T>>(thrust::atan(static_cast<thrust::complex<T>>(x)));
@@ -227,7 +229,7 @@ template <typename T> C10_HOST_DEVICE inline scalars::complex<T> atan(const scal
 
 // Hyperbolic functions
 
-template <typename T> C10_HOST_DEVICE inline scalars::complex<T> sinh(const scalars::complex<T>& x)
+template <typename T> SCALARS_HOST_DEVICE inline scalars::complex<T> sinh(const scalars::complex<T>& x)
 {
 #if defined(__CUDACC__) || defined(__HIPCC__)
     return static_cast<scalars::complex<T>>(thrust::sinh(static_cast<thrust::complex<T>>(x)));
@@ -236,7 +238,7 @@ template <typename T> C10_HOST_DEVICE inline scalars::complex<T> sinh(const scal
 #endif
 }
 
-template <typename T> C10_HOST_DEVICE inline scalars::complex<T> cosh(const scalars::complex<T>& x)
+template <typename T> SCALARS_HOST_DEVICE inline scalars::complex<T> cosh(const scalars::complex<T>& x)
 {
 #if defined(__CUDACC__) || defined(__HIPCC__)
     return static_cast<scalars::complex<T>>(thrust::cosh(static_cast<thrust::complex<T>>(x)));
@@ -245,7 +247,7 @@ template <typename T> C10_HOST_DEVICE inline scalars::complex<T> cosh(const scal
 #endif
 }
 
-template <typename T> C10_HOST_DEVICE inline scalars::complex<T> tanh(const scalars::complex<T>& x)
+template <typename T> SCALARS_HOST_DEVICE inline scalars::complex<T> tanh(const scalars::complex<T>& x)
 {
 #if defined(__CUDACC__) || defined(__HIPCC__)
     return static_cast<scalars::complex<T>>(thrust::tanh(static_cast<thrust::complex<T>>(x)));
@@ -254,7 +256,7 @@ template <typename T> C10_HOST_DEVICE inline scalars::complex<T> tanh(const scal
 #endif
 }
 
-template <typename T> C10_HOST_DEVICE inline scalars::complex<T> asinh(const scalars::complex<T>& x)
+template <typename T> SCALARS_HOST_DEVICE inline scalars::complex<T> asinh(const scalars::complex<T>& x)
 {
 #if defined(__CUDACC__) || defined(__HIPCC__)
     return static_cast<scalars::complex<T>>(thrust::asinh(static_cast<thrust::complex<T>>(x)));
@@ -263,7 +265,7 @@ template <typename T> C10_HOST_DEVICE inline scalars::complex<T> asinh(const sca
 #endif
 }
 
-template <typename T> C10_HOST_DEVICE inline scalars::complex<T> acosh(const scalars::complex<T>& x)
+template <typename T> SCALARS_HOST_DEVICE inline scalars::complex<T> acosh(const scalars::complex<T>& x)
 {
 #if defined(__CUDACC__) || defined(__HIPCC__)
     return static_cast<scalars::complex<T>>(thrust::acosh(static_cast<thrust::complex<T>>(x)));
@@ -272,7 +274,7 @@ template <typename T> C10_HOST_DEVICE inline scalars::complex<T> acosh(const sca
 #endif
 }
 
-template <typename T> C10_HOST_DEVICE inline scalars::complex<T> atanh(const scalars::complex<T>& x)
+template <typename T> SCALARS_HOST_DEVICE inline scalars::complex<T> atanh(const scalars::complex<T>& x)
 {
 #if defined(__CUDACC__) || defined(__HIPCC__)
     return static_cast<scalars::complex<T>>(thrust::atanh(static_cast<thrust::complex<T>>(x)));
@@ -281,7 +283,7 @@ template <typename T> C10_HOST_DEVICE inline scalars::complex<T> atanh(const sca
 #endif
 }
 
-template <typename T> C10_HOST_DEVICE inline scalars::complex<T> log1p(const scalars::complex<T>& z)
+template <typename T> SCALARS_HOST_DEVICE inline scalars::complex<T> log1p(const scalars::complex<T>& z)
 {
 #if defined(__APPLE__) || defined(__MACOSX) || defined(__CUDACC__) || defined(__HIPCC__) ||        \
     defined(__SYCL_DEVICE_ONLY__)
@@ -340,7 +342,7 @@ template <typename T> C10_HOST_DEVICE inline scalars::complex<T> log1p(const sca
 #endif
 }
 
-template <typename T> C10_HOST_DEVICE inline scalars::complex<T> expm1(const scalars::complex<T>& z)
+template <typename T> SCALARS_HOST_DEVICE inline scalars::complex<T> expm1(const scalars::complex<T>& z)
 {
     // expm1(z) = exp(z) - 1
     // Define z = x + i * y

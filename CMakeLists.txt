@@ -156,9 +156,10 @@ set_target_properties(ScalarsCore PROPERTIES EXPORT_NAME Core)
 add_library(Scalars src/core/scalar_type.cpp src/math/complex_math.cpp)
 add_library(Scalars::Scalars ALIAS Scalars)
 target_link_libraries(Scalars PUBLIC ScalarsCore)
-target_compile_definitions(Scalars PRIVATE SCALARS_BUILD_MAIN_LIB)
 if(BUILD_SHARED_LIBS)
-    target_compile_definitions(Scalars PUBLIC SCALARS_BUILD_SHARED_LIBS)
+    target_compile_definitions(Scalars PUBLIC SCALARS_SHARED_DEFINE PRIVATE SCALARS_BUILDING_DLL)
+else()
+    target_compile_definitions(Scalars PUBLIC SCALARS_STATIC_DEFINE)
 endif()
 set_target_properties(
     Scalars
