@@ -187,12 +187,62 @@ Math functions reuse the selected float backend/provider, including its accuracy
 limits and scalar mappings. X86 builds without SVML/SLEEF use standard-library
 scalar mappings for transcendental functions. FMA follows the float backend's
 fused/nonfused behavior and narrows once. The numerical contract assumes the
-default floating-point rounding environment. Complex SIMD packets are not
-implemented by this CPU extension.
+default floating-point rounding environment. Complex SIMD is described below.
 
 Reference architecture:
 [PyTorch reduced CPU packets](https://github.com/pytorch/pytorch/blob/main/aten/src/ATen/cpu/vec/vec256/vec256_16bit_float.h)
 and [widened functional helpers](https://github.com/pytorch/pytorch/blob/main/aten/src/ATen/cpu/vec/functional_bfloat16.h).
+
+## SIMD and complex primitives for LinearAlgebra
+
+LinearAlgebra can use the existing `<backend/simd.h>` interface directly.
+`simd<scalars::complex<float>>` and `simd<scalars::complex<double>>` extend
+that interface with complex load/store, counted load/store, set/setzero,
+add/sub/mul/div, FMA, negation, conjugation, accumulation, and strided
+gather/scatter. Arithmetic reuses the selected real SIMD backend; complex
+division maps scalar division over the lanes. Each complex SIMD value holds
+separate real and imaginary registers, with `size` complex elements.
+No packet adapter or additional public abstraction is needed.
+
+Link `Scalars::Scalars` to inherit the ISA, compiler flags, and math provider.
+Complex SIMD is CPU-only and requires a configured CPU backend, like the
+existing real SIMD types. Complex half/bfloat16 SIMD is not yet supported.
+
+```cpp
+#include <backend/simd.h>
+using S = simd<scalars::complex<double>>;
+auto a = S::loadu(input);
+auto b = S::fma(a, S::set({2.0, -1.0}), S::setzero());
+S::storeu(b, output);
+```
+
+`<math/complex_vector.h>` supplies `scalars::complex_dot`, `complex_axpy`,
+`complex_scale`, and `complex_rotate` using this same SIMD API directly.
+They handle tails with scalar arithmetic and use scalar loops when CPU SIMD
+is disabled. Strides count complex objects and may be negative. Dot and AXPY
+optionally conjugate x. Rotation computes `x' = c*x + s*y` and
+`y' = c*y - conj(s)*x` without scratch storage. Output strides must be nonzero;
+output ranges must be disjoint except for AXPY's exact in-place x/y case.
+Empty ranges accept null pointers. Complex counted loads zero-fill inactive
+lanes; counted stores write only active lanes (`0 <= count <= size`).
+SIMD accumulation order and FMA semantics follow the selected real backend.
+
+Real SIMD `ploadquad` uses PRETORIAN's implementation for each ISA:
+four-wide SSE/NEON float loads duplicate pairs; AVX float and AVX-512 double
+loads repeat each input four times; narrower double loads broadcast one value.
+PRETORIAN does not provide AVX-512 float `ploadquad`, so that operation remains
+unavailable. `ptranspose<4>` on wider float/double SIMD registers follows PRETORIAN's
+rectangular transpose: a `4 x size` input becomes a contiguous `size x 4`
+output repacked into four registers. Store those registers consecutively to
+produce a packed RHS block. Existing square transposes and half-width helpers remain
+on `simd<T>` itself. FMA returns its result; consumers must assign that result,
+including in half-width remainder kernels.
+
+Scalar helpers `scalars::abs`, `arg`, `conj`, `real`, `imag`, `norm`, and
+`isfinite` are available for complex values. Finite host complex division and
+the custom complex square root use power-of-two scaling at extreme magnitudes.
+Only Scalars is changed; LinearAlgebra can consume these operations directly
+when its local scalar/SIMD implementations are replaced.
 
 ## GPU backends
 
@@ -241,7 +291,9 @@ selected type and are responsible for their own storage conversions.
 - CUDA/HIP device tests require the corresponding compiler and GPU. Metal tests run on a Mac with a Metal device. This release does not claim full host/device parity with PyTorch.
 - Arithmetic for half/bfloat16 uses float intermediates and rounds the result to the stored format.
 - Scalar casts from complex to real discard the imaginary component by explicit request; review this policy for strict applications.
-- complex division and transcendental functions delegate to `std::complex`, with intermediate float for reduced precision.
+- Complex division uses scaled host arithmetic for finite float/double operands;
+  transcendental functions use standard-library math and the existing custom
+  square-root/arc-cosine implementation where required by the standard library.
 - Type promotion supports the four defined real component types; broader integral promotion and checked casts remain future work.
 - Numerical limits currently specialize half only; add complete bfloat16 limits and edge-case exhaustive tests before production use.
 - complex_math.h is CPU-only because of the `std::complex` backend.

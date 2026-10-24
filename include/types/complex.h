@@ -1,6 +1,8 @@
 #pragma once
 
+#include <cmath>
 #include <complex>
+#include <type_traits>
 
 #include "scalars_macros.h"
 #include "types/half.h"
@@ -19,6 +21,27 @@ SCALARS_CLANG_DIAGNOSTIC_IGNORE("-Wfloat-conversion")
 
 namespace scalars
 {
+
+namespace detail_complex
+{
+// Evaluate (x*u + y*v) / denominator * 2^exponent without overflowing
+// products or losing a subnormal product before the final rescaling.
+template <class T> inline T scaled_sum_products(T x, T u, T y, T v, T denominator, int exponent)
+{
+    int       ex = 0, eu = 0, ey = 0, ev = 0;
+    const T   mx = std::frexp(x, &ex), mu = std::frexp(u, &eu);
+    const T   my = std::frexp(y, &ey), mv = std::frexp(v, &ev);
+    const T   first = mx * mu, second = my * mv;
+    const int first_exponent = ex + eu, second_exponent = ey + ev;
+    const int common_exponent =
+        first == T(0)    ? second_exponent
+        : second == T(0) ? first_exponent
+                         : (first_exponent > second_exponent ? first_exponent : second_exponent);
+    const T sum = std::scalbn(first, first_exponent - common_exponent) +
+                  std::scalbn(second, second_exponent - common_exponent);
+    return std::scalbn(sum / denominator, exponent + common_exponent);
+}
+}  // namespace detail_complex
 
 // scalars::complex is an implementation of complex numbers that aims
 // to work on all devices supported by PyTorch
@@ -270,6 +293,29 @@ template <typename T> struct alignas(sizeof(T) * 2) complex
         T b = imag_;
         U c = rhs.real();
         U d = rhs.imag();
+
+#if !defined(__CUDACC__) && !defined(__HIPCC__)
+        if constexpr (std::is_same_v<T, U> && std::is_floating_point_v<T>)
+        {
+            if (!std::is_constant_evaluated() && std::isfinite(a) && std::isfinite(b) &&
+                std::isfinite(c) && std::isfinite(d) && (c != T(0) || d != T(0)))
+            {
+                // Normalize the divisor, then scale each numerator product
+                // independently: components may differ by thousands of powers
+                // of two while one quotient component remains finite.
+                int denominator_exponent = 0;
+                std::frexp(std::fmax(std::fabs(c), std::fabs(d)), &denominator_exponent);
+                const T    normalized_c = std::scalbn(c, -denominator_exponent);
+                const T    normalized_d = std::scalbn(d, -denominator_exponent);
+                const auto denominator  = normalized_c * normalized_c + normalized_d * normalized_d;
+                real_                   = detail_complex::scaled_sum_products(
+                    a, c, b, d, denominator, -2 * denominator_exponent);
+                imag_ = detail_complex::scaled_sum_products(
+                    b, c, -a, d, denominator, -2 * denominator_exponent);
+                return *this;
+            }
+        }
+#endif
 
 #if defined(__GNUC__) && !defined(__clang__)
         // std::abs is already constexpr by gcc
@@ -704,6 +750,19 @@ using complex_float  = scalars::complex<float>;
 using complex_double = scalars::complex<double>;
 using complex_half   = scalars::complex<half>;
 using complex_bf16   = scalars::complex<bfloat16>;
+
+// Qualified Scalars access to component operations already provided above.
+using std::abs;
+using std::arg;
+using std::conj;
+using std::imag;
+using std::norm;
+using std::real;
+
+template <class T> inline bool isfinite(const complex<T>& z)
+{
+    return std::isfinite(z.real()) && std::isfinite(z.imag());
+}
 
 using scalars::complex_math::acos;
 using scalars::complex_math::acosh;

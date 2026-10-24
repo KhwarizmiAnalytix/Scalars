@@ -25,24 +25,26 @@ scalars::complex<T> compute_csqrt(const scalars::complex<T>& z) {
         std::sqrt(static_cast<std::complex<T>>(z)));
   }
 
-  // Special case for square root of pure imaginary values
-  if (z.real() == T(0)) {
-    if (z.imag() == T(0)) {
-      return scalars::complex<T>(T(0), z.imag());
-    }
-    auto v = std::sqrt(half * std::abs(z.imag()));
-    return scalars::complex<T>(v, std::copysign(v, z.imag()));
+  const T scale = std::fmax(std::abs(z.real()), std::abs(z.imag()));
+  if (scale == T(0))
+  {
+    return {T(0), z.imag()};
   }
 
-  // At this point, z is non-zero and finite
-  if (z.real() >= 0.0) {
-    auto t = std::sqrt((z.real() + std::abs(z)) * half);
-    return scalars::complex<T>(t, half * (z.imag() / t));
+  // An even power-of-two normalization keeps hypot and the subsequent sum
+  // finite, and avoids halving a subnormal input down to zero.
+  int exponent = 0;
+  std::frexp(scale, &exponent);
+  if (exponent % 2 != 0)
+  {
+    --exponent;
   }
-
-  auto t = std::sqrt((-z.real() + std::abs(z)) * half);
-  return scalars::complex<T>(
-      half * std::abs(z.imag() / t), std::copysign(t, z.imag()));
+  const T real = std::scalbn(z.real(), -exponent);
+  const T imag = std::scalbn(z.imag(), -exponent);
+  const T t = std::sqrt((std::hypot(real, imag) + std::abs(real)) * half);
+  const T result_real = real >= T(0) ? t : half * std::abs(imag / t);
+  const T result_imag = real >= T(0) ? half * (imag / t) : std::copysign(t, imag);
+  return {std::scalbn(result_real, exponent / 2), std::scalbn(result_imag, exponent / 2)};
 }
 
 // Compute complex arccosine using formula from W. Kahan

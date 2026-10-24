@@ -109,3 +109,59 @@ TEST(ComplexMath, SquareRootAndArcCosineEdges)
     EXPECT_TRUE(std::isfinite(log1p(complex<float>{0.1f, 0.02f}).imag()));
     EXPECT_TRUE(std::isfinite(expm1(complex<double>{0.1, -0.2}).real()));
 }
+
+template <class T> void check_matrix_scalar_extremes()
+{
+    using c             = scalars::complex<T>;
+    const T    maximum  = std::numeric_limits<T>::max();
+    const T    tiny     = std::numeric_limits<T>::denorm_min();
+    const auto quotient = c(maximum, maximum) / c(maximum, maximum);
+    EXPECT_EQ(quotient.real(), T(1));
+    EXPECT_NEAR(quotient.imag(), T(0), std::numeric_limits<T>::epsilon() * 4);
+    const auto large_quotient = c(maximum, maximum) / c(T(1), T(1));
+    EXPECT_EQ(large_quotient.real(), maximum);
+    EXPECT_EQ(large_quotient.imag(), T(0));
+    const auto small_quotient = c(tiny, tiny) / c(tiny, tiny);
+    EXPECT_EQ(small_quotient.real(), T(1));
+    EXPECT_EQ(small_quotient.imag(), T(0));
+    const auto mixed_scale = c(maximum, tiny) / c(T(0), tiny);
+    EXPECT_EQ(mixed_scale.real(), T(1));
+    EXPECT_TRUE(std::isinf(mixed_scale.imag()));
+    const auto finite_mixed = c(maximum, tiny) / c(maximum, maximum);
+    EXPECT_NEAR(finite_mixed.real(), T(.5), std::numeric_limits<T>::epsilon() * 4);
+    EXPECT_NEAR(finite_mixed.imag(), T(-.5), std::numeric_limits<T>::epsilon() * 4);
+    // A tiny divisor component must survive until the product is formed:
+    // scaling the divisor first would erase this finite real component.
+    const auto separated = c(maximum, T(0)) / c(tiny, T(1));
+    EXPECT_EQ(separated.real(), maximum * tiny);
+    EXPECT_EQ(separated.imag(), -maximum);
+
+    const auto root = scalars::sqrt(c(maximum, maximum));
+    EXPECT_TRUE(scalars::isfinite(root));
+    // Squaring after scaling avoids overflow in the independent identity.
+    const T    scale      = std::sqrt(maximum);
+    const auto normalized = root / scale;
+    const auto squared    = normalized * normalized;
+    EXPECT_NEAR(squared.real(), T(1), std::numeric_limits<T>::epsilon() * 8);
+    EXPECT_NEAR(squared.imag(), T(1), std::numeric_limits<T>::epsilon() * 8);
+    const auto tiny_root = scalars::sqrt(c(T(0), tiny));
+    EXPECT_GT(tiny_root.real(), T(0));
+    EXPECT_NEAR((tiny_root.real() - tiny_root.imag()) / tiny_root.real(),
+        T(0),
+        std::numeric_limits<T>::epsilon() * 4);
+    const auto lower_branch = scalars::sqrt(C(T(-4), T(-0.0)));
+    EXPECT_EQ(lower_branch.real(), T(0));
+    EXPECT_EQ(lower_branch.imag(), T(-2));
+    EXPECT_EQ(scalars::abs(C(T(3), T(4))), T(5));
+    EXPECT_EQ(scalars::norm(C(T(3), T(4))), T(25));
+    EXPECT_EQ(scalars::conj(C(T(1), T(2))).imag(), T(-2));
+    EXPECT_FALSE(scalars::isfinite(C(maximum, std::numeric_limits<T>::infinity())));
+}
+
+TEST(ComplexMath, MatrixScalarExtremes)
+{
+    constexpr auto quotient = complex<double>(4, 2) / complex<double>(2, 0);
+    static_assert(quotient.real() == 2 && quotient.imag() == 1);
+    check_matrix_scalar_extremes<float>();
+    check_matrix_scalar_extremes<double>();
+}

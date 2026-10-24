@@ -91,6 +91,7 @@ template <typename T> struct simd
 // existing fixed-width NEON compatibility path.
 #if SCALARS_VECTORIZED
 #include "backend/cpu/reduced/simd.h"
+#include "backend/cpu/complex/simd.h"
 #endif
 // No CPU SIMD tier selected (SCALARS_CPU_BACKEND=no) and not compiling the
 // device pass: simd<T> is intentionally left without a specialization here.
