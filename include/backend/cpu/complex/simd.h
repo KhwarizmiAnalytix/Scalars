@@ -3,6 +3,8 @@
 #include <array>
 #include <cassert>
 #include <cstddef>
+#include <cstring>
+#include <type_traits>
 
 #include "backend/simd.h"
 #include "types/complex.h"
@@ -23,6 +25,10 @@ template <class T> struct complex_simd
 
     static simd_t gather(const value_t* p, std::ptrdiff_t stride)
     {
+        if (stride == 1)
+        {
+            return loadu(p);
+        }
         std::array<T, size> real, imag;
         for (int i = 0; i < size; ++i)
         {
@@ -33,6 +39,11 @@ template <class T> struct complex_simd
     }
     static void scatter(simd_t a, std::ptrdiff_t stride, value_t* p)
     {
+        if (stride == 1)
+        {
+            storeu(a, p);
+            return;
+        }
         std::array<T, size> real, imag;
         r::storeu(a.real, real.data());
         r::storeu(a.imag, imag.data());
@@ -41,9 +52,59 @@ template <class T> struct complex_simd
             p[i * stride] = value_t(real[i], imag[i]);
         }
     }
-    static simd_t loadu(const value_t* p) { return gather(p, 1); }
+    static simd_t loadu(const value_t* p)
+    {
+#if SCALARS_HAS_NEON || SCALARS_HAS_SVE
+        // memcpy preserves the object/aliasing rules. Register shuffles let
+        // optimizers cancel de/interleaving around componentwise operations.
+        static_assert(std::is_trivially_copyable_v<value_t>);
+        static_assert(sizeof(value_t) == 2 * sizeof(T));
+        std::array<typename r::simd_t, 2> lanes;
+        std::memcpy(lanes.data(), p, sizeof(lanes));
+        if constexpr (std::is_same_v<T, float>)
+        {
+            const auto a = vuzpq_f32(lanes[0], lanes[1]);
+            return {a.val[0], a.val[1]};
+        }
+        else
+        {
+            return {vuzp1q_f64(lanes[0], lanes[1]), vuzp2q_f64(lanes[0], lanes[1])};
+        }
+#else
+        std::array<T, size> real, imag;
+        for (int i = 0; i < size; ++i)
+        {
+            real[i] = p[i].real();
+            imag[i] = p[i].imag();
+        }
+        return {r::loadu(real.data()), r::loadu(imag.data())};
+#endif
+    }
     static simd_t load(const value_t* p) { return loadu(p); }
-    static void   storeu(simd_t a, value_t* p) { scatter(a, 1, p); }
+    static void storeu(simd_t a, value_t* p)
+    {
+#if SCALARS_HAS_NEON || SCALARS_HAS_SVE
+        std::array<typename r::simd_t, 2> lanes;
+        if constexpr (std::is_same_v<T, float>)
+        {
+            const auto packed = vzipq_f32(a.real, a.imag);
+            lanes = {packed.val[0], packed.val[1]};
+        }
+        else
+        {
+            lanes = {vzip1q_f64(a.real, a.imag), vzip2q_f64(a.real, a.imag)};
+        }
+        std::memcpy(p, lanes.data(), sizeof(lanes));
+#else
+        std::array<T, size> real, imag;
+        r::storeu(a.real, real.data());
+        r::storeu(a.imag, imag.data());
+        for (int i = 0; i < size; ++i)
+        {
+            p[i] = value_t(real[i], imag[i]);
+        }
+#endif
+    }
     static void   store(simd_t a, value_t* p) { storeu(a, p); }
     static simd_t loadu(const value_t* p, int count)
     {
