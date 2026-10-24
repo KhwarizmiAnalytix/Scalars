@@ -40,7 +40,9 @@ void fill_uniform(std::array<value_t, N>& xs, std::mt19937& gen, value_t lo, val
 {
     std::uniform_real_distribution<value_t> dist(lo, hi);
     for (auto& x : xs)
+    {
         x = dist(gen);
+    }
 }
 
 template <typename value_t, std::size_t N>

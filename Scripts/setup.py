@@ -455,6 +455,7 @@ class scalars_flags:
             "cppcheck",
             "cpu_backend",
             "gpu_backend",
+            "sleef",
         ]
         self.__description = [
             "build shared (default) or static libraries",
@@ -481,6 +482,7 @@ class scalars_flags:
             "(bare token, or --cpu_backend=<value>)",
             "GPU backend: none | cuda | hip | metal "
             "(bare token, or --gpu_backend=<value>)",
+            "enable SLEEF SIMD math library (SCALARS_ENABLE_SLEEF)",
         ]
 
     def __build_cmake_flag(self):
@@ -505,6 +507,7 @@ class scalars_flags:
             "lto": "SCALARS_LTO_MODE",
             "cpu_backend": "SCALARS_CPU_BACKEND",
             "gpu_backend": "SCALARS_GPU_BACKEND",
+            "sleef": "SCALARS_ENABLE_SLEEF",
         }
 
     def __fill_option_flags(self, arg_list):
@@ -529,6 +532,7 @@ class scalars_flags:
                 "sanitizer_enum": "address",
                 "cpu_backend": "",  # empty = let CMake's host-aware default apply
                 "gpu_backend": "",  # empty = let CMake default to "none"
+                "sleef": "",  # empty = let CMake's platform-aware auto-enable apply
             }
         )
 

@@ -17,8 +17,8 @@ template <class T, class Cpu, class Gpu> void expect_accumulate()
     static_assert(std::is_same_v<acc_type<T, true>, Gpu>);
     static_assert(std::is_same_v<acc_type_device<T, device_type::cpu>, Cpu>);
     static_assert(std::is_same_v<acc_type_device<T, device_type::gpu>, Gpu>);
-    static_assert(std::is_same_v<typename AccumulateType<T, false>::type, Cpu>);
-    static_assert(std::is_same_v<typename AccumulateType<T, true>::type, Gpu>);
+    static_assert(std::is_same_v<typename accumulate_type_impl<T, false>::type, Cpu>);
+    static_assert(std::is_same_v<typename accumulate_type_impl<T, true>::type, Gpu>);
 }
 }  // namespace
 

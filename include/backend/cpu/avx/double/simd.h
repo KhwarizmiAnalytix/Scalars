@@ -32,7 +32,7 @@ struct simd<double>
 
     SCALARS_SIMD_RETURN_TYPE prefetch(const value_t* addr)
     {
-        _mm_prefetch(PREFETCH_PTR_TYPE(addr), _MM_HINT_T0);
+        _mm_prefetch(prefetch_ptr_type(addr), _MM_HINT_T0);
     }
 
     //======================================================================================

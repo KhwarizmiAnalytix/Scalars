@@ -211,7 +211,7 @@ inline SCALARS_HOST_DEVICE bfloat16 operator*(const bfloat16& a, const bfloat16&
 }
 
 inline SCALARS_HOST_DEVICE bfloat16 operator/(
-    const bfloat16& a, const bfloat16& b) __ubsan_ignore_float_divide_by_zero__
+    const bfloat16& a, const bfloat16& b) SCALARS_UBSAN_IGNORE_FLOAT_DIVIDE_BY_ZERO
 {
     return static_cast<float>(a) / static_cast<float>(b);
 }

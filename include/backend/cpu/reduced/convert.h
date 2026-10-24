@@ -140,9 +140,13 @@ template <class T> SCALARS_FORCE_INLINE float_packet widen(const uint16_t* from)
 #elif SCALARS_HAS_NEON || SCALARS_HAS_SVE
     const auto packed = vld1_u16(from);
     if constexpr (std::is_same_v<T, half>)
+    {
         return vcvt_f32_f16(vreinterpret_f16_u16(packed));
+    }
     else
+    {
         return vreinterpretq_f32_u32(vshlq_n_u32(vmovl_u16(packed), 16));
+    }
 #endif
 }
 

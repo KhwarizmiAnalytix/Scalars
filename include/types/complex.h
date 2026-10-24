@@ -152,6 +152,8 @@ template <typename T> struct alignas(sizeof(T) * 2) complex
     T imag_ = T(0);
 
     constexpr complex() = default;
+    // cppcheck-suppress noExplicitConstructor -- deliberate, matches std::complex: a real value
+    // converts implicitly to a complex with a zero imaginary part.
     SCALARS_HOST_DEVICE constexpr complex(const T& re, const T& im = T()) : real_(re), imag_(im) {}
     template <typename U>
     explicit constexpr complex(const std::complex<U>& other) : complex(other.real(), other.imag())
@@ -176,7 +178,11 @@ template <typename T> struct alignas(sizeof(T) * 2) complex
         : real_(other.real_), imag_(other.imag_)
     {
     }
+
+    // Deliberate: complex<float> -> complex<double> is a widening conversion, implicit by
+    // design (narrowing the other way stays explicit above).
     template <typename U = T>
+    // cppcheck-suppress noExplicitConstructor
     SCALARS_HOST_DEVICE constexpr complex(
         const std::enable_if_t<std::is_same_v<U, double>, complex<float>>& other)
         : real_(other.real_), imag_(other.imag_)
@@ -256,7 +262,7 @@ template <typename T> struct alignas(sizeof(T) * 2) complex
 #endif
     template <typename U>
     constexpr FORCE_INLINE_APPLE complex<T>& operator/=(
-        const complex<U>& rhs) __ubsan_ignore_float_divide_by_zero__
+        const complex<U>& rhs) SCALARS_UBSAN_IGNORE_FLOAT_DIVIDE_BY_ZERO
     {
         // (a + bi) / (c + di) = (ac + bd)/(c^2 + d^2) + (bc - ad)/(c^2 + d^2) i
         // the calculation below follows numpy's complex division
@@ -571,6 +577,8 @@ template <> struct alignas(4) complex<half>
         : real_(real), imag_(imag)
     {
     }
+    // cppcheck-suppress noExplicitConstructor -- deliberate, matches half's own implicit
+    // narrowing conversion from float used throughout the reduced-precision types.
     SCALARS_HOST_DEVICE inline complex(const scalars::complex<float>& value)
         : real_(value.real()), imag_(value.imag())
     {
@@ -618,6 +626,9 @@ SCALARS_CLANG_DIAGNOSTIC_POP()
 
 namespace std
 {
+// NOLINTBEGIN(bugprone-std-namespace-modification) -- deliberate, mirrors
+// PyTorch's c10/util/complex.h: these overloads let generic code call
+// std::abs/std::real/etc. uniformly on scalars::complex<T>.
 
 template <typename T> constexpr T real(const scalars::complex<T>& z)
 {
@@ -675,6 +686,7 @@ template <typename T> constexpr scalars::complex<T> conj(const scalars::complex<
 // There is no c10 version of std::polar, because std::polar always
 // returns std::complex. Use scalars::polar instead;
 
+// NOLINTEND(bugprone-std-namespace-modification)
 }  // namespace std
 
 #define SCALARS_INTERNAL_INCLUDE_COMPLEX_REMAINING_H

@@ -48,30 +48,30 @@ namespace scalars {
 enum class device_type : std::uint8_t { cpu, gpu };
 
 template <typename T, device_type D>
-struct AccumulateTypeDevice {};
+struct accumulate_type_device {};
 
 template <typename T, bool>
-struct AccumulateType {};
+struct accumulate_type_impl {};
 
 template <typename T>
-struct AccumulateType<T, false> {
-  using type = typename AccumulateTypeDevice<T, device_type::cpu>::type;
+struct accumulate_type_impl<T, false> {
+  using type = typename accumulate_type_device<T, device_type::cpu>::type;
 };
 
 template <typename T>
-struct AccumulateType<T, true> {
-  using type = typename AccumulateTypeDevice<T, device_type::gpu>::type;
+struct accumulate_type_impl<T, true> {
+  using type = typename accumulate_type_device<T, device_type::gpu>::type;
 };
 
 template <typename T, device_type device>
-using acc_type_device = typename AccumulateTypeDevice<T, device>::type;
+using acc_type_device = typename accumulate_type_device<T, device>::type;
 
 template <typename T, bool is_cuda>
-using acc_type = typename AccumulateType<T, is_cuda>::type;
+using acc_type = typename accumulate_type_impl<T, is_cuda>::type;
 
 #define SCALARS_ACC_TYPE(t, acc_t, device)    \
   template <>                                 \
-  struct AccumulateTypeDevice<t, device> {    \
+  struct accumulate_type_device<t, device> {    \
     using type = acc_t;                       \
   };
 #define SCALARS_GPU_ACC_TYPE(t, acc_t) \

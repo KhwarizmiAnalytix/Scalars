@@ -33,9 +33,9 @@
 #endif
 
 #if __SCALARS_COMPILER_PGI__
-using PREFETCH_PTR_TYPE = const void*;
+using prefetch_ptr_type = const void*;
 #else
-using PREFETCH_PTR_TYPE = const char*;
+using prefetch_ptr_type = const char*;
 #endif
 #endif
 

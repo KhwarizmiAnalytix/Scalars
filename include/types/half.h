@@ -519,7 +519,7 @@ inline SCALARS_HOST_DEVICE half operator*(const half& a, const half& b)
 }
 
 inline SCALARS_HOST_DEVICE half operator/(
-    const half& a, const half& b) __ubsan_ignore_float_divide_by_zero__
+    const half& a, const half& b) SCALARS_UBSAN_IGNORE_FLOAT_DIVIDE_BY_ZERO
 {
     return static_cast<float>(a) / static_cast<float>(b);
 }
@@ -573,7 +573,7 @@ inline SCALARS_HOST_DEVICE float operator*(half a, float b)
 {
     return static_cast<float>(a) * b;
 }
-inline SCALARS_HOST_DEVICE float operator/(half a, float b) __ubsan_ignore_float_divide_by_zero__
+inline SCALARS_HOST_DEVICE float operator/(half a, float b) SCALARS_UBSAN_IGNORE_FLOAT_DIVIDE_BY_ZERO
 {
     return static_cast<float>(a) / b;
 }
@@ -590,7 +590,7 @@ inline SCALARS_HOST_DEVICE float operator*(float a, half b)
 {
     return a * static_cast<float>(b);
 }
-inline SCALARS_HOST_DEVICE float operator/(float a, half b) __ubsan_ignore_float_divide_by_zero__
+inline SCALARS_HOST_DEVICE float operator/(float a, half b) SCALARS_UBSAN_IGNORE_FLOAT_DIVIDE_BY_ZERO
 {
     return a / static_cast<float>(b);
 }
@@ -626,7 +626,7 @@ inline SCALARS_HOST_DEVICE double operator*(half a, double b)
 {
     return static_cast<double>(a) * b;
 }
-inline SCALARS_HOST_DEVICE double operator/(half a, double b) __ubsan_ignore_float_divide_by_zero__
+inline SCALARS_HOST_DEVICE double operator/(half a, double b) SCALARS_UBSAN_IGNORE_FLOAT_DIVIDE_BY_ZERO
 {
     return static_cast<double>(a) / b;
 }
@@ -643,7 +643,7 @@ inline SCALARS_HOST_DEVICE double operator*(double a, half b)
 {
     return a * static_cast<double>(b);
 }
-inline SCALARS_HOST_DEVICE double operator/(double a, half b) __ubsan_ignore_float_divide_by_zero__
+inline SCALARS_HOST_DEVICE double operator/(double a, half b) SCALARS_UBSAN_IGNORE_FLOAT_DIVIDE_BY_ZERO
 {
     return a / static_cast<double>(b);
 }

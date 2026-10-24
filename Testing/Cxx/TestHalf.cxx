@@ -124,7 +124,9 @@ TEST(half, SoftwareIeeeConversion)
     const float specials[] = {0.0f, -0.0f, HUGE_VALF, -HUGE_VALF,
         std::numeric_limits<float>::quiet_NaN(), 1.0e-8f, 1.0e20f, 1.0f, -2.5f};
     for (float value : specials)
+    {
         mix ^= detail::fp16_ieee_from_fp32_value(value);
+    }
     EXPECT_NE(mix, 0u);
 }
 

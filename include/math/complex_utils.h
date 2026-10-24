@@ -34,6 +34,9 @@ struct scalar_value_type<scalars::complex<T>> {
 } // namespace scalars
 
 namespace std {
+// NOLINTBEGIN(bugprone-std-namespace-modification) -- numeric_limits
+// specialization is standard-sanctioned; the isnan overload mirrors it so
+// generic code can call std::isnan uniformly on scalars::complex<T>.
 
 template <typename T>
 class numeric_limits<scalars::complex<T>> : public numeric_limits<T> {};
@@ -43,4 +46,5 @@ bool isnan(const scalars::complex<T>& v) {
   return std::isnan(v.real()) || std::isnan(v.imag());
 }
 
+// NOLINTEND(bugprone-std-namespace-modification)
 } // namespace std

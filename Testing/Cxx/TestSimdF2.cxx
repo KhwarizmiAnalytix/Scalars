@@ -28,7 +28,9 @@ void fill_uniform(std::array<value_t, N>& xs, std::mt19937& gen, value_t lo, val
 {
     std::uniform_real_distribution<value_t> dist(lo, hi);
     for (auto& x : xs)
+    {
         x = dist(gen);
+    }
 }
 
 template <typename value_t, std::size_t N>
@@ -45,7 +47,9 @@ void fill_binary_div_safe(std::array<value_t, N>& xs, std::array<value_t, N>& ys
         xs[i]     = wide(gen);
         value_t y = wide(gen);
         while (std::fabs(y) < guard)
+        {
             y = wide(gen);
+        }
         ys[i] = y;
     }
 }

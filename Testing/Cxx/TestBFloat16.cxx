@@ -123,8 +123,12 @@ TEST(bfloat16, NumericLimitsStreamAndRoundTrip)
         const bfloat16 encoded(sample);
         const float    back = static_cast<float>(encoded);
         if (sample == 0.0f)
+        {
             EXPECT_EQ(back, 0.0f);
+        }
         else
+        {
             EXPECT_NEAR(back, sample, std::abs(sample) * 0.02f + 1.0e-3f);
+        }
     }
 }

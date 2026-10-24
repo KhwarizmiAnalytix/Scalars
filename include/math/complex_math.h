@@ -384,6 +384,9 @@ using scalars::complex_math::tanh;
 
 namespace std
 {
+// NOLINTBEGIN(bugprone-std-namespace-modification) -- deliberate: pulls the
+// complex_math overloads into std so unqualified std::sqrt(...)-style calls
+// in generic code resolve for scalars::complex<T> too.
 
 using scalars::complex_math::acos;
 using scalars::complex_math::acosh;
@@ -406,4 +409,5 @@ using scalars::complex_math::sqrt;
 using scalars::complex_math::tan;
 using scalars::complex_math::tanh;
 
+// NOLINTEND(bugprone-std-namespace-modification)
 }  // namespace std
