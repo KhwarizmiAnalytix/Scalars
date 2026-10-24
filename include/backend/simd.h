@@ -39,8 +39,7 @@ using prefetch_ptr_type = const char*;
 #endif
 #endif
 
-template <typename T>
-struct simd
+template <typename T> struct simd
 {
 };
 

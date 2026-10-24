@@ -22,41 +22,43 @@ template <class T>
 constexpr mb::dtype metal_type =
     std::is_same_v<T, scalars::half> ? mb::dtype::half : mb::dtype::bfloat16;
 
-template <class T> struct MetalBuffer
+template <class T> struct metal_buffer
 {
     T* data;
-    explicit MetalBuffer(std::size_t n) : data(static_cast<T*>(mb::allocate(n * sizeof(T)))) {}
-    ~MetalBuffer() { mb::deallocate(data); }
-    MetalBuffer(const MetalBuffer&)            = delete;
-    MetalBuffer& operator=(const MetalBuffer&) = delete;
+    explicit metal_buffer(std::size_t n) : data(static_cast<T*>(mb::allocate(n * sizeof(T)))) {}
+    ~metal_buffer() { mb::deallocate(data); }
+    metal_buffer(const metal_buffer&)            = delete;
+    metal_buffer& operator=(const metal_buffer&) = delete;
 };
 
-template <class T> class MetalReduced : public ::testing::Test
+template <class T> class metal_reduced : public ::testing::Test
 {
     void SetUp() override
     {
-        if (!mb::device_available())
+        if (!mb::device_available()) {
             GTEST_SKIP() << "No Metal device";
+        }
     }
 };
-using MetalReducedTypes = ::testing::Types<scalars::half, scalars::bfloat16>;
-TYPED_TEST_SUITE(MetalReduced, MetalReducedTypes);
+using metal_reduced_types = ::testing::Types<scalars::half, scalars::bfloat16>;
+TYPED_TEST_SUITE(metal_reduced, metal_reduced_types);
 
 template <class T> void expect_bits(T actual, T expected)
 {
-    if (std::isnan(float(expected)))
+    if (std::isnan(float(expected))) {
         EXPECT_TRUE(std::isnan(float(actual)));
-    else
+    } else {
         EXPECT_EQ(actual.x, expected.x);
+    }
 }
 
-TYPED_TEST(MetalReduced, FillArithmeticAndFusedRounding)
+TYPED_TEST(metal_reduced, FillArithmeticAndFusedRounding)
 {
-    using T                    = TypeParam;
-    constexpr auto        type = metal_type<T>;
+    using t                    = TypeParam;
+    constexpr auto        type = metal_type<t>;
     constexpr std::size_t n    = 519;  // Partial final threadgroup.
-    MetalBuffer<T>        a(n), b(n), c(n), out(n);
-    const float           eps = std::is_same_v<T, scalars::half> ? 0x1p-10f : 0x1p-7f;
+    metal_buffer<t>        a(n), b(n), c(n), out(n);
+    const float           eps = std::is_same_v<t, scalars::half> ? 0x1p-10f : 0x1p-7f;
     mb::dispatch_fill(a.data, 1 + eps, n, type);
     mb::dispatch_fill(b.data, 1 - eps, n, type);
     mb::dispatch_fill(c.data, -1, n, type);
@@ -73,13 +75,14 @@ TYPED_TEST(MetalReduced, FillArithmeticAndFusedRounding)
                                : name == "min" ? y
                                : name == "max" ? x
                                                : std::fma(x, y, -1.f);
-        for (std::size_t i = 0; i < n; ++i)
-            expect_bits(out.data[i], T(expected));
+        for (std::size_t i = 0; i < n; ++i) {
+            expect_bits(out.data[i], t(expected));
+        }
     }
     // Multiplication rounded to T before the addition would produce zero.
     EXPECT_LT(float(out.data[0]), 0.f);
     mb::dispatch_fill(out.data, 1.00390625f, n, type);
-    expect_bits(out.data[n - 1], T(1.00390625f));
+    expect_bits(out.data[n - 1], t(1.00390625f));
     for (float value : {0.f,
              -0.f,
              1.f + eps / 2,
@@ -92,21 +95,22 @@ TYPED_TEST(MetalReduced, FillArithmeticAndFusedRounding)
              0x1p-133f})
     {
         mb::dispatch_fill(out.data, value, n, type);
-        expect_bits(out.data[0], T(value));
-        expect_bits(out.data[n - 1], T(value));
+        expect_bits(out.data[0], t(value));
+        expect_bits(out.data[n - 1], t(value));
     }
 }
 
-TYPED_TEST(MetalReduced, UnaryMath)
+TYPED_TEST(metal_reduced, UnaryMath)
 {
-    using T                    = TypeParam;
-    constexpr auto        type = metal_type<T>;
+    using t                    = TypeParam;
+    constexpr auto        type = metal_type<t>;
     constexpr std::size_t n    = 513;
-    MetalBuffer<T>        input(n), out(n);
-    for (std::size_t i = 0; i < n; ++i)
-        input.data[i] = T(0.25f + float(i) / float(n));
+    metal_buffer<t>        input(n), out(n);
+    for (std::size_t i = 0; i < n; ++i) {
+        input.data[i] = t(0.25f + float(i) / float(n));
+    }
     const void* inputs[] = {input.data};
-    const float eps      = std::is_same_v<T, scalars::half> ? 0x1p-10f : 0x1p-7f;
+    const float eps      = std::is_same_v<t, scalars::half> ? 0x1p-10f : 0x1p-7f;
     for (const char* op : {"sqrt", "exp", "log", "sin", "cos", "tanh", "fabs", "neg"})
     {
         mb::dispatch(op, inputs, 1, out.data, n, type);
@@ -127,14 +131,15 @@ TYPED_TEST(MetalReduced, UnaryMath)
     }
 }
 
-TYPED_TEST(MetalReduced, EveryEncodingPreservesSignAndPayload)
+TYPED_TEST(metal_reduced, EveryEncodingPreservesSignAndPayload)
 {
-    using T                    = TypeParam;
-    constexpr auto        type = metal_type<T>;
+    using t                    = TypeParam;
+    constexpr auto        type = metal_type<t>;
     constexpr std::size_t n    = 65536;
-    MetalBuffer<T>        input(n), out(n);
-    for (std::size_t i = 0; i < n; ++i)
-        input.data[i] = T(uint16_t(i), T::from_bits());
+    metal_buffer<t>        input(n), out(n);
+    for (std::size_t i = 0; i < n; ++i) {
+        input.data[i] = t(uint16_t(i), t::from_bits());
+}
     const void* inputs[] = {input.data};
     for (const char* op : {"neg", "fabs"})
     {
@@ -147,23 +152,23 @@ TYPED_TEST(MetalReduced, EveryEncodingPreservesSignAndPayload)
     }
 }
 
-TYPED_TEST(MetalReduced, FloatReductionPartialsAndExceptionalValues)
+TYPED_TEST(metal_reduced, FloatReductionPartialsAndExceptionalValues)
 {
-    using T                    = TypeParam;
-    constexpr auto        type = metal_type<T>;
+    using t                    = TypeParam;
+    constexpr auto        type = metal_type<t>;
     constexpr std::size_t n    = 65537;  // Three passes with 256-thread groups.
-    MetalBuffer<T>        input(n);
+    metal_buffer<t>        input(n);
     mb::dispatch_fill(input.data, 1, n, type);
     EXPECT_EQ(mb::reduce_sum(input.data, n, type), float(n));
     EXPECT_EQ(mb::reduce_min(input.data, n, type), 1.f);
     EXPECT_EQ(mb::reduce_max(input.data, n, type), 1.f);
-    input.data[n - 1] = T(std::numeric_limits<float>::quiet_NaN());
+    input.data[n - 1] = t(std::numeric_limits<float>::quiet_NaN());
     EXPECT_TRUE(std::isnan(mb::reduce_min(input.data, n, type)));
     EXPECT_TRUE(std::isnan(mb::reduce_max(input.data, n, type)));
     EXPECT_TRUE(std::isnan(mb::reduce_sum(input.data, n, type)));
 
     mb::dispatch_fill(input.data, 0, n, type);
-    input.data[n - 1] = T(uint16_t(0x8000), T::from_bits());
+    input.data[n - 1] = t(uint16_t(0x8000), t::from_bits());
     EXPECT_TRUE(std::signbit(mb::reduce_min(input.data, n, type)));
     EXPECT_FALSE(std::signbit(mb::reduce_max(input.data, n, type)));
     mb::dispatch_fill(input.data, INFINITY, 1, type);
@@ -177,11 +182,11 @@ TYPED_TEST(MetalReduced, FloatReductionPartialsAndExceptionalValues)
     mb::dispatch("add", nullptr, 2, nullptr, 0, type);
 }
 
-TYPED_TEST(MetalReduced, TypedFusedEntryPoints)
+TYPED_TEST(metal_reduced, TypedFusedEntryPoints)
 {
-    using T             = TypeParam;
-    constexpr auto type = metal_type<T>;
-    MetalBuffer<T> out(1);
+    using t             = TypeParam;
+    constexpr auto type = metal_type<t>;
+    metal_buffer<t> out(1);
     // One source with both entry points also exercises dtype-aware caching.
     const std::string source = R"(
         #include <metal_stdlib>
@@ -194,7 +199,7 @@ TYPED_TEST(MetalReduced, TypedFusedEntryPoints)
         { if (i < n) out[i] = ushort(0x4020); }
     )";
     mb::dispatch_fused(source, nullptr, 0, nullptr, 0, out.data, 1, type);
-    expect_bits(out.data[0], T(std::is_same_v<T, scalars::half> ? 1.5f : 2.5f));
+    expect_bits(out.data[0], t(std::is_same_v<t, scalars::half> ? 1.5f : 2.5f));
 }
 }  // namespace
 #endif

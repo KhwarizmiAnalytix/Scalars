@@ -15,7 +15,10 @@ include_guard(GLOBAL)
 set(SCALARS_GPU_BACKEND "none" CACHE STRING "GPU backend for Scalars: none, cuda, hip, metal")
 set_property(CACHE SCALARS_GPU_BACKEND PROPERTY STRINGS none cuda hip metal)
 if(NOT SCALARS_GPU_BACKEND MATCHES "^(none|cuda|hip|metal)$")
-    message(FATAL_ERROR "SCALARS_GPU_BACKEND must be one of: none, cuda, hip, metal (got '${SCALARS_GPU_BACKEND}')")
+    message(
+        FATAL_ERROR
+            "SCALARS_GPU_BACKEND must be one of: none, cuda, hip, metal (got '${SCALARS_GPU_BACKEND}')"
+    )
 endif()
 if(SCALARS_GPU_BACKEND STREQUAL "metal" AND NOT APPLE)
     message(FATAL_ERROR "SCALARS_GPU_BACKEND=metal is only supported on Apple platforms.")
@@ -29,9 +32,10 @@ set(_scalars_hip_version 0)
 # ---- HIP GPU backend --------------------------------------------------------
 if(SCALARS_GPU_BACKEND STREQUAL "hip")
     if(WIN32)
-        message(FATAL_ERROR
-            "SCALARS_GPU_BACKEND=hip is not supported on Windows (HIP/ROCm is Unix-only here). "
-            "Use SCALARS_GPU_BACKEND=cuda on Windows, or build on Linux for HIP."
+        message(
+            FATAL_ERROR
+                "SCALARS_GPU_BACKEND=hip is not supported on Windows (HIP/ROCm is Unix-only here). "
+                "Use SCALARS_GPU_BACKEND=cuda on Windows, or build on Linux for HIP."
         )
     endif()
 
@@ -43,9 +47,9 @@ if(SCALARS_GPU_BACKEND STREQUAL "hip")
     scalars_setup_rocm_prefix()
     find_package(hip QUIET)
     if(NOT hip_FOUND)
-        message(WARNING
-            "Scalars: SCALARS_GPU_BACKEND=hip but the HIP package was not found via "
-            "find_package(hip). Set ROCM_PATH or CMAKE_PREFIX_PATH to your ROCm install."
+        message(
+            WARNING "Scalars: SCALARS_GPU_BACKEND=hip but the HIP package was not found via "
+                    "find_package(hip). Set ROCM_PATH or CMAKE_PREFIX_PATH to your ROCm install."
         )
     endif()
 
@@ -69,7 +73,10 @@ if(SCALARS_GPU_BACKEND STREQUAL "hip")
         endif()
         unset(_scalars_hip_ver_match)
     endif()
-    message(STATUS "Scalars: HIP GPU backend enabled (archs: ${SCALARS_GPU_ARCHITECTURES}, SCALARS_HIP_VERSION=${_scalars_hip_version})")
+    message(
+        STATUS
+            "Scalars: HIP GPU backend enabled (archs: ${SCALARS_GPU_ARCHITECTURES}, SCALARS_HIP_VERSION=${_scalars_hip_version})"
+    )
 endif()
 
 # ---- CUDA GPU backend --------------------------------------------------------
@@ -88,7 +95,10 @@ if(SCALARS_GPU_BACKEND STREQUAL "cuda")
         CACHE STRING "CUDA compute capability list (e.g. 75;80;86 for Turing/Ampere/Ada)" FORCE
     )
     unset(_scalars_cuda_archs)
-    message(STATUS "Scalars: CUDA GPU backend enabled (archs: ${SCALARS_CUDA_ARCHITECTURES}, compiler: ${CMAKE_CUDA_COMPILER_ID})")
+    message(
+        STATUS
+            "Scalars: CUDA GPU backend enabled (archs: ${SCALARS_CUDA_ARCHITECTURES}, compiler: ${CMAKE_CUDA_COMPILER_ID})"
+    )
 endif()
 
 # ---- Metal GPU backend --------------------------------------------------------
@@ -105,9 +115,13 @@ if(SCALARS_GPU_BACKEND STREQUAL "metal")
     find_library(SCALARS_METAL_FRAMEWORK Metal REQUIRED)
     find_library(SCALARS_FOUNDATION_FRAMEWORK Foundation REQUIRED)
 
-    set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
-                 "${SCALARS_SOURCE_DIR}/include/backend/gpu/metal/kernels.metal")
-    file(READ "${SCALARS_SOURCE_DIR}/include/backend/gpu/metal/kernels.metal" SCALARS_METAL_KERNEL_SOURCE)
+    set_property(
+        DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
+                                  "${SCALARS_SOURCE_DIR}/include/backend/gpu/metal/kernels.metal"
+    )
+    file(READ "${SCALARS_SOURCE_DIR}/include/backend/gpu/metal/kernels.metal"
+         SCALARS_METAL_KERNEL_SOURCE
+    )
     configure_file(
         "${SCALARS_SOURCE_DIR}/include/backend/gpu/metal/metal_kernels_source.h.in"
         "${SCALARS_BINARY_DIR}/include/backend/gpu/metal/metal_kernels_source.h" @ONLY
@@ -125,13 +139,14 @@ unset(_scalars_hip_version)
 # framework links to <target>. Must run after add_library(<target> ...).
 function(scalars_apply_gpu_backend target)
     target_compile_definitions(
-        ${target}
-        PUBLIC SCALARS_HAS_CUDA=${SCALARS_HAS_CUDA} SCALARS_HAS_HIP=${SCALARS_HAS_HIP}
-               SCALARS_HAS_METAL=${SCALARS_HAS_METAL}
+        ${target} PUBLIC SCALARS_HAS_CUDA=${SCALARS_HAS_CUDA} SCALARS_HAS_HIP=${SCALARS_HAS_HIP}
+                         SCALARS_HAS_METAL=${SCALARS_HAS_METAL}
     )
 
     if(SCALARS_GPU_BACKEND STREQUAL "hip")
-        target_compile_definitions(${target} PUBLIC SCALARS_USE_HIP SCALARS_HIP_VERSION=${SCALARS_HIP_VERSION})
+        target_compile_definitions(
+            ${target} PUBLIC SCALARS_USE_HIP SCALARS_HIP_VERSION=${SCALARS_HIP_VERSION}
+        )
         set_target_properties(
             ${target} PROPERTIES HIP_STANDARD ${SCALARS_CXX_STANDARD}
                                  HIP_ARCHITECTURES "${SCALARS_GPU_ARCHITECTURES}"
@@ -153,12 +168,18 @@ function(scalars_apply_gpu_backend target)
         )
         if(CMAKE_CUDA_COMPILER_ID STREQUAL "Clang")
             target_compile_options(${target} PRIVATE $<$<COMPILE_LANGUAGE:CUDA>:-ffast-math>)
-            target_compile_options(${target} PRIVATE $<$<COMPILE_LANGUAGE:CUDA>:-std=c++${SCALARS_CXX_STANDARD}>)
+            target_compile_options(
+                ${target} PRIVATE $<$<COMPILE_LANGUAGE:CUDA>:-std=c++${SCALARS_CXX_STANDARD}>
+            )
         else()
-            target_compile_options(${target} PRIVATE $<$<COMPILE_LANGUAGE:CUDA>:--use_fast_math -Xcompiler=-fPIC>)
+            target_compile_options(
+                ${target} PRIVATE $<$<COMPILE_LANGUAGE:CUDA>:--use_fast_math -Xcompiler=-fPIC>
+            )
         endif()
     elseif(SCALARS_GPU_BACKEND STREQUAL "metal")
-        target_sources(${target} PRIVATE "${SCALARS_SOURCE_DIR}/include/backend/gpu/metal/metal_dispatch.mm")
+        target_sources(
+            ${target} PRIVATE "${SCALARS_SOURCE_DIR}/include/backend/gpu/metal/metal_dispatch.mm"
+        )
         set_source_files_properties(
             "${SCALARS_SOURCE_DIR}/include/backend/gpu/metal/metal_dispatch.mm"
             PROPERTIES COMPILE_OPTIONS "-fobjc-arc"
@@ -166,6 +187,8 @@ function(scalars_apply_gpu_backend target)
         target_include_directories(
             ${target} PUBLIC $<BUILD_INTERFACE:${SCALARS_BINARY_DIR}/include>
         )
-        target_link_libraries(${target} PUBLIC "${SCALARS_METAL_FRAMEWORK}" "${SCALARS_FOUNDATION_FRAMEWORK}")
+        target_link_libraries(
+            ${target} PUBLIC "${SCALARS_METAL_FRAMEWORK}" "${SCALARS_FOUNDATION_FRAMEWORK}"
+        )
     endif()
 endfunction()

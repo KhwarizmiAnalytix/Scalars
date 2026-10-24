@@ -41,7 +41,8 @@
 #include <sycl/sycl.hpp>  // for SYCL 2020
 #endif
 
-#if (defined(SCALARS_CPU_CAPABILITY_AVX2) || defined(SCALARS_CPU_CAPABILITY_AVX512)) && !defined(__APPLE__)
+#if (defined(SCALARS_CPU_CAPABILITY_AVX2) || defined(SCALARS_CPU_CAPABILITY_AVX512)) &&            \
+    !defined(__APPLE__)
 #include "common/vec_half.h"
 #endif
 
@@ -442,7 +443,8 @@ inline SCALARS_HOST_DEVICE half::half(float value)
       x(__half_as_short(__float2half(value)))
 #elif defined(__SYCL_DEVICE_ONLY__)
       x(scalars::bit_cast<uint16_t>(sycl::half(value)))
-#elif (defined(SCALARS_CPU_CAPABILITY_AVX2) || defined(SCALARS_CPU_CAPABILITY_AVX512)) && !defined(__APPLE__)
+#elif (defined(SCALARS_CPU_CAPABILITY_AVX2) || defined(SCALARS_CPU_CAPABILITY_AVX512)) &&          \
+    !defined(__APPLE__)
       x(scalars::vec::float2half_scalar(value))
 #else
       x(detail::fp16_ieee_from_fp32_value(value))
@@ -458,7 +460,8 @@ inline SCALARS_HOST_DEVICE half::operator float() const
     return __half2float(*reinterpret_cast<const __half*>(&x));
 #elif defined(__SYCL_DEVICE_ONLY__)
     return float(scalars::bit_cast<sycl::half>(x));
-#elif (defined(SCALARS_CPU_CAPABILITY_AVX2) || defined(SCALARS_CPU_CAPABILITY_AVX512)) && !defined(__APPLE__)
+#elif (defined(SCALARS_CPU_CAPABILITY_AVX2) || defined(SCALARS_CPU_CAPABILITY_AVX512)) &&          \
+    !defined(__APPLE__)
     return scalars::vec::half2float_scalar(x);
 #elif defined(__aarch64__) && !defined(__CUDACC__) && !defined(__HIPCC__)
     return detail::native_fp16_to_fp32_value(x);
@@ -573,7 +576,8 @@ inline SCALARS_HOST_DEVICE float operator*(half a, float b)
 {
     return static_cast<float>(a) * b;
 }
-inline SCALARS_HOST_DEVICE float operator/(half a, float b) SCALARS_UBSAN_IGNORE_FLOAT_DIVIDE_BY_ZERO
+inline SCALARS_HOST_DEVICE float operator/(
+    half a, float b) SCALARS_UBSAN_IGNORE_FLOAT_DIVIDE_BY_ZERO
 {
     return static_cast<float>(a) / b;
 }
@@ -590,7 +594,8 @@ inline SCALARS_HOST_DEVICE float operator*(float a, half b)
 {
     return a * static_cast<float>(b);
 }
-inline SCALARS_HOST_DEVICE float operator/(float a, half b) SCALARS_UBSAN_IGNORE_FLOAT_DIVIDE_BY_ZERO
+inline SCALARS_HOST_DEVICE float operator/(
+    float a, half b) SCALARS_UBSAN_IGNORE_FLOAT_DIVIDE_BY_ZERO
 {
     return a / static_cast<float>(b);
 }
@@ -626,7 +631,8 @@ inline SCALARS_HOST_DEVICE double operator*(half a, double b)
 {
     return static_cast<double>(a) * b;
 }
-inline SCALARS_HOST_DEVICE double operator/(half a, double b) SCALARS_UBSAN_IGNORE_FLOAT_DIVIDE_BY_ZERO
+inline SCALARS_HOST_DEVICE double operator/(
+    half a, double b) SCALARS_UBSAN_IGNORE_FLOAT_DIVIDE_BY_ZERO
 {
     return static_cast<double>(a) / b;
 }
@@ -643,7 +649,8 @@ inline SCALARS_HOST_DEVICE double operator*(double a, half b)
 {
     return a * static_cast<double>(b);
 }
-inline SCALARS_HOST_DEVICE double operator/(double a, half b) SCALARS_UBSAN_IGNORE_FLOAT_DIVIDE_BY_ZERO
+inline SCALARS_HOST_DEVICE double operator/(
+    double a, half b) SCALARS_UBSAN_IGNORE_FLOAT_DIVIDE_BY_ZERO
 {
     return a / static_cast<double>(b);
 }

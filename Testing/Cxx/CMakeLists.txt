@@ -34,9 +34,9 @@ if(SCALARS_ENABLE_GTEST)
     if(_scalars_gpu_test_sources)
         if(SCALARS_GPU_BACKEND STREQUAL "cuda")
             set_target_properties(
-                ScalarsCxxTests PROPERTIES CUDA_STANDARD ${SCALARS_CXX_STANDARD}
-                                           CUDA_STANDARD_REQUIRED ON
-                                           CUDA_ARCHITECTURES "${SCALARS_CUDA_ARCHITECTURES}"
+                ScalarsCxxTests
+                PROPERTIES CUDA_STANDARD ${SCALARS_CXX_STANDARD} CUDA_STANDARD_REQUIRED ON
+                           CUDA_ARCHITECTURES "${SCALARS_CUDA_ARCHITECTURES}"
             )
         elseif(SCALARS_GPU_BACKEND STREQUAL "hip")
             set_source_files_properties(${_scalars_gpu_test_sources} PROPERTIES LANGUAGE HIP)

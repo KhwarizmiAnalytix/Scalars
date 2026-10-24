@@ -10,13 +10,14 @@
 // before binding with setBuffer:offset:.
 
 #include <cstddef>
+#include <cstdint>
 #include <string>
 
 namespace scalars::metal_backend
 {
 // Reduced buffers contain the two-byte encodings of scalars::half/bfloat16.
 // All operation math and reduction partials use float.
-enum class dtype
+enum class dtype : std::uint8_t
 {
     float32,
     half,
