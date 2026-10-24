@@ -1,5 +1,7 @@
 #pragma once
 
+#include <type_traits>
+
 #if SCALARS_HAS_SVML || SCALARS_HAS_SLEEF
 #ifdef __clang__
 #pragma clang diagnostic push

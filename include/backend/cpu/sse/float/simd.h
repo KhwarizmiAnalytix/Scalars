@@ -107,7 +107,10 @@ struct simd<float>
 #else
         simd_t f    = _mm_cvtepi32_ps(_mm_cvttps_epi32(x));
         simd_t mask = _mm_cmplt_ps(f, x);
-        return _mm_add_ps(f, _mm_and_ps(mask, _mm_set1_ps(1.0f)));
+        simd_t y    = _mm_add_ps(f, _mm_and_ps(mask, _mm_set1_ps(1.0f)));
+        // cvttps turns (-1, -0] into +0. Put the input sign back on that zero.
+        return _mm_or_ps(
+            y, _mm_and_ps(x, _mm_and_ps(sign_mask, _mm_cmpeq_ps(y, _mm_setzero_ps()))));
 #endif
     }
 
@@ -118,7 +121,9 @@ struct simd<float>
 #else
         simd_t f    = _mm_cvtepi32_ps(_mm_cvttps_epi32(x));
         simd_t mask = _mm_cmpgt_ps(f, x);
-        return _mm_sub_ps(f, _mm_and_ps(mask, _mm_set1_ps(1.0f)));
+        simd_t y    = _mm_sub_ps(f, _mm_and_ps(mask, _mm_set1_ps(1.0f)));
+        return _mm_or_ps(
+            y, _mm_and_ps(x, _mm_and_ps(sign_mask, _mm_cmpeq_ps(y, _mm_setzero_ps()))));
 #endif
     }
 

@@ -12,6 +12,41 @@
 # backend/ tree's own dispatch.
 include_guard(GLOBAL)
 
+# hip::device publishes Clang device flags for the legacy "compile HIP as CXX"
+# workflow (`-x hip`, `--offload-arch`, `--hip-link`). CMake's HIP language
+# already supplies those for HIP sources. On a host g++ they land on every .cpp
+# file and the compile fails.
+function(_scalars_drop_hip_cxx_device_flags target)
+    if(NOT TARGET "${target}")
+        return()
+    endif()
+    foreach(_prop IN ITEMS INTERFACE_COMPILE_OPTIONS INTERFACE_LINK_LIBRARIES INTERFACE_LINK_OPTIONS)
+        get_property(_prop_set TARGET "${target}" PROPERTY "${_prop}" SET)
+        if(NOT _prop_set)
+            continue()
+        endif()
+        get_property(_opts TARGET "${target}" PROPERTY "${_prop}")
+        set(_kept "")
+        set(_dropped 0)
+        foreach(_opt IN LISTS _opts)
+            if(_opt MATCHES "--offload-arch|-x hip|--hip-link|-include cstdlib")
+                math(EXPR _dropped "${_dropped} + 1")
+                continue()
+            endif()
+            list(APPEND _kept "${_opt}")
+        endforeach()
+        if(_dropped GREATER 0)
+            list(LENGTH _kept _kept_len)
+            if(_kept_len EQUAL 0)
+                set_property(TARGET "${target}" PROPERTY "${_prop}" "")
+            else()
+                set_property(TARGET "${target}" PROPERTY "${_prop}" ${_kept})
+            endif()
+            message(STATUS "Scalars: dropped ${_dropped} host-incompatible ${_prop} from ${target}")
+        endif()
+    endforeach()
+endfunction()
+
 set(SCALARS_GPU_BACKEND "none" CACHE STRING "GPU backend for Scalars: none, cuda, hip, metal")
 set_property(CACHE SCALARS_GPU_BACKEND PROPERTY STRINGS none cuda hip metal)
 if(NOT SCALARS_GPU_BACKEND MATCHES "^(none|cuda|hip|metal)$")
@@ -54,6 +89,8 @@ if(SCALARS_GPU_BACKEND STREQUAL "hip")
     endif()
 
     enable_language(HIP)
+    _scalars_drop_hip_cxx_device_flags(hip::device)
+    _scalars_drop_hip_cxx_device_flags(hip::host)
     set(SCALARS_HAS_HIP 1)
 
     set(SCALARS_GPU_ARCHITECTURES "gfx900;gfx906;gfx908;gfx90a;gfx1030;gfx1100"

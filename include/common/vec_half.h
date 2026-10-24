@@ -10,22 +10,28 @@ inline namespace CPU_CAPABILITY {
 #if (defined(SCALARS_CPU_CAPABILITY_AVX2) || defined(SCALARS_CPU_CAPABILITY_AVX512)) && \
     !defined(__APPLE__)
 static inline uint16_t float2half_scalar(float val) {
+// MSVC's _mm*_cvtps_ph immediate check rejects _MM_FROUND_NO_EXC (8) as C4556,
+// and /WX turns that into an error. Nearest-even is the same rounding mode.
+#if defined(_MSC_VER)
+#define SCALARS_F16C_ROUND _MM_FROUND_TO_NEAREST_INT
+#else
+#define SCALARS_F16C_ROUND (_MM_FROUND_TO_NEAREST_INT | _MM_FROUND_NO_EXC)
+#endif
 #if defined(SCALARS_CPU_CAPABILITY_AVX2)
 #if defined(_MSC_VER)
   __m256 v = _mm256_set1_ps(val);
-  __m128i o =
-      _mm256_cvtps_ph(v, (_MM_FROUND_TO_NEAREST_INT | _MM_FROUND_NO_EXC));
+  __m128i o = _mm256_cvtps_ph(v, SCALARS_F16C_ROUND);
   return static_cast<std::uint16_t>(_mm_cvtsi128_si32(o));
 #else
-  return _cvtss_sh(val, _MM_FROUND_TO_NEAREST_INT | _MM_FROUND_NO_EXC);
+  return _cvtss_sh(val, SCALARS_F16C_ROUND);
 #endif
 #elif defined(SCALARS_CPU_CAPABILITY_AVX512)
   __m512 v = _mm512_set1_ps(val);
-  __m256i o =
-      _mm512_cvtps_ph(v, (_MM_FROUND_TO_NEAREST_INT | _MM_FROUND_NO_EXC));
+  __m256i o = _mm512_cvtps_ph(v, SCALARS_F16C_ROUND);
   return static_cast<std::uint16_t>(
       _mm_cvtsi128_si32(_mm256_castsi256_si128(o)));
 #endif
+#undef SCALARS_F16C_ROUND
 }
 
 static inline float half2float_scalar(uint16_t val) {

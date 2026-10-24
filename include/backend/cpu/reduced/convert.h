@@ -17,6 +17,13 @@ using float_backend = ::simd<float>;
 using float_packet  = float_backend::simd_t;
 
 #if SCALARS_HAS_SSE || SCALARS_HAS_AVX || SCALARS_HAS_AVX2 || SCALARS_HAS_AVX512
+// MSVC's _mm*_cvtps_ph immediate check rejects _MM_FROUND_NO_EXC (8) as C4556.
+#if defined(_MSC_VER)
+#define SCALARS_F16C_ROUND _MM_FROUND_TO_NEAREST_INT
+#else
+#define SCALARS_F16C_ROUND (_MM_FROUND_TO_NEAREST_INT | _MM_FROUND_NO_EXC)
+#endif
+
 SCALARS_FORCE_INLINE __m128i select_bits(__m128i mask, __m128i yes, __m128i no)
 {
     return _mm_or_si128(_mm_and_si128(mask, yes), _mm_andnot_si128(mask, no));
@@ -64,7 +71,7 @@ template <class T> SCALARS_FORCE_INLINE void narrow4(__m128 from, uint16_t* to)
     if constexpr (std::is_same_v<T, half>)
     {
 #if defined(__F16C__)
-        packed = _mm_cvtps_ph(from, _MM_FROUND_TO_NEAREST_INT | _MM_FROUND_NO_EXC);
+        packed = _mm_cvtps_ph(from, SCALARS_F16C_ROUND);
 #else
         // Scale into a float range where its rounding also rounds the half
         // mantissa, including half subnormals. This mirrors the scalar format
@@ -96,8 +103,8 @@ template <class T> SCALARS_FORCE_INLINE void narrow4(__m128 from, uint16_t* to)
         const auto rounded =
             _mm_srli_epi32(_mm_add_epi32(bits, _mm_add_epi32(_mm_set1_epi32(0x7fff), lsb)), 16);
         const auto nan = _mm_castps_si128(_mm_cmpunord_ps(from, from));
-        // PyTorch's x86 bf16 packets use the all-ones NaN encoding.
-        packed         = pack_u16(select_bits(nan, _mm_set1_epi32(0xffff), rounded));
+        // Match bfloat16::bfloat16(float), which canonicalizes every NaN to 0x7fc0.
+        packed = pack_u16(select_bits(nan, _mm_set1_epi32(0x7fc0), rounded));
     }
     std::memcpy(to, &packed, 4 * sizeof(uint16_t));
 }
@@ -156,7 +163,7 @@ template <class T> SCALARS_FORCE_INLINE void narrow(float_packet from, uint16_t*
     __m256i packed;
     if constexpr (std::is_same_v<T, half>)
     {
-        packed = _mm512_cvtps_ph(from, _MM_FROUND_TO_NEAREST_INT | _MM_FROUND_NO_EXC);
+        packed = _mm512_cvtps_ph(from, SCALARS_F16C_ROUND);
     }
     else
     {
@@ -165,7 +172,7 @@ template <class T> SCALARS_FORCE_INLINE void narrow(float_packet from, uint16_t*
         auto       rounded = _mm512_srli_epi32(
             _mm512_add_epi32(bits, _mm512_add_epi32(_mm512_set1_epi32(0x7fff), lsb)), 16);
         rounded = _mm512_mask_mov_epi32(
-            rounded, _mm512_cmp_ps_mask(from, from, _CMP_UNORD_Q), _mm512_set1_epi32(0xffff));
+            rounded, _mm512_cmp_ps_mask(from, from, _CMP_UNORD_Q), _mm512_set1_epi32(0x7fc0));
         packed = _mm512_cvtepi32_epi16(rounded);
     }
     std::memcpy(to, &packed, sizeof(packed));
@@ -173,7 +180,7 @@ template <class T> SCALARS_FORCE_INLINE void narrow(float_packet from, uint16_t*
     if constexpr (std::is_same_v<T, half>)
     {
 #if defined(__F16C__)
-        const auto packed = _mm256_cvtps_ph(from, _MM_FROUND_TO_NEAREST_INT | _MM_FROUND_NO_EXC);
+        const auto packed = _mm256_cvtps_ph(from, SCALARS_F16C_ROUND);
         std::memcpy(to, &packed, sizeof(packed));
 #else
         narrow4<T>(_mm256_castps256_ps128(from), to);
@@ -188,7 +195,7 @@ template <class T> SCALARS_FORCE_INLINE void narrow(float_packet from, uint16_t*
         auto       rounded = _mm256_srli_epi32(
             _mm256_add_epi32(bits, _mm256_add_epi32(_mm256_set1_epi32(0x7fff), lsb)), 16);
         rounded           = _mm256_blendv_epi8(rounded,
-            _mm256_set1_epi32(0xffff),
+            _mm256_set1_epi32(0x7fc0),
             _mm256_castps_si256(_mm256_cmp_ps(from, from, _CMP_UNORD_Q)));
         const auto packed = _mm256_castsi256_si128(
             _mm256_permute4x64_epi64(_mm256_packus_epi32(rounded, rounded), 0xd8));
@@ -221,4 +228,7 @@ template <class T> SCALARS_FORCE_INLINE void narrow(float_packet from, uint16_t*
     vst1_u16(to, packed);
 #endif
 }
+#if SCALARS_HAS_SSE || SCALARS_HAS_AVX || SCALARS_HAS_AVX2 || SCALARS_HAS_AVX512
+#undef SCALARS_F16C_ROUND
+#endif
 }  // namespace scalars::detail_reduced

@@ -347,11 +347,16 @@ inline uint32_t fp16_ieee_to_fp32_bits(uint16_t h)
      * making mantissa normalized (i.e. without leading 1).
      */
 #ifdef _MSC_VER
-    unsigned long nonsign_bsr;
-    _BitScanReverse(&nonsign_bsr, (unsigned long)nonsign);
-    uint32_t renorm_shift = (uint32_t)nonsign_bsr ^ 31;
+    unsigned long nonsign_bsr = 0;
+    // BitScanReverse is undefined for 0. A zero input renorms by 32 bits.
+    uint32_t renorm_shift = 32;
+    if (_BitScanReverse(&nonsign_bsr, (unsigned long)nonsign))
+    {
+        renorm_shift = (uint32_t)nonsign_bsr ^ 31;
+    }
 #else
-    uint32_t renorm_shift = __builtin_clz(nonsign);
+    // __builtin_clz(0) is undefined and UBSan rejects it. Zero renorms by 32.
+    uint32_t renorm_shift = nonsign == 0 ? 32u : static_cast<uint32_t>(__builtin_clz(nonsign));
 #endif
     renorm_shift = renorm_shift > 5 ? renorm_shift - 5 : 0;
     /*

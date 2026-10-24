@@ -55,9 +55,10 @@ macro(scalars_setup_rocm_prefix)
                 set(ENV{HIP_PATH} "${_scalars_rocm_found}")
             endif()
             message(STATUS "Scalars: ROCm/HIP SDK root: ${_scalars_rocm_found}")
-            # hip-config.cmake looks at AMDGPU_TARGETS / GPU_TARGETS, not only
-            # CMAKE_HIP_ARCHITECTURES. Without these, it falls back to gfx906 and
-            # may inject --offload-arch into host CXX flags.
+            # hip-config.cmake reads AMDGPU_TARGETS / GPU_TARGETS. Without them it
+            # runs amdgpu-arch, which fails when no GPU is present and falls back
+            # to gfx906. Host compiles still must not receive --offload-arch; that
+            # is stripped from hip::device after find_package(hip).
             if(CMAKE_HIP_ARCHITECTURES AND NOT CMAKE_HIP_ARCHITECTURES STREQUAL "native")
                 if(NOT AMDGPU_TARGETS)
                     set(AMDGPU_TARGETS "${CMAKE_HIP_ARCHITECTURES}")

@@ -424,7 +424,7 @@ template <class T> void run_reduced_contract_test()
     EXPECT_EQ(rounded[5].x, 0);
     EXPECT_EQ(rounded[6].x, 0);
     for (int i : {7, 8, 9, 10, 12})
-        EXPECT_EQ(rounded[i].x, std::is_same_v<T, scalars::half> ? 0x7e15 : 0x7fc5);
+        EXPECT_EQ(rounded[i].x, (std::is_same_v<T, scalars::half> ? 0x7e15 : 0x7fc5));
     EXPECT_EQ(rounded[11].x, 0);
     for (int i : {0, 2, 3, 4, 6, 7, 8})
         EXPECT_EQ(cmp[i], 0xffff);
