@@ -24,19 +24,23 @@ complex<T> complex_dot(const complex<T>* x,
     std::ptrdiff_t k = 0;
     complex<T>     result{};
 #if SCALARS_VECTORIZED && !SCALARS_ON_GPU_DEVICE
-    using P  = ::simd<complex<T>>;
-    auto sum = P::setzero();
-    for (; count - k >= P::size; k += P::size)
+    using p  = ::simd<complex<T>>;
+    auto sum = p::setzero();
+    for (; count - k >= p::size; k += p::size)
     {
-        auto a = P::gather(x + k * sx, sx);
+        auto a = p::gather(x + k * sx, sx);
         if (conjugate_x)
-            a = P::conj(a);
-        sum = P::fma(a, P::gather(y + k * sy, sy), sum);
+        {
+            a = p::conj(a);
+        }
+        sum = p::fma(a, p::gather(y + k * sy, sy), sum);
     }
-    result = P::accumulate(sum);
+    result = p::accumulate(sum);
 #endif
     for (; k < count; ++k)
+    {
         result += (conjugate_x ? scalars::conj(x[k * sx]) : x[k * sx]) * y[k * sy];
+    }
     return result;
 }
 
@@ -52,19 +56,23 @@ void complex_axpy(complex<T>* y,
     assert(count >= 0 && (count <= 1 || sy != 0));
     std::ptrdiff_t k = 0;
 #if SCALARS_VECTORIZED && !SCALARS_ON_GPU_DEVICE
-    using P           = ::simd<complex<T>>;
-    const auto factor = P::set(alpha);
-    for (; count - k >= P::size; k += P::size)
+    using p           = ::simd<complex<T>>;
+    const auto factor = p::set(alpha);
+    for (; count - k >= p::size; k += p::size)
     {
-        auto a = P::gather(x + k * sx, sx);
+        auto a = p::gather(x + k * sx, sx);
         if (conjugate_x)
-            a = P::conj(a);
-        const auto b = P::gather(y + k * sy, sy);
-        P::scatter(P::fma(factor, a, b), sy, y + k * sy);
+        {
+            a = p::conj(a);
+        }
+        const auto b = p::gather(y + k * sy, sy);
+        p::scatter(p::fma(factor, a, b), sy, y + k * sy);
     }
 #endif
     for (; k < count; ++k)
+    {
         y[k * sy] += alpha * (conjugate_x ? scalars::conj(x[k * sx]) : x[k * sx]);
+    }
 }
 
 template <class T>
@@ -73,19 +81,21 @@ void complex_scale(complex<T>* x, std::ptrdiff_t stride, std::ptrdiff_t count, T
     assert(count >= 0 && (count <= 1 || stride != 0));
     std::ptrdiff_t k = 0;
 #if SCALARS_VECTORIZED && !SCALARS_ON_GPU_DEVICE
-    using P           = ::simd<complex<T>>;
-    using R           = ::simd<T>;
-    const auto factor = R::set(scale);
-    for (; count - k >= P::size; k += P::size)
+    using p           = ::simd<complex<T>>;
+    using r           = ::simd<T>;
+    const auto factor = r::set(scale);
+    for (; count - k >= p::size; k += p::size)
     {
-        auto a = P::gather(x + k * stride, stride);
-        a.real = R::mul(a.real, factor);
-        a.imag = R::mul(a.imag, factor);
-        P::scatter(a, stride, x + k * stride);
+        auto a = p::gather(x + k * stride, stride);
+        a.real = r::mul(a.real, factor);
+        a.imag = r::mul(a.imag, factor);
+        p::scatter(a, stride, x + k * stride);
     }
 #endif
     for (; k < count; ++k)
+    {
         x[k * stride] *= scale;
+    }
 }
 
 // x' = c*x + s*y; y' = c*y - conj(s)*x. Both inputs are loaded before
@@ -102,19 +112,19 @@ void complex_rotate(complex<T>* x,
     assert(count >= 0 && (count <= 1 || (sx != 0 && sy != 0)));
     std::ptrdiff_t k = 0;
 #if SCALARS_VECTORIZED && !SCALARS_ON_GPU_DEVICE
-    using P                       = ::simd<complex<T>>;
-    using R                       = ::simd<T>;
-    const auto cosine             = R::set(c);
-    const auto sine               = P::set(s);
-    const auto negative_conjugate = P::neg(P::conj(sine));
-    for (; count - k >= P::size; k += P::size)
+    using p                       = ::simd<complex<T>>;
+    using r                       = ::simd<T>;
+    const auto cosine             = r::set(c);
+    const auto sine               = p::set(s);
+    const auto negative_conjugate = p::neg(p::conj(sine));
+    for (; count - k >= p::size; k += p::size)
     {
-        const auto               a = P::gather(x + k * sx, sx);
-        const auto               b = P::gather(y + k * sy, sy);
-        const typename P::simd_t ca{R::mul(a.real, cosine), R::mul(a.imag, cosine)};
-        const typename P::simd_t cb{R::mul(b.real, cosine), R::mul(b.imag, cosine)};
-        P::scatter(P::fma(sine, b, ca), sx, x + k * sx);
-        P::scatter(P::fma(negative_conjugate, a, cb), sy, y + k * sy);
+        const auto               a = p::gather(x + k * sx, sx);
+        const auto               b = p::gather(y + k * sy, sy);
+        const typename p::simd_t ca{r::mul(a.real, cosine), r::mul(a.imag, cosine)};
+        const typename p::simd_t cb{r::mul(b.real, cosine), r::mul(b.imag, cosine)};
+        p::scatter(p::fma(sine, b, ca), sx, x + k * sx);
+        p::scatter(p::fma(negative_conjugate, a, cb), sy, y + k * sy);
     }
 #endif
     for (; k < count; ++k)
