@@ -9,6 +9,7 @@ follows the sibling LinearAlgebra repository, with `SCALARS_` options and
 the configuration summary in `cmake/summary.cmake`.
 
 ```bash
+git submodule update --init ThirdParty/googletest ThirdParty/benchmark
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build --parallel
 ctest --test-dir build --output-on-failure
@@ -31,6 +32,7 @@ Common build options follow LinearAlgebra's naming and defaults:
 | `SCALARS_CXX_STANDARD` | `20` | C++20 or C++23 |
 | `SCALARS_ENABLE_TESTING` | `ON` standalone | Build the scalar test suite |
 | `SCALARS_ENABLE_GTEST` | `ON` | Build GoogleTest C++ unit tests |
+| `SCALARS_ENABLE_BENCHMARK` | `OFF` | Build Google Benchmark micro-benchmarks |
 | `SCALARS_ENABLE_CACHE` | `ON` | Enable the selected compiler cache |
 | `SCALARS_CACHE_BACKEND` | `none` | `none`, `ccache`, `sccache`, or `buildcache` |
 | `SCALARS_LTO_MODE` | `off` | `off`, `thin`, `full`, `ipo`, or `auto` |
@@ -71,10 +73,12 @@ Sanitizer, coverage, and Valgrind builds use Debug. Optional analysis tools must
 be installed separately; coverage reporting requires `coverage-tool` and uses
 `coverage.toml`. `colorama` and `psutil` are optional.
 
-Tests follow LinearAlgebra's structure, with snake_case source filenames:
+Tests follow LinearAlgebra's structure, with CamelCase source filenames:
 
-- `Testing/Cxx/test_*.cxx`: GoogleTest cases grouped by scalar type, math,
+- `Testing/Cxx/Test*.cxx`: GoogleTest cases grouped by scalar type, math,
   traits, promotion, conversion, and metadata, built as `ScalarsCxxTests`.
+- `Testing/Benchmark/Benchmark*.cxx`: Google Benchmark micro-benchmarks, built
+  when `SCALARS_ENABLE_BENCHMARK=ON` (setup helper token `benchmark`).
 - `Testing/scalars_test.h.in`: the shared test header configured by CMake.
 - `Testing/CMake/test_setup.py`: Python build-helper regression checks,
   registered as `ScalarsSetupTests` when Python is available.
@@ -82,12 +86,13 @@ Tests follow LinearAlgebra's structure, with snake_case source filenames:
   `Scalars::Scalars` and `Scalars::Core` targets.
 
 `ctest --test-dir build --output-on-failure` runs the C++ and Python suites.
-GoogleTest is reused from the host or an installed package, resolved from
-`SCALARS_THIRD_PARTY_DIR/googletest`, or fetched at the reference's pinned
-version. Library-only builds with `SCALARS_ENABLE_TESTING=OFF` need no GoogleTest.
-Use `-DSCALARS_ENABLE_GTEST=OFF` (or the setup helper's `gtest` token) to disable
-only the C++ suite. Run the Python checks directly with
-`python3 -m unittest discover -s Testing/CMake -p test_setup.py`.
+GoogleTest and Google Benchmark are the `ThirdParty/googletest` and
+`ThirdParty/benchmark` submodules, pinned to the same commits as LinearAlgebra.
+Initialize them with `git submodule update --init`. A missing checkout falls
+back to FetchContent. Library-only builds with `SCALARS_ENABLE_TESTING=OFF`
+need no GoogleTest. Use `-DSCALARS_ENABLE_GTEST=OFF` (or the setup helper's
+`gtest` token) to disable only the C++ suite. Run the Python checks directly
+with `python3 -m unittest discover -s Testing/CMake -p test_setup.py`.
 
 After installation, verify the exported package with:
 
@@ -122,12 +127,12 @@ Code filenames and class/type names use `snake_case`, for example
 
 ```cpp
 #include <scalars.h>
-using namespace kh::scalars;
+using namespace scalars;
 int main() {
   half h{1.5f};
   bfloat16 b{2.0f};
   complex_float z{1.f, 2.f};
-  auto w = kh::scalars::exp(z);
+  auto w = scalars::exp(z);
   return float(h) + float(b) + w.real() > 0 ? 0 : 1;
 }
 ```

@@ -1,7 +1,7 @@
 #pragma once
-#include <core/scalar_traits.h>
+#include "core/scalar_traits.h"
 #include <type_traits>
-namespace kh::scalars
+namespace scalars
 {
 template <class To, class From> To scalar_cast(const From& v)
 {
@@ -23,4 +23,4 @@ template <class To, class From> To scalar_cast(const From& v)
         return static_cast<To>(v);
     }
 }
-}  // namespace kh::scalars
+}  // namespace scalars

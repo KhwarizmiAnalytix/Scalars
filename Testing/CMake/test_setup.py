@@ -59,6 +59,10 @@ class setup_tests(unittest.TestCase):
         _, values, _ = self.flags("config.gtest")
         self.assertEqual(values["SCALARS_ENABLE_GTEST"], "OFF")
 
+    def test_benchmark_toggle(self):
+        _, values, _ = self.flags("config.benchmark")
+        self.assertEqual(values["SCALARS_ENABLE_BENCHMARK"], "ON")
+
     def test_invalid_options_fail(self):
         for arg in ["mkl", "cxx17", "c++17", "--lto.invalid", "--sanitizer.invalid"]:
             with self.subTest(arg=arg), self.assertRaises(SystemExit) as error:

@@ -8,7 +8,7 @@ if(SCALARS_ENABLE_GTEST)
         "${SCALARS_BINARY_DIR}/Testing/scalars_test.h" @ONLY
     )
     file(GLOB_RECURSE test_sources CONFIGURE_DEPENDS LIST_DIRECTORIES false
-         "${CMAKE_CURRENT_SOURCE_DIR}/test_*.cxx"
+         "${CMAKE_CURRENT_SOURCE_DIR}/Test*.cxx"
     )
     add_executable(ScalarsCxxTests ${test_sources})
     target_include_directories(

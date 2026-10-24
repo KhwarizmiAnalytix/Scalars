@@ -1,9 +1,7 @@
 #pragma once
+#include "types/complex.h"
 #include <cmath>
-#include <math/complex_math.h>
-#include <types/bfloat16.h>
-#include <types/half.h>
-namespace kh::scalars
+namespace scalars
 {
 #define KH_REAL_MATH(NAME)                                                                         \
     inline half NAME(half x)                                                                       \
@@ -28,4 +26,4 @@ KH_REAL_MATH(ceil)
 KH_REAL_MATH(round)
 KH_REAL_MATH(trunc)
 #undef KH_REAL_MATH
-}  // namespace kh::scalars
+}  // namespace scalars

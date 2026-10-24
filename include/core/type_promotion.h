@@ -1,7 +1,7 @@
 #pragma once
-#include <core/scalar_traits.h>
+#include "core/scalar_traits.h"
 #include <type_traits>
-namespace kh::scalars
+namespace scalars
 {
 template <class A, class B> struct promote_real
 {
@@ -29,4 +29,4 @@ template <class A, class B> struct promote<A, complex<B>>
     using type = complex<typename promote_real<A, B>::type>;
 };
 template <class A, class B> using promote_t = typename promote<A, B>::type;
-}  // namespace kh::scalars
+}  // namespace scalars

@@ -41,6 +41,8 @@ if(DEFINED SCALARS_BUILD_TESTS)
 endif()
 option(SCALARS_ENABLE_TESTING "Build Scalars test suite" ${_scalars_testing_default})
 option(SCALARS_ENABLE_GTEST "Enable GoogleTest for Scalars" ON)
+# Vendored submodule under ThirdParty/benchmark. Off by default, as in LinearAlgebra.
+option(SCALARS_ENABLE_BENCHMARK "Enable Google Benchmark for Scalars micro-benchmarks" OFF)
 if(DEFINED BUILD_TESTING AND NOT BUILD_TESTING)
     set(SCALARS_ENABLE_TESTING OFF)
 endif()
@@ -151,9 +153,13 @@ target_include_directories(
 )
 set_target_properties(ScalarsCore PROPERTIES EXPORT_NAME Core)
 
-add_library(Scalars src/core/scalar_type.cpp)
+add_library(Scalars src/core/scalar_type.cpp src/math/complex_math.cpp)
 add_library(Scalars::Scalars ALIAS Scalars)
 target_link_libraries(Scalars PUBLIC ScalarsCore)
+target_compile_definitions(Scalars PRIVATE SCALARS_BUILD_MAIN_LIB)
+if(BUILD_SHARED_LIBS)
+    target_compile_definitions(Scalars PUBLIC SCALARS_BUILD_SHARED_LIBS)
+endif()
 set_target_properties(
     Scalars
     PROPERTIES EXPORT_NAME Scalars
@@ -197,6 +203,9 @@ install(FILES "${SCALARS_BINARY_DIR}/ScalarsConfig.cmake"
 if(SCALARS_ENABLE_TESTING)
     add_subdirectory(Testing/Cxx)
     add_subdirectory(Testing/CMake)
+endif()
+if(SCALARS_ENABLE_BENCHMARK)
+    add_subdirectory(Testing/Benchmark)
 endif()
 if(SCALARS_ENABLE_VALGRIND AND SCALARS_ENABLE_TESTING)
     scalars_apply_valgrind_timeouts()

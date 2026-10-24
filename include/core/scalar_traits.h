@@ -1,14 +1,9 @@
 #pragma once
+#include "types/bfloat16.h"
+#include "types/complex.h"
 #include <type_traits>
-#include <types/complex.h>
-namespace kh::scalars
+namespace scalars
 {
-template <class T> struct is_complex : std::false_type
-{
-};
-template <class T> struct is_complex<complex<T>> : std::true_type
-{
-};
 template <class T> inline constexpr bool is_complex_v = is_complex<T>::value;
 template <class T> struct real_type
 {
@@ -36,4 +31,4 @@ template <class T> struct accumulation_type<complex<T>>
     using type = complex<typename accumulation_type<T>::type>;
 };
 template <class T> using accumulation_type_t = typename accumulation_type<T>::type;
-}  // namespace kh::scalars
+}  // namespace scalars

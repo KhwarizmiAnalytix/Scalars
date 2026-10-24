@@ -1,105 +1,531 @@
 #pragma once
 
-#include <bit>
-#include <cstdint>
-#include <type_traits>
+// Defines the bloat16 type (brain floating-point). This representation uses
+// 1 bit for the sign, 8 bits for the exponent and 7 bits for the mantissa.
 
-namespace kh::scalars
+#include "detail/bit_cast.h"
+#include "scalars_macros.h"
+
+#include <cmath>
+#include <cstdint>
+#include <cstring>
+#include <iosfwd>
+#include <ostream>
+
+#if defined(__CUDACC__) && (!defined(USE_ROCM) || (TORCH_HIP_VERSION >= 702))
+#include <cuda_bf16.h>
+#endif
+
+#if defined(CL_SYCL_LANGUAGE_VERSION)
+#include <CL/sycl.hpp>  // for SYCL 1.2.1
+#elif defined(SYCL_LANGUAGE_VERSION)
+#include <sycl/sycl.hpp>  // for SYCL 2020
+#endif
+
+namespace scalars
 {
+
+struct alignas(2) BFloat16
+{
+    uint16_t x;
+
+    // HIP wants __host__ __device__ tag, CUDA does not
+#if defined(USE_ROCM) && defined(__HIPCC__)
+    C10_HOST_DEVICE BFloat16() = default;
+#else
+    BFloat16() = default;
+#endif
+
+    struct from_bits_t
+    {
+    };
+    static constexpr C10_HOST_DEVICE from_bits_t from_bits() { return from_bits_t(); }
+
+    constexpr C10_HOST_DEVICE BFloat16(unsigned short bits, from_bits_t /*unused*/) : x(bits) {}
+    /* implicit */ inline C10_HOST_DEVICE BFloat16(float value);
+    inline C10_HOST_DEVICE                operator float() const;
+
+#if defined(__CUDACC__) && (!defined(USE_ROCM) || (TORCH_HIP_VERSION >= 702))
+    inline C10_HOST_DEVICE          BFloat16(const __nv_bfloat16& value);
+    explicit inline C10_HOST_DEVICE operator __nv_bfloat16() const;
+#endif
+
+#if defined(SYCL_EXT_ONEAPI_BFLOAT16_MATH_FUNCTIONS)
+    inline C10_HOST_DEVICE          BFloat16(const sycl::ext::oneapi::bfloat16& value);
+    explicit inline C10_HOST_DEVICE operator sycl::ext::oneapi::bfloat16() const;
+#endif
+};
+
+inline std::ostream& operator<<(std::ostream& out, const BFloat16& value)
+{
+    out << (float)value;
+    return out;
+}
+
 namespace detail
 {
-inline constexpr std::uint16_t float_to_bfloat16(float x) noexcept
+inline C10_HOST_DEVICE float f32_from_bits(uint16_t src)
 {
-    const auto bits = std::bit_cast<std::uint32_t>(x);
-    if ((bits & 0x7f800000u) == 0x7f800000u && (bits & 0x007fffffu))
+    float    res = 0;
+    uint32_t tmp = src;
+    tmp <<= 16;
+
+#if defined(USE_ROCM) && defined(__HIPCC__)
+    float* tempRes;
+
+    // We should be using memcpy in order to respect the strict aliasing rule
+    // but it fails in the HIP environment.
+    tempRes = reinterpret_cast<float*>(&tmp);
+    res     = *tempRes;
+#else
+    std::memcpy(&res, &tmp, sizeof(tmp));
+#endif
+
+    return res;
+}
+
+inline C10_HOST_DEVICE uint16_t bits_from_f32(float src)
+{
+    uint32_t res = 0;
+
+#if defined(USE_ROCM) && defined(__HIPCC__)
+    // We should be using memcpy in order to respect the strict aliasing rule
+    // but it fails in the HIP environment.
+    uint32_t* tempRes = reinterpret_cast<uint32_t*>(&src);
+    res               = *tempRes;
+#else
+    std::memcpy(&res, &src, sizeof(res));
+#endif
+
+    return res >> 16;
+}
+
+inline C10_HOST_DEVICE uint16_t round_to_nearest_even(float src)
+{
+#if defined(USE_ROCM) && defined(__HIPCC__)
+    if (src != src)
     {
-        return static_cast<std::uint16_t>((bits >> 16) | 0x0040u);
+#elif defined(_MSC_VER)
+    if (isnan(src))
+    {
+#else
+    if (std::isnan(src))
+    {
+#endif
+        return UINT16_C(0x7FC0);
     }
-    return static_cast<std::uint16_t>((bits + 0x7fffu + ((bits >> 16) & 1u)) >> 16);
+    else
+    {
+        const uint32_t U32           = scalars::bit_cast<uint32_t>(src);
+        uint32_t       rounding_bias = ((U32 >> 16) & 1) + UINT32_C(0x7FFF);
+        return static_cast<uint16_t>((U32 + rounding_bias) >> 16);
+    }
 }
-inline constexpr float bfloat16_to_float(std::uint16_t bits) noexcept
-{
-    return std::bit_cast<float>(static_cast<std::uint32_t>(bits) << 16);
-}
+
 }  // namespace detail
-struct bfloat16
+
+//-------- the following is copied from c10/util/BFloat16-inl.h ---------//
+C10_CLANG_DIAGNOSTIC_PUSH()
+#if C10_CLANG_HAS_WARNING("-Wimplicit-int-float-conversion")
+C10_CLANG_DIAGNOSTIC_IGNORE("-Wimplicit-int-float-conversion")
+#endif
+
+/// Constructors
+inline C10_HOST_DEVICE BFloat16::BFloat16(float value)
+    :
+#if defined(__CUDACC__) &&                                                                         \
+    (!defined(USE_ROCM) && defined(__CUDA_ARCH__) && __CUDA_ARCH__ >= 800 ||                       \
+        defined(USE_ROCM) && (TORCH_HIP_VERSION >= 702))
+      x(__bfloat16_as_ushort(__float2bfloat16(value)))
+#elif defined(__SYCL_DEVICE_ONLY__) && defined(SYCL_EXT_ONEAPI_BFLOAT16_MATH_FUNCTIONS)
+      x(scalars::bit_cast<uint16_t>(sycl::ext::oneapi::bfloat16(value)))
+#else
+      // RNE by default
+      x(detail::round_to_nearest_even(value))
+#endif
 {
-    std::uint16_t bits{};
-    constexpr bfloat16() noexcept = default;
-    explicit constexpr bfloat16(float v) noexcept : bits(detail::float_to_bfloat16(v)) {}
-    explicit constexpr bfloat16(double v) noexcept : bfloat16(static_cast<float>(v)) {}
-    static constexpr bfloat16 from_bits(std::uint16_t b) noexcept
+}
+
+/// Implicit conversions
+inline C10_HOST_DEVICE BFloat16::operator float() const
+{
+#if defined(__CUDACC__) && (!defined(USE_ROCM) || (TORCH_HIP_VERSION >= 702))
+    return __bfloat162float(*reinterpret_cast<const __nv_bfloat16*>(&x));
+#elif defined(__SYCL_DEVICE_ONLY__) && defined(SYCL_EXT_ONEAPI_BFLOAT16_MATH_FUNCTIONS)
+    return float(*reinterpret_cast<const sycl::ext::oneapi::bfloat16*>(&x));
+#else
+    return detail::f32_from_bits(x);
+#endif
+}
+
+#if defined(__CUDACC__) && (!defined(USE_ROCM) || (TORCH_HIP_VERSION >= 702))
+inline C10_HOST_DEVICE BFloat16::BFloat16(const __nv_bfloat16& value)
+{
+    x = *reinterpret_cast<const unsigned short*>(&value);
+}
+inline C10_HOST_DEVICE BFloat16::operator __nv_bfloat16() const
+{
+    return *reinterpret_cast<const __nv_bfloat16*>(&x);
+}
+#endif
+
+#if defined(SYCL_EXT_ONEAPI_BFLOAT16_MATH_FUNCTIONS)
+inline C10_HOST_DEVICE BFloat16::BFloat16(const sycl::ext::oneapi::bfloat16& value)
+{
+    x = *reinterpret_cast<const unsigned short*>(&value);
+}
+inline C10_HOST_DEVICE BFloat16::operator sycl::ext::oneapi::bfloat16() const
+{
+    return *reinterpret_cast<const sycl::ext::oneapi::bfloat16*>(&x);
+}
+#endif
+
+// CUDA intrinsics
+
+#if defined(__CUDACC__) || defined(__HIPCC__)
+inline C10_DEVICE BFloat16 __ldg(const BFloat16* ptr)
+{
+#if !defined(USE_ROCM) && defined(__CUDA_ARCH__) && __CUDA_ARCH__ >= 800
+    return __ldg(reinterpret_cast<const __nv_bfloat16*>(ptr));
+#else
+    return *ptr;
+#endif
+}
+#endif
+
+/// Arithmetic
+
+inline C10_HOST_DEVICE BFloat16 operator+(const BFloat16& a, const BFloat16& b)
+{
+    return static_cast<float>(a) + static_cast<float>(b);
+}
+
+inline C10_HOST_DEVICE BFloat16 operator-(const BFloat16& a, const BFloat16& b)
+{
+    return static_cast<float>(a) - static_cast<float>(b);
+}
+
+inline C10_HOST_DEVICE BFloat16 operator*(const BFloat16& a, const BFloat16& b)
+{
+    return static_cast<float>(a) * static_cast<float>(b);
+}
+
+inline C10_HOST_DEVICE BFloat16 operator/(
+    const BFloat16& a, const BFloat16& b) __ubsan_ignore_float_divide_by_zero__
+{
+    return static_cast<float>(a) / static_cast<float>(b);
+}
+
+inline C10_HOST_DEVICE BFloat16 operator-(const BFloat16& a)
+{
+    return -static_cast<float>(a);
+}
+
+inline C10_HOST_DEVICE BFloat16& operator+=(BFloat16& a, const BFloat16& b)
+{
+    a = a + b;
+    return a;
+}
+
+inline C10_HOST_DEVICE BFloat16& operator-=(BFloat16& a, const BFloat16& b)
+{
+    a = a - b;
+    return a;
+}
+
+inline C10_HOST_DEVICE BFloat16& operator*=(BFloat16& a, const BFloat16& b)
+{
+    a = a * b;
+    return a;
+}
+
+inline C10_HOST_DEVICE BFloat16& operator/=(BFloat16& a, const BFloat16& b)
+{
+    a = a / b;
+    return a;
+}
+
+inline C10_HOST_DEVICE BFloat16& operator|(BFloat16& a, const BFloat16& b)
+{
+    a.x = a.x | b.x;
+    return a;
+}
+
+inline C10_HOST_DEVICE BFloat16& operator^(BFloat16& a, const BFloat16& b)
+{
+    a.x = a.x ^ b.x;
+    return a;
+}
+
+inline C10_HOST_DEVICE BFloat16& operator&(BFloat16& a, const BFloat16& b)
+{
+    a.x = a.x & b.x;
+    return a;
+}
+
+/// Arithmetic with floats
+
+inline C10_HOST_DEVICE float operator+(BFloat16 a, float b)
+{
+    return static_cast<float>(a) + b;
+}
+inline C10_HOST_DEVICE float operator-(BFloat16 a, float b)
+{
+    return static_cast<float>(a) - b;
+}
+inline C10_HOST_DEVICE float operator*(BFloat16 a, float b)
+{
+    return static_cast<float>(a) * b;
+}
+inline C10_HOST_DEVICE float operator/(BFloat16 a, float b)
+{
+    return static_cast<float>(a) / b;
+}
+
+inline C10_HOST_DEVICE float operator+(float a, BFloat16 b)
+{
+    return a + static_cast<float>(b);
+}
+inline C10_HOST_DEVICE float operator-(float a, BFloat16 b)
+{
+    return a - static_cast<float>(b);
+}
+inline C10_HOST_DEVICE float operator*(float a, BFloat16 b)
+{
+    return a * static_cast<float>(b);
+}
+inline C10_HOST_DEVICE float operator/(float a, BFloat16 b)
+{
+    return a / static_cast<float>(b);
+}
+
+inline C10_HOST_DEVICE float& operator+=(float& a, const BFloat16& b)
+{
+    return a += static_cast<float>(b);
+}
+inline C10_HOST_DEVICE float& operator-=(float& a, const BFloat16& b)
+{
+    return a -= static_cast<float>(b);
+}
+inline C10_HOST_DEVICE float& operator*=(float& a, const BFloat16& b)
+{
+    return a *= static_cast<float>(b);
+}
+inline C10_HOST_DEVICE float& operator/=(float& a, const BFloat16& b)
+{
+    return a /= static_cast<float>(b);
+}
+
+/// Arithmetic with doubles
+
+inline C10_HOST_DEVICE double operator+(BFloat16 a, double b)
+{
+    return static_cast<double>(a) + b;
+}
+inline C10_HOST_DEVICE double operator-(BFloat16 a, double b)
+{
+    return static_cast<double>(a) - b;
+}
+inline C10_HOST_DEVICE double operator*(BFloat16 a, double b)
+{
+    return static_cast<double>(a) * b;
+}
+inline C10_HOST_DEVICE double operator/(BFloat16 a, double b)
+{
+    return static_cast<double>(a) / b;
+}
+
+inline C10_HOST_DEVICE double operator+(double a, BFloat16 b)
+{
+    return a + static_cast<double>(b);
+}
+inline C10_HOST_DEVICE double operator-(double a, BFloat16 b)
+{
+    return a - static_cast<double>(b);
+}
+inline C10_HOST_DEVICE double operator*(double a, BFloat16 b)
+{
+    return a * static_cast<double>(b);
+}
+inline C10_HOST_DEVICE double operator/(double a, BFloat16 b)
+{
+    return a / static_cast<double>(b);
+}
+
+/// Arithmetic with ints
+
+inline C10_HOST_DEVICE BFloat16 operator+(BFloat16 a, int b)
+{
+    // NOLINTNEXTLINE(bugprone-narrowing-conversions,cppcoreguidelines-narrowing-conversions)
+    return a + static_cast<BFloat16>(b);
+}
+inline C10_HOST_DEVICE BFloat16 operator-(BFloat16 a, int b)
+{
+    // NOLINTNEXTLINE(bugprone-narrowing-conversions,cppcoreguidelines-narrowing-conversions)
+    return a - static_cast<BFloat16>(b);
+}
+inline C10_HOST_DEVICE BFloat16 operator*(BFloat16 a, int b)
+{
+    // NOLINTNEXTLINE(bugprone-narrowing-conversions,cppcoreguidelines-narrowing-conversions)
+    return a * static_cast<BFloat16>(b);
+}
+inline C10_HOST_DEVICE BFloat16 operator/(BFloat16 a, int b)
+{
+    // NOLINTNEXTLINE(bugprone-narrowing-conversions,cppcoreguidelines-narrowing-conversions)
+    return a / static_cast<BFloat16>(b);
+}
+
+inline C10_HOST_DEVICE BFloat16 operator+(int a, BFloat16 b)
+{
+    // NOLINTNEXTLINE(bugprone-narrowing-conversions,cppcoreguidelines-narrowing-conversions)
+    return static_cast<BFloat16>(a) + b;
+}
+inline C10_HOST_DEVICE BFloat16 operator-(int a, BFloat16 b)
+{
+    // NOLINTNEXTLINE(bugprone-narrowing-conversions,cppcoreguidelines-narrowing-conversions)
+    return static_cast<BFloat16>(a) - b;
+}
+inline C10_HOST_DEVICE BFloat16 operator*(int a, BFloat16 b)
+{
+    // NOLINTNEXTLINE(bugprone-narrowing-conversions,cppcoreguidelines-narrowing-conversions)
+    return static_cast<BFloat16>(a) * b;
+}
+inline C10_HOST_DEVICE BFloat16 operator/(int a, BFloat16 b)
+{
+    // NOLINTNEXTLINE(bugprone-narrowing-conversions,cppcoreguidelines-narrowing-conversions)
+    return static_cast<BFloat16>(a) / b;
+}
+
+//// Arithmetic with int64_t
+
+inline C10_HOST_DEVICE BFloat16 operator+(BFloat16 a, int64_t b)
+{
+    // NOLINTNEXTLINE(bugprone-narrowing-conversions,cppcoreguidelines-narrowing-conversions)
+    return a + static_cast<BFloat16>(b);
+}
+inline C10_HOST_DEVICE BFloat16 operator-(BFloat16 a, int64_t b)
+{
+    // NOLINTNEXTLINE(bugprone-narrowing-conversions,cppcoreguidelines-narrowing-conversions)
+    return a - static_cast<BFloat16>(b);
+}
+inline C10_HOST_DEVICE BFloat16 operator*(BFloat16 a, int64_t b)
+{
+    // NOLINTNEXTLINE(bugprone-narrowing-conversions,cppcoreguidelines-narrowing-conversions)
+    return a * static_cast<BFloat16>(b);
+}
+inline C10_HOST_DEVICE BFloat16 operator/(BFloat16 a, int64_t b)
+{
+    // NOLINTNEXTLINE(bugprone-narrowing-conversions,cppcoreguidelines-narrowing-conversions)
+    return a / static_cast<BFloat16>(b);
+}
+
+inline C10_HOST_DEVICE BFloat16 operator+(int64_t a, BFloat16 b)
+{
+    // NOLINTNEXTLINE(bugprone-narrowing-conversions,cppcoreguidelines-narrowing-conversions)
+    return static_cast<BFloat16>(a) + b;
+}
+inline C10_HOST_DEVICE BFloat16 operator-(int64_t a, BFloat16 b)
+{
+    // NOLINTNEXTLINE(bugprone-narrowing-conversions,cppcoreguidelines-narrowing-conversions)
+    return static_cast<BFloat16>(a) - b;
+}
+inline C10_HOST_DEVICE BFloat16 operator*(int64_t a, BFloat16 b)
+{
+    // NOLINTNEXTLINE(bugprone-narrowing-conversions,cppcoreguidelines-narrowing-conversions)
+    return static_cast<BFloat16>(a) * b;
+}
+inline C10_HOST_DEVICE BFloat16 operator/(int64_t a, BFloat16 b)
+{
+    // NOLINTNEXTLINE(bugprone-narrowing-conversions,cppcoreguidelines-narrowing-conversions)
+    return static_cast<BFloat16>(a) / b;
+}
+
+// Overloading < and > operators, because std::max and std::min use them.
+
+inline C10_HOST_DEVICE bool operator>(BFloat16& lhs, BFloat16& rhs)
+{
+    return float(lhs) > float(rhs);
+}
+
+inline C10_HOST_DEVICE bool operator<(BFloat16& lhs, BFloat16& rhs)
+{
+    return float(lhs) < float(rhs);
+}
+
+C10_CLANG_DIAGNOSTIC_POP()
+}  // namespace scalars
+
+namespace std
+{
+
+template <> class numeric_limits<scalars::BFloat16>
+{
+public:
+    static constexpr bool is_signed         = true;
+    static constexpr bool is_specialized    = true;
+    static constexpr bool is_integer        = false;
+    static constexpr bool is_exact          = false;
+    static constexpr bool has_infinity      = true;
+    static constexpr bool has_quiet_NaN     = true;
+    static constexpr bool has_signaling_NaN = true;
+    static constexpr auto has_denorm        = numeric_limits<float>::has_denorm;
+    static constexpr auto has_denorm_loss   = numeric_limits<float>::has_denorm_loss;
+    static constexpr auto round_style       = numeric_limits<float>::round_style;
+    static constexpr bool is_iec559         = false;
+    static constexpr bool is_bounded        = true;
+    static constexpr bool is_modulo         = false;
+    static constexpr int  digits            = 8;
+    static constexpr int  digits10          = 2;
+    static constexpr int  max_digits10      = 4;
+    static constexpr int  radix             = 2;
+    static constexpr int  min_exponent      = -125;
+    static constexpr int  min_exponent10    = -37;
+    static constexpr int  max_exponent      = 128;
+    static constexpr int  max_exponent10    = 38;
+    static constexpr auto traps             = numeric_limits<float>::traps;
+    static constexpr auto tinyness_before   = numeric_limits<float>::tinyness_before;
+
+    static constexpr scalars::BFloat16 min()
     {
-        bfloat16 x;
-        x.bits = b;
-        return x;
+        return scalars::BFloat16(0x0080, scalars::BFloat16::from_bits());
     }
-    constexpr std::uint16_t to_bits() const noexcept { return bits; }
-    constexpr           operator float() const noexcept { return detail::bfloat16_to_float(bits); }
-    constexpr bfloat16& operator+=(bfloat16 b) noexcept
+    static constexpr scalars::BFloat16 lowest()
     {
-        *this = bfloat16(float(*this) + float(b));
-        return *this;
+        return scalars::BFloat16(0xFF7F, scalars::BFloat16::from_bits());
     }
-    constexpr bfloat16& operator-=(bfloat16 b) noexcept
+    static constexpr scalars::BFloat16 max()
     {
-        *this = bfloat16(float(*this) - float(b));
-        return *this;
+        return scalars::BFloat16(0x7F7F, scalars::BFloat16::from_bits());
     }
-    constexpr bfloat16& operator*=(bfloat16 b) noexcept
+    static constexpr scalars::BFloat16 epsilon()
     {
-        *this = bfloat16(float(*this) * float(b));
-        return *this;
+        return scalars::BFloat16(0x3C00, scalars::BFloat16::from_bits());
     }
-    constexpr bfloat16& operator/=(bfloat16 b) noexcept
+    static constexpr scalars::BFloat16 round_error()
     {
-        *this = bfloat16(float(*this) / float(b));
-        return *this;
+        return scalars::BFloat16(0x3F00, scalars::BFloat16::from_bits());
+    }
+    static constexpr scalars::BFloat16 infinity()
+    {
+        return scalars::BFloat16(0x7F80, scalars::BFloat16::from_bits());
+    }
+    static constexpr scalars::BFloat16 quiet_NaN()
+    {
+        return scalars::BFloat16(0x7FC0, scalars::BFloat16::from_bits());
+    }
+    static constexpr scalars::BFloat16 signaling_NaN()
+    {
+        return scalars::BFloat16(0x7F80, scalars::BFloat16::from_bits());
+    }
+    static constexpr scalars::BFloat16 denorm_min()
+    {
+        return scalars::BFloat16(0x0001, scalars::BFloat16::from_bits());
     }
 };
-inline constexpr bfloat16 operator+(bfloat16 a, bfloat16 b) noexcept
+
+}  // namespace std
+
+namespace scalars
 {
-    return a += b;
+using bfloat16 = scalars::BFloat16;
 }
-inline constexpr bfloat16 operator-(bfloat16 a, bfloat16 b) noexcept
-{
-    return a -= b;
-}
-inline constexpr bfloat16 operator*(bfloat16 a, bfloat16 b) noexcept
-{
-    return a *= b;
-}
-inline constexpr bfloat16 operator/(bfloat16 a, bfloat16 b) noexcept
-{
-    return a /= b;
-}
-inline constexpr bfloat16 operator-(bfloat16 a) noexcept
-{
-    return bfloat16::from_bits(a.bits ^ 0x8000u);
-}
-inline constexpr bool operator==(bfloat16 a, bfloat16 b) noexcept
-{
-    return float(a) == float(b);
-}
-inline constexpr bool operator!=(bfloat16 a, bfloat16 b) noexcept
-{
-    return !(a == b);
-}
-inline constexpr bool operator<(bfloat16 a, bfloat16 b) noexcept
-{
-    return float(a) < float(b);
-}
-inline constexpr bool operator<=(bfloat16 a, bfloat16 b) noexcept
-{
-    return float(a) <= float(b);
-}
-inline constexpr bool operator>(bfloat16 a, bfloat16 b) noexcept
-{
-    return float(a) > float(b);
-}
-inline constexpr bool operator>=(bfloat16 a, bfloat16 b) noexcept
-{
-    return float(a) >= float(b);
-}
-static_assert(sizeof(bfloat16) == 2 && std::is_trivially_copyable_v<bfloat16>);
-}  // namespace kh::scalars

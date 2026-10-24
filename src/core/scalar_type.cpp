@@ -1,5 +1,5 @@
-#include <core/scalar_type.h>
-namespace kh::scalars
+#include "core/scalar_type.h"
+namespace scalars
 {
 std::string_view scalar_type_name(scalar_type t) noexcept
 {
@@ -43,4 +43,4 @@ std::size_t scalar_type_size(scalar_type t) noexcept
     }
     return 0;
 }
-}  // namespace kh::scalars
+}  // namespace scalars
