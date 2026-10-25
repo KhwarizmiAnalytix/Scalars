@@ -144,20 +144,17 @@ function(scalars_configure_target target)
     endif()
 endfunction()
 
-# --- Public targets ---
+# --- Public target ---
+# One library, matching Vectorization: headers and the compiled sources live on
+# Scalars, and in-tree consumers link the Scalars::Scalars alias.
 set(CMAKE_CXX_STANDARD ${SCALARS_CXX_STANDARD})
-add_library(ScalarsCore INTERFACE)
-add_library(Scalars::Core ALIAS ScalarsCore)
-target_compile_features(ScalarsCore INTERFACE cxx_std_${SCALARS_CXX_STANDARD})
-target_include_directories(
-    ScalarsCore INTERFACE $<BUILD_INTERFACE:${SCALARS_SOURCE_DIR}/include>
-                          $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
-)
-set_target_properties(ScalarsCore PROPERTIES EXPORT_NAME Core)
-
 add_library(Scalars src/core/scalar_type.cpp src/math/complex_math.cpp src/math/normal_cdf.cpp)
 add_library(Scalars::Scalars ALIAS Scalars)
-target_link_libraries(Scalars PUBLIC ScalarsCore)
+target_compile_features(Scalars PUBLIC cxx_std_${SCALARS_CXX_STANDARD})
+target_include_directories(
+    Scalars PUBLIC $<BUILD_INTERFACE:${SCALARS_SOURCE_DIR}/include>
+                   $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
+)
 scalars_apply_simd_compile_definitions(Scalars)
 scalars_apply_gpu_backend(Scalars)
 if(BUILD_SHARED_LIBS)
@@ -183,7 +180,7 @@ install(
     PATTERN "*.h"
 )
 install(
-    TARGETS Scalars ScalarsCore
+    TARGETS Scalars
     EXPORT ScalarsTargets
     LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
     ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}

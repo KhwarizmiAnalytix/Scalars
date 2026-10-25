@@ -6,7 +6,7 @@ find_package(Scalars CONFIG REQUIRED)
 add_executable(install_consumer main.cpp)
 target_link_libraries(install_consumer PRIVATE Scalars::Scalars)
 add_executable(core_consumer core.cpp)
-target_link_libraries(core_consumer PRIVATE Scalars::Core)
+target_link_libraries(core_consumer PRIVATE Scalars::Scalars)
 
 enable_testing()
 add_test(NAME installed_package COMMAND install_consumer)

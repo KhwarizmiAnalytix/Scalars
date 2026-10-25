@@ -69,7 +69,16 @@ if(SCALARS_ENABLE_MKL)
             if(NOT TARGET MKL::MKL)
                 add_library(MKL::MKL INTERFACE IMPORTED GLOBAL)
                 target_include_directories(MKL::MKL INTERFACE "${MKL_INCLUDE_DIR}")
-                target_link_libraries(MKL::MKL INTERFACE ${MKL_LIBRARIES} ${CMAKE_DL_LIBS})
+                # --start-group / --end-group resolves circular references among the
+                # static MKL archives. Shared libraries do not need it.
+                if(UNIX AND NOT APPLE AND ENABLE_STATIC_MKL)
+                    target_link_libraries(
+                        MKL::MKL INTERFACE -Wl,--start-group ${MKL_LIBRARIES} -Wl,--end-group
+                                           ${CMAKE_DL_LIBS}
+                    )
+                else()
+                    target_link_libraries(MKL::MKL INTERFACE ${MKL_LIBRARIES} ${CMAKE_DL_LIBS})
+                endif()
             endif()
         else()
             message(WARNING
@@ -201,19 +210,16 @@ function(scalars_apply_simd_compile_definitions target)
     if(SCALARS_CPU_BACKEND STREQUAL "avx512")
         target_compile_definitions(${target} PUBLIC SCALARS_CPU_CAPABILITY_AVX512)
     endif()
-    # Link ThirdParty SVML and stage its runtime next to the library, matching
-    # Vectorization. SVML:: targets are not in the install export set, so they
-    # stay in BUILD_INTERFACE the same way Vectorization wraps Logging/Memory.
-    # libintlc.so.5 is a direct DT_NEEDED of libsvml. Linux ld.so does not use
-    # an executable RUNPATH to find a shared library's own dependencies, so the
-    # library also searches $ORIGIN, where the runtime copies are staged.
+    # Link ThirdParty SVML and stage its runtime binaries next to the output
+    # library. Same PUBLIC imported targets as Vectorization: SVML::SVML, and
+    # on Unix SVML::IRC and SVML::INTLC.
     if(SCALARS_ENABLE_SVML AND TARGET SVML::SVML)
-        target_link_libraries(${target} PUBLIC $<BUILD_INTERFACE:SVML::SVML>)
+        target_link_libraries(${target} PUBLIC SVML::SVML)
         if(TARGET SVML::IRC)
-            target_link_libraries(${target} PUBLIC $<BUILD_INTERFACE:SVML::IRC>)
+            target_link_libraries(${target} PUBLIC SVML::IRC)
         endif()
         if(TARGET SVML::INTLC)
-            target_link_libraries(${target} PUBLIC $<BUILD_INTERFACE:SVML::INTLC>)
+            target_link_libraries(${target} PUBLIC SVML::INTLC)
         endif()
         foreach(_svml_rt IN LISTS SVML_RUNTIME_LIBRARIES)
             if(_svml_rt)
@@ -227,32 +233,28 @@ function(scalars_apply_simd_compile_definitions target)
                 )
             endif()
         endforeach()
-        if(SVML_RUNTIME_LIBRARIES)
-            install(FILES ${SVML_RUNTIME_LIBRARIES} DESTINATION ${CMAKE_INSTALL_LIBDIR})
-        endif()
-        if(UNIX AND NOT APPLE)
-            set_property(TARGET ${target} APPEND PROPERTY BUILD_RPATH "\$ORIGIN")
-            set_property(TARGET ${target} APPEND PROPERTY INSTALL_RPATH "\$ORIGIN")
-            if(SVML_LIBRARY_SVML)
-                get_filename_component(_svml_rt_dir "${SVML_LIBRARY_SVML}" DIRECTORY)
-                target_link_options(
-                    ${target}
-                    PUBLIC
-                    "$<BUILD_INTERFACE:-Wl$<COMMA>-rpath$<COMMA>${_svml_rt_dir}>"
-                )
-                unset(_svml_rt_dir)
-            endif()
-        endif()
         unset(_svml_rt)
+        message(STATUS
+            "Scalars: linked SVML::SVML (ThirdParty); runtime files: ${SVML_RUNTIME_LIBRARIES}"
+        )
     endif()
-    if(SCALARS_HAS_MKL AND TARGET MKL::MKL)
-        target_link_libraries(${target} PUBLIC MKL::MKL)
+    if(SCALARS_ENABLE_MKL)
+        if(MKL_FOUND AND TARGET MKL::MKL)
+            target_link_libraries(${target} PUBLIC MKL::MKL)
+            message(STATUS "Scalars: linked MKL VML via MKL::MKL.")
+        else()
+            message(FATAL_ERROR
+                "SCALARS_ENABLE_MKL=ON but the MKL::MKL target is not available. "
+                "Set MKLROOT or INTEL_MKL_DIR to your MKL installation root."
+            )
+        endif()
     endif()
-    if(SCALARS_HAS_SLEEF AND TARGET Sleef::sleef)
+    if(SCALARS_ENABLE_SLEEF AND TARGET Sleef::sleef)
         target_link_libraries(${target} PUBLIC Sleef::sleef)
     endif()
-    if(SCALARS_HAS_ACCELERATE)
+    if(SCALARS_ENABLE_ACCELERATE AND APPLE)
         target_link_libraries(${target} PUBLIC "-framework Accelerate")
+        message(STATUS "Scalars: linked Apple Accelerate framework (vForce).")
     endif()
     if(SCALARS_SIMD_COMPILER_FLAGS)
         if(MSVC)

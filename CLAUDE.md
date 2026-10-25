@@ -2,8 +2,8 @@
 
 Standalone C++20 scalar library for half, bfloat16, and complex<T>, with dtype
 metadata, traits, promotion, casts, and math. Public headers live in
-`include/`; the umbrella header is `<scalars.h>`. Runtime dtype metadata is
-`Scalars::Scalars`; header-only types are `Scalars::Core`. Tests live in
+`include/`; the umbrella header is `<scalars.h>`. The library target is
+`Scalars::Scalars`. Tests live in
 `Testing/`. Use namespace `scalars` and `SCALARS_*` macros from
 `include/scalars_macros.h` and `include/common/scalars_export.h`. Dependencies
 are under `ThirdParty/`.

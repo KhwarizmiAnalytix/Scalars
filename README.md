@@ -16,7 +16,7 @@ ctest --test-dir build --output-on-failure
 cmake --install build --prefix /your/install/prefix
 ```
 
-Consumers can use `find_package(Scalars CONFIG REQUIRED)` and link `Scalars::Core` (headers) or `Scalars::Scalars` (runtime dtype metadata).
+Consumers can use `find_package(Scalars CONFIG REQUIRED)` and link `Scalars::Scalars`.
 
 Headers live directly under `include/`: use `<scalars.h>` for the full library,
 or individual headers such as `<types/half.h>` and `<core/scalar_type.h>`.
@@ -83,7 +83,7 @@ Tests follow LinearAlgebra's structure, with CamelCase source filenames:
 - `Testing/CMake/test_setup.py`: Python build-helper regression checks,
   registered as `ScalarsSetupTests` when Python is available.
 - `Testing/InstallConsumer/`: standalone consumers for the installed
-  `Scalars::Scalars` and `Scalars::Core` targets.
+  `Scalars::Scalars` target.
 
 `ctest --test-dir build --output-on-failure` runs the C++ and Python suites.
 GoogleTest and Google Benchmark are the `ThirdParty/googletest` and
