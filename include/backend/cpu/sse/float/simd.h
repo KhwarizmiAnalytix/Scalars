@@ -335,7 +335,7 @@ template <> struct simd<float>
 
     SCALARS_SIMD_RETURN_TYPE copy(const value_t* from, value_t* to)
     {
-        _mm_store_ps(to, _mm_loadu_ps(from));
+        _mm_storeu_ps(to, _mm_loadu_ps(from));
     }
 
     SCALARS_SIMD_METHOD simd_t ploadquad(const value_t* from)

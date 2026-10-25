@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cmath>
 #include <type_traits>
 
 #if SCALARS_HAS_SVML || SCALARS_HAS_SLEEF
@@ -254,7 +255,7 @@ template <> struct simd<double>
 
     SCALARS_SIMD_RETURN_TYPE copy(const value_t* from, value_t* to)
     {
-        _mm_store_pd(to, _mm_loadu_pd(from));
+        _mm_storeu_pd(to, _mm_loadu_pd(from));
     }
 
     template <int N> SCALARS_SIMD_RETURN_TYPE ptranspose(simd_t simd[N])  // NOLINT

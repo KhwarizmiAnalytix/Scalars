@@ -298,7 +298,7 @@ struct simd<double>
 
     SCALARS_SIMD_RETURN_TYPE copy(const value_t* from, value_t* to)
     {
-        _mm256_store_pd(to, _mm256_loadu_pd(from));
+        _mm256_storeu_pd(to, _mm256_loadu_pd(from));
     }
 
     template <int N>
