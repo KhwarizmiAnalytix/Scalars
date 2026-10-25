@@ -11,6 +11,8 @@ from pathlib import Path
 
 
 def main() -> None:
+    """Parse CLI arguments, compile the comparison harness for the selected
+    backend, and run it against the installed PyTorch build."""
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--elements", type=int, nargs="+", default=[4096])
     parser.add_argument("--iterations", type=int, default=1000)
@@ -130,10 +132,12 @@ def main() -> None:
     width = {"sse": 4, "avx": 8, "avx2": 8, "avx512": 16, "neon": 4, "sve": 4}[backend]
     if args.iterations <= 0 or any(n <= 0 or n % width for n in args.elements):
         parser.error(
-            f"elements must be positive multiples of {width}; iterations must be positive"
+            f"elements must be positive multiples of {width}; "
+            "iterations must be positive"
         )
     print(
-        f"PyTorch {torch.__version__}, {torch.version.git_version}; compiler: {compiler}; backend: {backend}",
+        f"PyTorch {torch.__version__}, {torch.version.git_version}; "
+        f"compiler: {compiler}; backend: {backend}",
         flush=True,
     )
     with tempfile.TemporaryDirectory(prefix="scalars-complex-benchmark-") as build:

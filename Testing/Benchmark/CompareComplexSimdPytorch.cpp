@@ -268,6 +268,9 @@ SCALARS_NOINLINE void scalars_kernel(const complex_t<T>* a,
     int                                                  count)
 {
     using p = packet<T>;
+    // p::size is a positive static constexpr int; clang-tidy can't resolve
+    // the dependent member here and misreads the increment as a no-op.
+    // NOLINTNEXTLINE(bugprone-infinite-loop)
     for (int i = 0; i < count; i += p::size)
     {
         const auto x = p::loadu(a + i), y = p::loadu(b + i);

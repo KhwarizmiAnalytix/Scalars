@@ -21,4 +21,5 @@ import-allowlist = [
     "coverage_tool",
     "helpers",
     "psutil",
+    "torch",
 ]

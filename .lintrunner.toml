@@ -92,6 +92,10 @@ exclude_patterns = [
     'build-*/**',
     '.git/**',
     'bazel-*/**',
+    # Standalone comparison harness compiled directly by
+    # Scripts/benchmark_complex_simd.py with its own torch include flags, not
+    # by CMake; it never has a compile_commands.json entry to lint against.
+    'Testing/Benchmark/CompareComplexSimdPytorch.cpp',
 ]
 command = [
     'python3',

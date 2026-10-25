@@ -15,6 +15,9 @@ project-excludes = [
     # excluded for the same reason MYPY excludes it: defensive patterns like
     # `if "x" in locals()` guards and re-match re-evaluation false-positive here.
     "Scripts/setup.py",
+    # torch is an optional runtime dependency needed only when this benchmark
+    # actually runs; it is not installed in the lint/type-check environment.
+    "Scripts/benchmark_complex_simd.py",
 ]
 
 # Import roots mirroring how the scripts actually run: setup.py and the helpers
