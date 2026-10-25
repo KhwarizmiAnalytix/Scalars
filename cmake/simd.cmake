@@ -218,12 +218,27 @@ function(scalars_apply_simd_compile_definitions target)
     # find a shared library's own dependencies, so the library searches $ORIGIN,
     # where the installed copies live.
     if(SCALARS_ENABLE_SVML AND TARGET SVML::SVML)
+        if(UNIX AND NOT APPLE)
+            # Nothing in Scalars calls libirc/libintlc symbols directly, so the
+            # linker's default --as-needed drops them from this target's own
+            # DT_NEEDED. DT_RUNPATH only resolves the DT_NEEDED entries of the
+            # object that carries it, not of that object's dependencies in
+            # turn -- so if libintlc.so.5 is only a transitive dependency of
+            # libsvml, ld.so has no RUNPATH to find it when libsvml is loaded.
+            # Forcing it onto this target's own DT_NEEDED makes ld.so resolve
+            # and load it via this target's RUNPATH up front; libsvml's later
+            # request for the same soname then reuses the already-loaded copy.
+            target_link_libraries(${target} PUBLIC "$<BUILD_INTERFACE:-Wl$<COMMA>--no-as-needed>")
+        endif()
         target_link_libraries(${target} PUBLIC $<BUILD_INTERFACE:SVML::SVML>)
         if(TARGET SVML::IRC)
             target_link_libraries(${target} PUBLIC $<BUILD_INTERFACE:SVML::IRC>)
         endif()
         if(TARGET SVML::INTLC)
             target_link_libraries(${target} PUBLIC $<BUILD_INTERFACE:SVML::INTLC>)
+        endif()
+        if(UNIX AND NOT APPLE)
+            target_link_libraries(${target} PUBLIC "$<BUILD_INTERFACE:-Wl$<COMMA>--as-needed>")
         endif()
         foreach(_svml_rt IN LISTS SVML_RUNTIME_LIBRARIES)
             if(_svml_rt)
@@ -285,10 +300,22 @@ function(scalars_apply_simd_compile_definitions target)
     if(SCALARS_SIMD_COMPILER_FLAGS)
         if(MSVC)
             separate_arguments(_scalars_simd_flags_list WINDOWS_COMMAND "${SCALARS_SIMD_COMPILER_FLAGS}")
+            # nvcc treats a bare /arch or /D option as another input file and stops
+            # with "A single input file is required". -Xcompiler forwards them to
+            # cl.exe, so /D__F16C__ still enables F16C half conversion in .cu files.
+            foreach(_flag IN LISTS _scalars_simd_flags_list)
+                target_compile_options(
+                    ${target}
+                    PUBLIC "$<$<COMPILE_LANGUAGE:CUDA>:-Xcompiler=${_flag}>"
+                           "$<$<NOT:$<COMPILE_LANGUAGE:CUDA>>:${_flag}>"
+                )
+            endforeach()
+            unset(_flag)
         else()
             separate_arguments(_scalars_simd_flags_list UNIX_COMMAND "${SCALARS_SIMD_COMPILER_FLAGS}")
+            target_compile_options(${target} PUBLIC ${_scalars_simd_flags_list})
         endif()
-        target_compile_options(${target} PUBLIC ${_scalars_simd_flags_list})
+        unset(_scalars_simd_flags_list)
     endif()
 endfunction()
 
