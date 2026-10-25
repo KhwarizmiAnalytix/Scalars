@@ -57,7 +57,14 @@ if(UNIX)
 
   find_library(SVML_LIBRARY_SVML   NAMES svml   PATHS "${_svml_lib_dir}" NO_DEFAULT_PATH)
   find_library(SVML_LIBRARY_IRC    NAMES irc    PATHS "${_svml_lib_dir}" NO_DEFAULT_PATH)
-  find_library(SVML_LIBRARY_INTLC  NAMES intlc  PATHS "${_svml_lib_dir}" NO_DEFAULT_PATH)
+  # libintlc.so is a linker script ("INPUT (libintlc.so.5)"), not an ELF object.
+  # Linking the versioned SONAME directly lets CMake record a runtime path to
+  # the file the loader actually opens.
+  if(EXISTS "${_svml_lib_dir}/libintlc.so.5")
+    set(SVML_LIBRARY_INTLC "${_svml_lib_dir}/libintlc.so.5")
+  else()
+    find_library(SVML_LIBRARY_INTLC NAMES intlc PATHS "${_svml_lib_dir}" NO_DEFAULT_PATH)
+  endif()
 
   foreach(_svml_var IN ITEMS SVML_LIBRARY_SVML SVML_LIBRARY_IRC SVML_LIBRARY_INTLC)
     if(${_svml_var})
@@ -66,11 +73,6 @@ if(UNIX)
     endif()
   endforeach()
   unset(_svml_var)
-
-  # Also stage the versioned intlc symlink (libintlc.so.5) if present
-  if(EXISTS "${_svml_lib_dir}/libintlc.so.5")
-    list(APPEND SVML_RUNTIME_LIBRARIES "${_svml_lib_dir}/libintlc.so.5")
-  endif()
 endif()
 
 # ---------------------------------------------------------------------------

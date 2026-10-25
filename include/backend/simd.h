@@ -63,6 +63,7 @@ template <typename T> struct simd
 #include "backend/gpu/double/simd.h"
 #include "backend/gpu/float/simd.h"
 #include "backend/gpu/reduced/simd.h"
+#include "backend/gpu/complex/simd.h"
 
 #else
 // --- CPU host code: SIMD or scalar fallback ---
@@ -101,6 +102,7 @@ template <typename T> struct simd
 // existing fixed-width NEON compatibility path.
 #if SCALARS_VECTORIZED
 #include "backend/cpu/reduced/simd.h"
+#include "backend/cpu/reduced/complex_simd.h"
 #endif
 // No CPU SIMD tier selected (SCALARS_CPU_BACKEND=no) and not compiling the
 // device pass: simd<T> is intentionally left without a specialization here.

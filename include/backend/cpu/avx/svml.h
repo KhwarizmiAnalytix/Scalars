@@ -70,6 +70,10 @@ extern "C"
     __m256d __svml_hypot4_ha(__m256d, __m256d);
 }
 
+// MSVC provides these names as intrinsics once the compiler probe succeeds.
+// Defining them is error C2169. simd.h then calls the compiler entry points,
+// which is how Vectorization uses the ISA when it does not wrap SVML.
+#if !defined(_MSC_VER) || !SCALARS_COMPILER_SUPPORTS_SVML_EXTENSIONS
 #if defined(_MSC_VER)
 
 #define SVML_FUNCTION_ONE_ARG(op)                                                             \
@@ -216,6 +220,7 @@ SVML_FUNCTION_TWO_ARGS(hypot)
 #undef svml_ps_mask
 #undef svml_pd_mask
 
+#endif  // !MSVC or the compiler does not already provide the SVML intrinsics
 #elif SCALARS_HAS_SLEEF && (SCALARS_HAS_AVX2 || SCALARS_HAS_AVX)
 
 #include <sleef.h>

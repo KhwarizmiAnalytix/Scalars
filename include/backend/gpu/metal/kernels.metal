@@ -1,8 +1,10 @@
 // Fixed, hand-written Metal kernels for fill, reductions, and metal_backend::dispatch()
 // tests. Expression trees such as `x = y + a + 5*d` are emitted as one fused MSL kernel
 // at runtime (see expressions_evaluator_metal.h) — there is no per-node lowering.
-// Float, half and bf16 storage; MSL has no double type. One thread per element; buffer
-// argument order is always (inputs..., out, n).
+// Float, half, bf16, and complex64 storage; MSL has no double type, so there is no
+// complex128 here either -- complex64 is at parity with float32, not with a
+// float32/float64 pair. One thread per element; buffer argument order is always
+// (inputs..., out, n).
 //
 // This source is embedded into the Vectorization library as a C++ string at CMake
 // configure time (see the "Metal GPU backend" block in CMakeLists.txt) and compiled at
@@ -190,6 +192,213 @@ kernel void neg_float(
 {
     if (tid < n)
         out[tid] = -a[tid];
+}
+
+// -----------------------------------------------------------------------------------
+// Complex64: storage is float2 (x = real, y = imag), the same interleaved
+// real/imag layout the CPU complex backends use. Arithmetic is exact (float2
+// vector ops for add/sub/neg; the standard complex formulas for mul/div/fma).
+// sqrt/exp/log/sin/cos/tanh use the standard complex formulas -- MSL has no
+// complex type or std::complex equivalent to defer to, unlike the CPU/CUDA/HIP
+// backends, which call into math/complex_math.h's existing scalar
+// implementation. These do not promise bit-exact branch-cut agreement with
+// that implementation (signed zero on a branch cut, etc.), the same
+// disclaimer already documented for CPU/GPU scalar complex math.
+// There is no reduce_sum_complex64 (reduce_buffer's host helper returns a
+// single float accumulator; a complex reduction needs a two-wide one, which
+// is a public API addition, not just a kernel -- left for follow-up work)
+// and no min/max (complex numbers have no total order, matching every other
+// complex backend in this codebase).
+// -----------------------------------------------------------------------------------
+
+float2 complex_mul(float2 a, float2 b)
+{
+    return float2(a.x * b.x - a.y * b.y, a.x * b.y + a.y * b.x);
+}
+float2 complex_div(float2 a, float2 b)
+{
+    const float denom = b.x * b.x + b.y * b.y;
+    return float2((a.x * b.x + a.y * b.y) / denom, (a.y * b.x - a.x * b.y) / denom);
+}
+
+kernel void fill_complex64(
+    device float2* out [[buffer(0)]],
+    constant float& value [[buffer(1)]],
+    constant uint& n [[buffer(2)]],
+    uint tid [[thread_position_in_grid]])
+{
+    if (tid < n)
+        out[tid] = float2(value, 0.0f);
+}
+
+kernel void add_complex64(
+    device const float2* a [[buffer(0)]],
+    device const float2* b [[buffer(1)]],
+    device float2* out [[buffer(2)]],
+    constant uint& n [[buffer(3)]],
+    uint tid [[thread_position_in_grid]])
+{
+    if (tid < n)
+        out[tid] = a[tid] + b[tid];
+}
+
+kernel void sub_complex64(
+    device const float2* a [[buffer(0)]],
+    device const float2* b [[buffer(1)]],
+    device float2* out [[buffer(2)]],
+    constant uint& n [[buffer(3)]],
+    uint tid [[thread_position_in_grid]])
+{
+    if (tid < n)
+        out[tid] = a[tid] - b[tid];
+}
+
+kernel void mul_complex64(
+    device const float2* a [[buffer(0)]],
+    device const float2* b [[buffer(1)]],
+    device float2* out [[buffer(2)]],
+    constant uint& n [[buffer(3)]],
+    uint tid [[thread_position_in_grid]])
+{
+    if (tid < n)
+        out[tid] = complex_mul(a[tid], b[tid]);
+}
+
+kernel void div_complex64(
+    device const float2* a [[buffer(0)]],
+    device const float2* b [[buffer(1)]],
+    device float2* out [[buffer(2)]],
+    constant uint& n [[buffer(3)]],
+    uint tid [[thread_position_in_grid]])
+{
+    if (tid < n)
+        out[tid] = complex_div(a[tid], b[tid]);
+}
+
+kernel void fma_complex64(
+    device const float2* a [[buffer(0)]],
+    device const float2* b [[buffer(1)]],
+    device const float2* c [[buffer(2)]],
+    device float2* out [[buffer(3)]],
+    constant uint& n [[buffer(4)]],
+    uint tid [[thread_position_in_grid]])
+{
+    if (tid < n)
+        out[tid] = complex_mul(a[tid], b[tid]) + c[tid];
+}
+
+kernel void neg_complex64(
+    device const float2* a [[buffer(0)]],
+    device float2* out [[buffer(1)]],
+    constant uint& n [[buffer(2)]],
+    uint tid [[thread_position_in_grid]])
+{
+    if (tid < n)
+        out[tid] = -a[tid];
+}
+
+kernel void conj_complex64(
+    device const float2* a [[buffer(0)]],
+    device float2* out [[buffer(1)]],
+    constant uint& n [[buffer(2)]],
+    uint tid [[thread_position_in_grid]])
+{
+    if (tid < n)
+        out[tid] = float2(a[tid].x, -a[tid].y);
+}
+
+kernel void fabs_complex64(
+    device const float2* a [[buffer(0)]],
+    device float* out [[buffer(1)]],
+    constant uint& n [[buffer(2)]],
+    uint tid [[thread_position_in_grid]])
+{
+    if (tid < n)
+        out[tid] = length(a[tid]);
+}
+
+kernel void sqrt_complex64(
+    device const float2* a [[buffer(0)]],
+    device float2* out [[buffer(1)]],
+    constant uint& n [[buffer(2)]],
+    uint tid [[thread_position_in_grid]])
+{
+    if (tid < n)
+    {
+        const float2 z = a[tid];
+        const float  r = length(z);
+        const float  re = sqrt(max(0.0f, (r + z.x) * 0.5f));
+        const float  im = sqrt(max(0.0f, (r - z.x) * 0.5f));
+        out[tid]        = float2(re, z.y < 0.0f ? -im : im);
+    }
+}
+
+kernel void exp_complex64(
+    device const float2* a [[buffer(0)]],
+    device float2* out [[buffer(1)]],
+    constant uint& n [[buffer(2)]],
+    uint tid [[thread_position_in_grid]])
+{
+    if (tid < n)
+    {
+        const float2 z  = a[tid];
+        const float  ea = exp(z.x);
+        out[tid]        = float2(ea * cos(z.y), ea * sin(z.y));
+    }
+}
+
+kernel void log_complex64(
+    device const float2* a [[buffer(0)]],
+    device float2* out [[buffer(1)]],
+    constant uint& n [[buffer(2)]],
+    uint tid [[thread_position_in_grid]])
+{
+    if (tid < n)
+    {
+        const float2 z = a[tid];
+        out[tid]       = float2(log(length(z)), atan2(z.y, z.x));
+    }
+}
+
+kernel void sin_complex64(
+    device const float2* a [[buffer(0)]],
+    device float2* out [[buffer(1)]],
+    constant uint& n [[buffer(2)]],
+    uint tid [[thread_position_in_grid]])
+{
+    if (tid < n)
+    {
+        const float2 z = a[tid];
+        out[tid]       = float2(sin(z.x) * cosh(z.y), cos(z.x) * sinh(z.y));
+    }
+}
+
+kernel void cos_complex64(
+    device const float2* a [[buffer(0)]],
+    device float2* out [[buffer(1)]],
+    constant uint& n [[buffer(2)]],
+    uint tid [[thread_position_in_grid]])
+{
+    if (tid < n)
+    {
+        const float2 z = a[tid];
+        out[tid]       = float2(cos(z.x) * cosh(z.y), -sin(z.x) * sinh(z.y));
+    }
+}
+
+kernel void tanh_complex64(
+    device const float2* a [[buffer(0)]],
+    device float2* out [[buffer(1)]],
+    constant uint& n [[buffer(2)]],
+    uint tid [[thread_position_in_grid]])
+{
+    if (tid < n)
+    {
+        const float2 z     = a[tid];
+        const float2 sinh_z = float2(sinh(z.x) * cos(z.y), cosh(z.x) * sin(z.y));
+        const float2 cosh_z = float2(cosh(z.x) * cos(z.y), sinh(z.x) * sin(z.y));
+        out[tid]            = complex_div(sinh_z, cosh_z);
+    }
 }
 
 // -----------------------------------------------------------------------------------

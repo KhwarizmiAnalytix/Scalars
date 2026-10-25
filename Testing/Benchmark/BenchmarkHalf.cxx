@@ -12,7 +12,7 @@ void BM_HalfAddition(benchmark::State& state)
         benchmark::DoNotOptimize(left.x);
     }
 }
-BENCHMARK(BM_HalfAddition);
+BENCHMARK(BM_HalfAddition);  // NOLINT(bugprone-throwing-static-initialization)
 
 void BM_HalfMultiply(benchmark::State& state)
 {
@@ -25,4 +25,4 @@ void BM_HalfMultiply(benchmark::State& state)
         benchmark::DoNotOptimize(left.x);
     }
 }
-BENCHMARK(BM_HalfMultiply);
+BENCHMARK(BM_HalfMultiply);  // NOLINT(bugprone-throwing-static-initialization)

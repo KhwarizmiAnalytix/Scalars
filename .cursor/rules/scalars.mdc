@@ -1,0 +1,10 @@
+---
+description: Shared Scalars entry point for relevant rules and workflow skills
+alwaysApply: true
+---
+
+# Shared Scalars Rules
+
+Before editing, read the repository-wide guidance in [.agent-rules.md](../../.agent-rules.md) and load only the relevant rule under `.agent-rules/`.
+
+Also follow [CLAUDE.md](../../CLAUDE.md) for repository architecture, build commands, test conventions, and project-specific contracts. Load a skill from `../skills/` only when its workflow applies.

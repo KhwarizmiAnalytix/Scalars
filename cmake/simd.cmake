@@ -100,6 +100,11 @@ if(SCALARS_ENABLE_SVML)
 else()
     set(SCALARS_HAS_SVML 0)
 endif()
+if(SCALARS_COMPILER_SUPPORTS_SVML_EXTENSIONS)
+    set(SCALARS_COMPILER_SUPPORTS_SVML_EXTENSIONS 1)
+else()
+    set(SCALARS_COMPILER_SUPPORTS_SVML_EXTENSIONS 0)
+endif()
 
 if(NOT SCALARS_CPU_BACKEND STREQUAL "no" AND NOT _scalars_has_sse AND NOT _scalars_has_avx
    AND NOT _scalars_has_avx2 AND NOT _scalars_has_avx512 AND NOT _scalars_has_neon AND NOT _scalars_has_sve
@@ -183,6 +188,7 @@ function(scalars_apply_simd_compile_definitions target)
                SCALARS_HAS_NEON=${SCALARS_HAS_NEON}
                SCALARS_HAS_SVE=${SCALARS_HAS_SVE}
                SCALARS_HAS_SVML=${SCALARS_HAS_SVML}
+               SCALARS_COMPILER_SUPPORTS_SVML_EXTENSIONS=${SCALARS_COMPILER_SUPPORTS_SVML_EXTENSIONS}
                SCALARS_HAS_MKL=${SCALARS_HAS_MKL}
                SCALARS_HAS_SLEEF=${SCALARS_HAS_SLEEF}
                SCALARS_HAS_ACCELERATE=${SCALARS_HAS_ACCELERATE}
@@ -196,15 +202,18 @@ function(scalars_apply_simd_compile_definitions target)
         target_compile_definitions(${target} PUBLIC SCALARS_CPU_CAPABILITY_AVX512)
     endif()
     # Link ThirdParty SVML and stage its runtime next to the library, matching
-    # Vectorization. On Linux that directory is already on the test RPATH; on
-    # Windows it is the directory of the DLL, next to the test executables.
+    # Vectorization. SVML:: targets are not in the install export set, so they
+    # stay in BUILD_INTERFACE the same way Vectorization wraps Logging/Memory.
+    # libintlc.so.5 is a direct DT_NEEDED of libsvml. Linux ld.so does not use
+    # an executable RUNPATH to find a shared library's own dependencies, so the
+    # library also searches $ORIGIN, where the runtime copies are staged.
     if(SCALARS_ENABLE_SVML AND TARGET SVML::SVML)
-        target_link_libraries(${target} PUBLIC SVML::SVML)
+        target_link_libraries(${target} PUBLIC $<BUILD_INTERFACE:SVML::SVML>)
         if(TARGET SVML::IRC)
-            target_link_libraries(${target} PUBLIC SVML::IRC)
+            target_link_libraries(${target} PUBLIC $<BUILD_INTERFACE:SVML::IRC>)
         endif()
         if(TARGET SVML::INTLC)
-            target_link_libraries(${target} PUBLIC SVML::INTLC)
+            target_link_libraries(${target} PUBLIC $<BUILD_INTERFACE:SVML::INTLC>)
         endif()
         foreach(_svml_rt IN LISTS SVML_RUNTIME_LIBRARIES)
             if(_svml_rt)
@@ -218,6 +227,22 @@ function(scalars_apply_simd_compile_definitions target)
                 )
             endif()
         endforeach()
+        if(SVML_RUNTIME_LIBRARIES)
+            install(FILES ${SVML_RUNTIME_LIBRARIES} DESTINATION ${CMAKE_INSTALL_LIBDIR})
+        endif()
+        if(UNIX AND NOT APPLE)
+            set_property(TARGET ${target} APPEND PROPERTY BUILD_RPATH "\$ORIGIN")
+            set_property(TARGET ${target} APPEND PROPERTY INSTALL_RPATH "\$ORIGIN")
+            if(SVML_LIBRARY_SVML)
+                get_filename_component(_svml_rt_dir "${SVML_LIBRARY_SVML}" DIRECTORY)
+                target_link_options(
+                    ${target}
+                    PUBLIC
+                    "$<BUILD_INTERFACE:-Wl$<COMMA>-rpath$<COMMA>${_svml_rt_dir}>"
+                )
+                unset(_svml_rt_dir)
+            endif()
+        endif()
         unset(_svml_rt)
     endif()
     if(SCALARS_HAS_MKL AND TARGET MKL::MKL)

@@ -197,14 +197,38 @@ and [widened functional helpers](https://github.com/pytorch/pytorch/blob/main/at
 
 LinearAlgebra can use the existing `<backend/simd.h>` interface directly.
 `simd<scalars::complex<float>>` and `simd<scalars::complex<double>>` extend
-that interface with complex load/store, counted load/store, set/setzero,
-add/sub/mul/div, FMA, negation, conjugation, accumulation, and strided
-gather/scatter. Complex specializations live beside the real types in
+that interface at parity with the real float/double operation set: load/store,
+counted load/store, set/setzero, arithmetic/FMA/division, negation,
+conjugation, roots/powers, the exponential/logarithmic/trigonometric/
+hyperbolic functions, equality and mask selection, magnitude/argument/
+real/imag, classification (`isnan`/`isinf`/`isfinite`), rounding, half-width
+utilities, and strided or indexed gather/scatter. Real-only ordering
+(`gt`/`lt`/`min`/`max`/`hmin`/`hmax`) and `hypot`/`cbrt`/`signcopy`/`cdf`/
+`inv_cdf` are deliberately `= delete`d rather than silently applied
+componentwise -- complex numbers have no total order and those others have no
+agreed complex contract. See
+[the operation audit](docs/complex_simd_operation_audit.md) for the full
+table and what still maps the scalar complex implementation lane-by-lane
+instead of using native vector transcendentals.
+
+Complex specializations live beside the real types in
 `backend/cpu/{sse,avx,avx512,neon,sve}/complex/simd.h` and are selected by the same
 dispatcher. AVX and AVX2 share the `avx` folder. SVE follows the real types' fixed
 128-bit NEON compatibility path. Backend headers implement their own native
 register shuffles, division checks, and reciprocals; common packet operations
 live in `backend/cpu/detail/complex_simd.h` without ISA conditionals.
+`simd<scalars::complex<half>>`/`simd<scalars::complex<bfloat16>>`
+(`backend/cpu/reduced/complex_simd.h`) widen the whole operand to a
+`complex<float>` pair, run the operation through `simd<complex<float>>`, and
+narrow once, rather than narrowing after every intermediate op the way the
+real reduced backend does -- narrowing a squared term for a division
+denominator would overflow half's range far sooner than a real division ever
+would. `simd<scalars::complex<float>>`/`simd<scalars::complex<double>>` also
+exist for CUDA/HIP device code (`backend/gpu/complex/simd.h`, scalar,
+`size == 1`, same interface as `backend/gpu/{float,double}/simd.h`), and
+Metal has a `complex64` kernel set at parity with its `float32` kernels
+(`backend/gpu/metal/kernels.metal`; no `complex128`, since Metal has no
+`double` either).
 
 All CPU backends use contiguous interleaved memory operations and bounded vector
 division. SSE, AVX/AVX2, and AVX-512 use hardware vector division for the reciprocal;
@@ -214,8 +238,8 @@ SIMD value holds separate real and imaginary registers, with `size` complex elem
 No packet adapter or additional public abstraction is needed.
 
 Link `Scalars::Scalars` to inherit the ISA, compiler flags, and math provider.
-Complex SIMD is CPU-only and requires a configured CPU backend, like the
-existing real SIMD types. Complex half/bfloat16 SIMD is not yet supported.
+CPU complex SIMD (including the reduced-precision packets above) requires a
+configured CPU backend, like the existing real SIMD types.
 
 ```cpp
 #include <backend/simd.h>

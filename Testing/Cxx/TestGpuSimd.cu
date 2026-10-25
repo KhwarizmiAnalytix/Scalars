@@ -16,6 +16,7 @@
 #endif
 
 #include <cmath>
+#include <complex>
 #include <cstddef>
 #include <cstdint>
 #include <type_traits>
@@ -26,10 +27,12 @@
 #if SCALARS_ON_GPU_DEVICE
 #include "backend/simd.h"
 #else
+#include "backend/gpu/complex/simd.h"
 #include "backend/gpu/double/simd.h"
 #include "backend/gpu/reduced/simd.h"
 #endif
 #include "scalars_test.h"
+#include "types/complex.h"
 
 // ---- CUDA/HIP runtime API aliases -----------------------------------------
 // The two runtimes expose an identical API surface under different names;
@@ -63,19 +66,18 @@ namespace
 
 // ---- CUDA/HIP error helper -------------------------------------------------
 
-#define GPU_CHECK(expr)                                                                          \
-    do                                                                                           \
-    {                                                                                            \
-        gpu_error_t _e = (expr);                                                                 \
-        if (_e != kGpuSuccess)                                                                   \
-            ADD_FAILURE() << "GPU error: " << gpuGetErrorString(_e) << " at " << __FILE__ << ":" \
-                          << __LINE__;                                                           \
+#define GPU_CHECK(expr)                                                                            \
+    do                                                                                             \
+    {                                                                                              \
+        gpu_error_t _e = (expr);                                                                   \
+        if (_e != kGpuSuccess)                                                                     \
+            ADD_FAILURE() << "GPU error: " << gpuGetErrorString(_e) << " at " << __FILE__ << ":"   \
+                          << __LINE__;                                                             \
     } while (0)
 
 // ---- RAII device buffer --------------------------------------------------
 
-template <typename T>
-struct DevBuf
+template <typename T> struct DevBuf
 {
     T*     d = nullptr;
     size_t n = 0;
@@ -116,16 +118,15 @@ __global__ void k_arith(
 
 // Unary: sqrt(|a|), sqr, fabs, neg, ceil, floor, trunc
 template <typename T>
-__global__ void k_unary(
-    const T* a,
-    T*       r_sqrt,
-    T*       r_sqr,
-    T*       r_fabs,
-    T*       r_neg,
-    T*       r_ceil,
-    T*       r_floor,
-    T*       r_trunc,
-    size_t   n)
+__global__ void k_unary(const T* a,
+    T*                           r_sqrt,
+    T*                           r_sqr,
+    T*                           r_fabs,
+    T*                           r_neg,
+    T*                           r_ceil,
+    T*                           r_floor,
+    T*                           r_trunc,
+    size_t                       n)
 {
     size_t i = (size_t)blockIdx.x * blockDim.x + threadIdx.x;
     if (i >= n)
@@ -157,8 +158,7 @@ __global__ void k_explog(const T* a, T* r_exp, T* r_log, T* r_exp2, T* r_log2, T
 }
 
 // Trig: sin, cos, tanh
-template <typename T>
-__global__ void k_trig(const T* a, T* r_sin, T* r_cos, T* r_tanh, size_t n)
+template <typename T> __global__ void k_trig(const T* a, T* r_sin, T* r_cos, T* r_tanh, size_t n)
 {
     size_t i = (size_t)blockIdx.x * blockDim.x + threadIdx.x;
     if (i >= n)
@@ -187,8 +187,7 @@ __global__ void k_cmp_reduce(
 
 // ---- Templated test body -------------------------------------------------
 
-template <typename T>
-void run_gpu_simd_test()
+template <typename T> void run_gpu_simd_test()
 {
     constexpr size_t N    = 512;
     constexpr double kRel = std::is_same_v<T, scalars::bfloat16> ? 2e-2
@@ -312,6 +311,156 @@ void run_gpu_simd_test()
             EXPECT_EQ(vacc[i], ha[i]) << "accumulate is identity for size=1, i=" << i;
             EXPECT_EQ(vhmin[i], ha[i]) << "hmin is identity for size=1, i=" << i;
             EXPECT_EQ(vhmax[i], ha[i]) << "hmax is identity for size=1, i=" << i;
+        }
+    }
+}
+
+// ---- Complex arithmetic / math kernels -----------------------------------
+// simd<complex<T>> on GPU is scalar (size == 1), same as simd<T>; there is no
+// ordering (lt/hmin/hmax/etc. are deleted), so this does not reuse
+// run_gpu_simd_test's generic template -- it is its own test body.
+
+template <typename T>
+__global__ void k_complex_arith(
+    const T* a, const T* b, T* r_add, T* r_sub, T* r_mul, T* r_div, T* r_fma, T* r_conj, size_t n)
+{
+    size_t i = (size_t)blockIdx.x * blockDim.x + threadIdx.x;
+    if (i >= n)
+        return;
+    T av = simd<T>::loadu(a + i), bv = simd<T>::loadu(b + i);
+    simd<T>::storeu(simd<T>::add(av, bv), r_add + i);
+    simd<T>::storeu(simd<T>::sub(av, bv), r_sub + i);
+    simd<T>::storeu(simd<T>::mul(av, bv), r_mul + i);
+    simd<T>::storeu(simd<T>::div(av, bv), r_div + i);
+    simd<T>::storeu(simd<T>::fma(av, bv, bv), r_fma + i);
+    simd<T>::storeu(simd<T>::conj(av), r_conj + i);
+}
+
+template <typename T>
+__global__ void k_complex_math(const T* a,
+    T*                                  r_sqrt,
+    T*                                  r_exp,
+    T*                                  r_log,
+    typename T::value_type*             r_abs,
+    typename T::value_type*             r_arg,
+    size_t                              n)
+{
+    size_t i = (size_t)blockIdx.x * blockDim.x + threadIdx.x;
+    if (i >= n)
+        return;
+    T av = simd<T>::loadu(a + i);
+    simd<T>::storeu(simd<T>::sqrt(simd<T>::mul(av, av)), r_sqrt + i);
+    simd<T>::storeu(simd<T>::exp(av), r_exp + i);
+    simd<T>::storeu(simd<T>::log(simd<T>::exp(av)), r_log + i);
+    r_abs[i] = simd<T>::abs(av);
+    r_arg[i] = simd<T>::arg(av);
+}
+
+// Comparisons + identity accumulate (size==1 -> accumulate is pass-through)
+template <typename T>
+__global__ void k_complex_cmp_reduce(const T* a, uint32_t* r_eq_self, T* r_acc, size_t n)
+{
+    size_t i = (size_t)blockIdx.x * blockDim.x + threadIdx.x;
+    if (i >= n)
+        return;
+    T av           = simd<T>::loadu(a + i);
+    r_eq_self[i]   = simd<T>::eq(av, av) != 0 ? 1u : 0u;
+    const auto acc = simd<T>::accumulate(av);
+    r_acc[i]       = T(static_cast<typename T::value_type>(acc.real()),
+        static_cast<typename T::value_type>(acc.imag()));
+}
+
+template <typename T> void run_gpu_complex_simd_test()
+{
+    using component_t     = typename T::value_type;
+    constexpr size_t N    = 512;
+    constexpr double kRel = std::is_same_v<component_t, float> ? 5e-5 : 1e-11;
+    constexpr double kAbs = kRel;
+
+    // Real part stays positive so sqrt(a*a) == a on the principal branch.
+    std::vector<T>                    ha(N), hb(N);
+    std::vector<std::complex<double>> ra(N), rb(N);
+    for (size_t i = 0; i < N; ++i)
+    {
+        double t  = static_cast<double>(i) / static_cast<double>(N);
+        double re = t * 2.0 + 0.5, im = t * 4.0 - 2.0;
+        double rb_re = t + 0.5, rb_im = 1.0 - t;
+        ha[i] = T(static_cast<component_t>(re), static_cast<component_t>(im));
+        hb[i] = T(static_cast<component_t>(rb_re), static_cast<component_t>(rb_im));
+        ra[i] = {re, im};
+        rb[i] = {rb_re, rb_im};
+    }
+
+    DevBuf<T> da(N), db(N);
+    da.upload(ha);
+    db.upload(hb);
+
+    constexpr unsigned kBlock = 128u;
+    const unsigned     kGrid  = static_cast<unsigned>((N + kBlock - 1u) / kBlock);
+
+    auto expect_near = [&](const T& got, std::complex<double> expect, const char* what, size_t i)
+    {
+        double got_re = static_cast<double>(got.real()), got_im = static_cast<double>(got.imag());
+        double scale = std::max({1.0, std::abs(expect.real()), std::abs(expect.imag())});
+        EXPECT_NEAR(got_re, expect.real(), scale * kRel + kAbs) << what << " real at i=" << i;
+        EXPECT_NEAR(got_im, expect.imag(), scale * kRel + kAbs) << what << " imag at i=" << i;
+    };
+
+    // ---- Arithmetic -------------------------------------------------------
+    {
+        DevBuf<T> r_add(N), r_sub(N), r_mul(N), r_div(N), r_fma(N), r_conj(N);
+        k_complex_arith<<<kGrid, kBlock>>>(
+            da.d, db.d, r_add.d, r_sub.d, r_mul.d, r_div.d, r_fma.d, r_conj.d, N);
+        GPU_CHECK(gpuDeviceSynchronize());
+
+        auto vadd = r_add.download(), vsub = r_sub.download(), vmul = r_mul.download(),
+             vdiv = r_div.download(), vfma = r_fma.download(), vconj = r_conj.download();
+
+        for (size_t i = 0; i < N; ++i)
+        {
+            expect_near(vadd[i], ra[i] + rb[i], "add", i);
+            expect_near(vsub[i], ra[i] - rb[i], "sub", i);
+            expect_near(vmul[i], ra[i] * rb[i], "mul", i);
+            expect_near(vdiv[i], ra[i] / rb[i], "div", i);
+            expect_near(vfma[i], ra[i] * rb[i] + rb[i], "fma", i);
+            expect_near(vconj[i], std::conj(ra[i]), "conj", i);
+        }
+    }
+
+    // ---- Roots, exp/log, magnitude/argument --------------------------------
+    {
+        DevBuf<T>           r_sqrt(N), r_exp(N), r_log(N);
+        DevBuf<component_t> r_abs(N), r_arg(N);
+        k_complex_math<<<kGrid, kBlock>>>(da.d, r_sqrt.d, r_exp.d, r_log.d, r_abs.d, r_arg.d, N);
+        GPU_CHECK(gpuDeviceSynchronize());
+
+        auto vsqrt = r_sqrt.download(), vexp = r_exp.download(), vlog = r_log.download();
+        auto vabs = r_abs.download(), varg = r_arg.download();
+
+        for (size_t i = 0; i < N; ++i)
+        {
+            expect_near(vsqrt[i], ra[i], "sqrt(a*a)", i);
+            expect_near(vexp[i], std::exp(ra[i]), "exp", i);
+            expect_near(vlog[i], ra[i], "log(exp(a))", i);
+            EXPECT_NEAR(
+                static_cast<double>(vabs[i]), std::abs(ra[i]), std::abs(ra[i]) * kRel + kAbs)
+                << "abs at i=" << i;
+            EXPECT_NEAR(static_cast<double>(varg[i]), std::arg(ra[i]), kAbs) << "arg at i=" << i;
+        }
+    }
+
+    // ---- Comparisons and reduction -----------------------------------------
+    {
+        DevBuf<uint32_t> r_eq(N);
+        DevBuf<T>        r_acc(N);
+        k_complex_cmp_reduce<<<kGrid, kBlock>>>(da.d, r_eq.d, r_acc.d, N);
+        GPU_CHECK(gpuDeviceSynchronize());
+
+        auto veq = r_eq.download(), vacc = r_acc.download();
+        for (size_t i = 0; i < N; ++i)
+        {
+            EXPECT_EQ(veq[i], 1u) << "eq(x,x) must be true at i=" << i;
+            expect_near(vacc[i], ra[i], "accumulate is identity for size=1", i);
         }
     }
 }
@@ -492,6 +641,24 @@ TEST(GpuSimd, ArithmeticAndMathBFloat16)
         GTEST_SKIP() << "No GPU device";
     run_gpu_simd_test<scalars::bfloat16>();
     run_reduced_contract_test<scalars::bfloat16>();
+}
+
+TEST(GpuSimd, ArithmeticAndMathComplexFloat)
+{
+    int ndev = 0;
+    gpuGetDeviceCount(&ndev);
+    if (ndev == 0)
+        GTEST_SKIP() << "No GPU device -- skipping GpuSimd complex<float> test";
+    run_gpu_complex_simd_test<scalars::complex<float>>();
+}
+
+TEST(GpuSimd, ArithmeticAndMathComplexDouble)
+{
+    int ndev = 0;
+    gpuGetDeviceCount(&ndev);
+    if (ndev == 0)
+        GTEST_SKIP() << "No GPU device -- skipping GpuSimd complex<double> test";
+    run_gpu_complex_simd_test<scalars::complex<double>>();
 }
 
 #endif  // SCALARS_HAS_CUDA || SCALARS_HAS_HIP

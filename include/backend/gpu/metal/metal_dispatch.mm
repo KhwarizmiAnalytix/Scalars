@@ -29,6 +29,8 @@ const char* dtype_suffix(dtype type)
         return "half";
     case dtype::bfloat16:
         return "bfloat16";
+    case dtype::complex64:
+        return "complex64";
     }
     throw std::invalid_argument("Metal dispatch: unsupported dtype");
 }

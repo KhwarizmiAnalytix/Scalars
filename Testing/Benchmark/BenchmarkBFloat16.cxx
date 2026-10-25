@@ -12,7 +12,7 @@ void BM_BFloat16Addition(benchmark::State& state)
         benchmark::DoNotOptimize(left.x);
     }
 }
-BENCHMARK(BM_BFloat16Addition);
+BENCHMARK(BM_BFloat16Addition);  // NOLINT(bugprone-throwing-static-initialization)
 
 void BM_BFloat16Multiply(benchmark::State& state)
 {
@@ -25,4 +25,4 @@ void BM_BFloat16Multiply(benchmark::State& state)
         benchmark::DoNotOptimize(left.x);
     }
 }
-BENCHMARK(BM_BFloat16Multiply);
+BENCHMARK(BM_BFloat16Multiply);  // NOLINT(bugprone-throwing-static-initialization)

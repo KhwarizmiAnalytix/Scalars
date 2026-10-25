@@ -16,12 +16,18 @@
 namespace scalars::metal_backend
 {
 // Reduced buffers contain the two-byte encodings of scalars::half/bfloat16.
-// All operation math and reduction partials use float.
+// All operation math and reduction partials use float. complex64 buffers
+// contain scalars::complex<float> (= MSL float2: x is real, y is imag), the
+// same interleaved layout the CPU complex backends use; there is no
+// complex128 (MSL has no double type, matching the backend's existing
+// float32-only -- no double -- support), and complex64 has no reduce_sum/
+// min/max (see kernels.metal's complex64 block for why).
 enum class dtype : std::uint8_t
 {
     float32,
     half,
-    bfloat16
+    bfloat16,
+    complex64
 };
 
 bool device_available();

@@ -96,8 +96,9 @@ TEST_F(metal_complex, Transcendentals)
     constexpr std::size_t n = 64;
     metal_buffer<cfloat>   a(n), out(n);
     metal_buffer<float>    mag(n);
-    for (std::size_t i = 0; i < n; ++i)
+    for (std::size_t i = 0; i < n; ++i) {
         a.data[i] = cfloat(1.2f + float(i) * 0.05f, -0.7f + float(i) * 0.02f);
+    }
 
     const void* inputs[] = {a.data};
 
@@ -156,8 +157,9 @@ TEST_F(metal_complex, Fill)
     constexpr std::size_t n = 9;
     metal_buffer<cfloat>   out(n);
     mb::dispatch_fill(out.data, 3.5f, n, mb::dtype::complex64);
-    for (std::size_t i = 0; i < n; ++i)
+    for (std::size_t i = 0; i < n; ++i) {
         expect_near(out.data[i], std::complex<float>(3.5f, 0.0f));
+    }
 }
 
 #endif  // SCALARS_HAS_METAL

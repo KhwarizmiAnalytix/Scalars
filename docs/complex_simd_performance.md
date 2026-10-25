@@ -75,6 +75,15 @@ packets. Existing tests cover counted loads/stores, negative strides, matrix
 products, and in-place vector operations. The scalar extreme-magnitude division
 behavior is retained, including `(max + max*i) / (max + max*i) == 1 + 0*i`.
 
+These measurements cover arithmetic, FMA, and division — the operations with
+genuine native-vector implementations. The packet API's broader operation
+set (roots/powers, exponential/logarithmic, trigonometric, hyperbolic,
+masks/selection, half-width utilities, rounding) is covered by
+[`complex_simd_operation_audit.md`](complex_simd_operation_audit.md), not by
+this performance comparison; most of those map the existing scalar complex
+implementation lane-by-lane rather than using native vector transcendentals,
+so no PyTorch throughput comparison is claimed for them here.
+
 After splitting the implementation by backend, the full native NEON suite passed
 (66 unit tests), as did the CMake setup and both installed-package consumer tests.
 The six focused complex SIMD/vector tests passed for SSE2, AVX without AVX2/FMA,

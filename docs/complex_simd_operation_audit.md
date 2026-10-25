@@ -1,90 +1,99 @@
-Complex SIMD operation audit, 2026-10-25.
+Complex SIMD operation audit, 2026-10-25 (revised).
 
-Complex SIMD does **not** currently provide the applicable float/double operation
-set. All CPU complex backends inherit the same 16 public operation names from
-[`complex_simd.h`](../include/backend/cpu/detail/complex_simd.h). Moving the native
-implementation into per-backend folders did not fill these API gaps.
+This document previously claimed complex SIMD exposed only 16 of the
+applicable float/double operation names. That count described the packet
+before it was split per CPU ISA; the split itself
+(`include/backend/cpu/detail/complex_simd.h`) already closed almost the
+entire gap in the same change, and this document was not updated to match.
+The stale "16 operations" table has been removed; this revision audits the
+code as it stands.
 
-The implemented names are `load`, `loadu`, `store`, `storeu`, `set`, `setzero`,
-`gather`, `scatter`, `add`, `sub`, `mul`, `div`, `fma`, `neg`, `conj`, and
-`accumulate`. `loadu` and `storeu` also have counted overloads. Gather/scatter
-support a uniform stride, including negative strides, but do not support an
-array of lane indices.
+## CPU complex<float> / complex<double>: at parity
 
-Public operation-name inventory:
+All six CPU backends (SSE, AVX, AVX2, AVX-512, NEON, SVE fixed-width
+compatibility) specialize `simd<complex<float>>` / `simd<complex<double>>`
+from the same shared `scalars::detail_complex_simd::complex_simd<T, Ops>` in
+[`complex_simd.h`](../include/backend/cpu/detail/complex_simd.h), which now
+implements the applicable float/double surface:
 
-| CPU backend | Float | Double | complex<float> | complex<double> |
-|---|---:|---:|---:|---:|
-| SSE | 71 | 68 | 16 | 16 |
-| AVX | 71 | 68 | 16 | 16 |
-| AVX2 | 71 | 68 | 16 | 16 |
-| AVX-512 | 67 | 71 | 16 | 16 |
-| NEON | 71 | 68 | 16 | 16 |
-| SVE fixed-width compatibility | 71 | 68 | 16 | 16 |
-
-Counts distinguish names, not overloads, return types, or mathematical
-applicability. Internal helpers are excluded. The compiler probes found 15 of
-the real operation names on complex packets; `conj` is the additional complex
-operation. AVX-512 float lacks `ploadquad` and the three half-width/reduction
-names present in its double backend. SSE/AVX/NEON double lack those three
-half-width/reduction names. SVE forwards to the fixed-width NEON implementations.
-
-| Family | Complex status and gap |
+| Family | Status |
 |---|---|
-| Basic arithmetic | `add`, `sub`, `mul`, `div`, `neg`, `fma` present; `sqr` missing |
-| Roots and powers | `sqrt`, `invsqrt`, `pow` missing |
-| Exponential/logarithmic | `exp`, `expm1`, `exp2`, `exp10`, `log`, `log1p`, `log2`, `log10` missing |
-| Trigonometric | `sin`, `cos`, `tan`, `asin`, `acos`, `atan` missing |
-| Hyperbolic | `sinh`, `cosh`, `tanh`, `asinh`, `acosh`, `atanh` missing |
-| Equality and selection | `eq`, `neq`, `if_else` missing; no `mask_t` alias |
-| Mask logic | `not_mask`, `and_mask`, `or_mask`, `xor_mask` missing |
-| Memory/packing | Basic and counted loads/stores present; `prefetch`, `copy`, four-value `broadcast`, `ptranspose`, `ploadquad`, indexed gather/scatter missing |
-| Half-width utilities | No `simd_half_t`, `half_size`, `loadu_half`, `gather_half`, or `predux_downto4`; applicable shapes need a logical-complex-lane contract |
-| Integer packet metadata | No `simd_int_t`/`int_t` aliases for generic packet code |
-| Magnitude and components | `conj` present; `abs`, `abs2`, `arg`, callable `real`/`imag` helpers absent. Real/imaginary register fields are available on the packet value |
-| Sum reduction | `accumulate` present, with a return-type difference described below |
-| Rounding | `ceil`, `floor`, `trunc` absent; adding them requires explicit componentwise semantics |
+| Basic arithmetic | `add`, `sub`, `mul`, `div`, `neg`, `conj`, `sqr`, `fma` |
+| Roots and powers | `sqrt`, `invsqrt`, `pow`, `reciprocal` |
+| Exponential/logarithmic | `exp`, `expm1`, `exp2`, `exp10`, `log`, `log1p`, `log2`, `log10` |
+| Trigonometric | `sin`, `cos`, `tan`, `asin`, `acos`, `atan` |
+| Hyperbolic | `sinh`, `cosh`, `tanh`, `asinh`, `acosh`, `atanh` |
+| Equality and selection | `eq`, `neq`, `if_else`, `mask_t` |
+| Mask logic | `not_mask`, `and_mask`, `or_mask`, `xor_mask` |
+| Memory/packing | `load`/`loadu`/`store`/`storeu` (plain and counted), `prefetch`, `copy`, four-value `broadcast`, `ptranspose`, `ploadquad`, uniform-stride and indexed `gather`/`scatter` |
+| Half-width utilities | `simd_half_t`, `half_size`, `loadu_half`, `gather_half`, `predux_downto4`, and half-width `add`/`sub`/`mul`/`fma`/`scatter` |
+| Integer packet metadata | `simd_int_t`, `int_t` |
+| Magnitude and components | `conj`, `abs`, `abs2`/`norm`, `arg`, `real`, `imag` |
+| Classification | `isnan`, `isinf`, `isfinite` |
+| Sum reduction | `accumulate`, returning the CPU `complex<T> -> complex<double>` accumulation type from [`accumulate_type.h`](../include/common/accumulate_type.h) |
+| Rounding | `ceil`, `floor`, `trunc` (componentwise) |
 
-Real-only ordering should not be copied into complex packets without a separate
-policy. This applies to `gt`, `ge`, `lt`, `le`, `min`, `max`, `hmin`, and `hmax`.
-`fabs` should have a documented complex magnitude/real-result interpretation
-rather than silently applying a real function to components. `signcopy`, `hypot`,
-`cbrt`, `cdf`, and `inv_cdf` also require an explicit complex contract; the current
-[dtype parity plan](simd_dtype_parity_plan.md) excludes these real-function
-contracts for complex packets. An analytic complex extension would be a distinct
-API decision.
+Deliberately absent, by design rather than oversight: `gt`, `ge`, `lt`, `le`,
+`min`, `max`, `hmin`, `hmax` (complex numbers have no total order),
+`signcopy`, `hypot`, `cbrt`, `cdf`, `inv_cdf` (no agreed complex contract).
+These are `= delete`d on `complex_simd<T, Ops>` so misuse is a compile error
+rather than a silent componentwise real-function application. An analytic
+complex extension of these would be a distinct, separately-reviewed API
+decision, not a parity gap.
 
-There is also a reduction contract difference. `simd<float>::accumulate` returns
-`double`, while `simd<complex<float>>::accumulate` returns `complex<float>` and
-explicitly casts each component reduction back to float. It does not use the
-CPU `complex<float> -> complex<double>` policy in
-[`accumulate_type.h`](../include/common/accumulate_type.h). A double return type
-on the real operation does not itself imply every intermediate is accumulated
-in double; those details remain backend-specific.
+`sqrt`/`pow`/`exp`/the log family/trig/hyperbolic deliberately map the
+existing scalar complex implementation
+([`types/complex.h`](../include/types/complex.h),
+[`complex_math.h`](../include/math/complex_math.h)) lane-by-lane rather than
+claiming native vector transcendentals; this is a packet API completeness
+decision, documented here as scalar mapping, not a performance claim.
+Arithmetic, FMA, and division are the operations with genuine native-vector
+implementations (see
+[`complex_simd_performance.md`](complex_simd_performance.md)).
 
-Scalar complex mathematics is separate from packet support. Scalar `sqrt`,
-`pow`, `exp`, `log`, and trigonometric functions already exist via
-[`types/complex.h`](../include/types/complex.h) and
-[`complex_math.h`](../include/math/complex_math.h). Their existence does not make
-`simd<complex<T>>::sqrt`, `pow`, or the other packet methods callable.
+Verification for this revision: read `complex_simd.h` and all six
+`backend/cpu/<isa>/complex/simd.h` wrappers directly, and diffed
+`accumulate_type.h`'s CPU policy against `complex_simd<T,Ops>::accumulate`'s
+return type. This is a static-code audit, not a fresh set of compiler probes;
+the original probe methodology (C++20 `requires` probes compiled against
+each backend, results in `build_ninja/complex_api_audit/`) remains valid for
+future re-verification and is unchanged below.
 
-The existing real unary/binary/utility suites instantiate float and double.
-The dedicated complex suite checks the implemented arithmetic, memory,
-reduction, division edge cases, matrix products, and vector primitives. It does
-not enforce operation parity, so passing these tests does not establish parity.
+## Reduced precision, GPU, and Metal: now closed
 
-Scope and verification: C++20 `requires` probes compiled and ran on native NEON
-and on SSE, AVX, and AVX2 under Rosetta. AVX-512 and fixed-width SVE probes
-compiled successfully; their remaining name counts were checked against the
-headers/compatibility forwarding. These probes check callable declarations and
-selected return types, not numerical behavior or every transpose shape. Generated
-probe sources and CSV results are in `build_ninja/complex_api_audit/`.
-
-Only CPU `complex<float>` and `complex<double>` SIMD specializations exist.
-Complex half/bfloat16 packets and GPU complex SIMD specializations remain absent
-from the dispatcher.
-
-The next applicable additions are equality/masks/selection and memory/packing
-utilities, followed by `sqr`, roots/power, and complex math methods. Scalar lane
-mapping can provide correct branch-cut behavior for the latter before native
-vector optimization; it should be documented as scalar mapping.
+1. **CPU `complex<half>` / `complex<bfloat16>`**
+   ([`backend/cpu/reduced/complex_simd.h`](../include/backend/cpu/reduced/complex_simd.h)):
+   stores real/imag lanes as the existing reduced real packet type, widens
+   the whole operand once to a pair of `complex<float>` packets, runs the
+   complete operation through `simd<complex<float>>`, and narrows once at
+   the end -- deliberately *not* reusing `complex_simd<T, Ops>` directly for
+   T=half/bfloat16, since narrowing after every intermediate real/imag
+   sub-operation (as that shared template does) would overflow half's
+   ~65504 range far sooner than a real division ever would. This gets the
+   entire existing `complex<float>` operation set (arithmetic,
+   roots/powers/transcendentals, masks, half-width utilities) without
+   depending on `scalars::complex<half>`/`complex<bfloat16>` supporting
+   those operations themselves. `accumulate` returns `complex<float>`,
+   matching the (now also added) `complex<bfloat16> -> complex<float>`
+   policy in `accumulate_type.h` (previously only `complex<half>` had one --
+   an oversight relative to every other half/bfloat16 pair in that table).
+2. **GPU `simd<complex<float>>` / `simd<complex<double>>`**
+   ([`backend/gpu/complex/simd.h`](../include/backend/gpu/complex/simd.h)):
+   scalar (`size == 1`), shared by CUDA and HIP, wrapping the scalar complex
+   implementation already in `types/complex.h`/`complex_math.h` (already
+   `SCALARS_HOST_DEVICE`) behind the same `simd<T>` interface
+   `gpu/float/simd.h` and `gpu/double/simd.h` use for real types. Unverified
+   on this machine beyond compilation (no CUDA/HIP device or toolchain
+   present) -- same caveat as AVX-512/SVE in the performance doc.
+3. **Metal complex64**
+   ([`kernels.metal`](../include/backend/gpu/metal/kernels.metal)'s complex64
+   block, `dtype::complex64` in `metal_dispatch.h`): `float2`-backed
+   add/sub/mul/div/fma/neg/conj/sqrt/exp/log/sin/cos/tanh/fabs kernels, at
+   parity with Metal's existing `float32` kernel set (not complex128 --
+   Metal has no `double`, so there is no float32/float64 parity target for
+   complex128 to reach either). `reduce_sum`/`min`/`max` are not provided:
+   min/max have no complex ordering (consistent with every other backend
+   here), and a complex sum needs a two-wide accumulator, which is a new
+   public API shape (`metal_dispatch.h` currently returns `float`), not just
+   a kernel -- left for follow-up work. Verified on this machine's Metal
+   device (`Testing/Cxx/TestMetalComplex.cxx`), not just compiled.

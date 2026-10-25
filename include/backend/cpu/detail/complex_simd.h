@@ -44,17 +44,19 @@ template <class T> struct packed_registers
 // All backends use the same conservative range for ordinary vector division.
 template <class T> constexpr T division_lower()
 {
-    if constexpr (std::is_same_v<T, float>)
+    if constexpr (std::is_same_v<T, float>) {
         return T(0x1p-30);
-    else
+    } else {
         return T(0x1p-250);
+    }
 }
 template <class T> constexpr T division_upper()
 {
-    if constexpr (std::is_same_v<T, float>)
+    if constexpr (std::is_same_v<T, float>) {
         return T(0x1p31);
-    else
+    } else {
         return T(0x1p251);
+    }
 }
 
 template <class T> SCALARS_FORCE_INLINE auto division_mask(complex_packet<T> a, complex_packet<T> b)
@@ -99,8 +101,9 @@ private:
     {
         std::array<value_t, size> lanes;
         storeu(a, lanes.data());
-        for (auto& lane : lanes)
+        for (auto& lane : lanes) {
             lane = function(lane);
+        }
         return loadu(lanes.data());
     }
     template <class F> static simd_t map(simd_t a, simd_t b, F function)
@@ -108,8 +111,9 @@ private:
         std::array<value_t, size> x, y;
         storeu(a, x.data());
         storeu(b, y.data());
-        for (int i = 0; i < size; ++i)
+        for (int i = 0; i < size; ++i) {
             x[i] = function(x[i], y[i]);
+        }
         return loadu(x.data());
     }
     template <class F> static real_packet_t map_real(simd_t a, F function)
@@ -117,8 +121,9 @@ private:
         std::array<value_t, size> lanes;
         std::array<T, size>       result;
         storeu(a, lanes.data());
-        for (int i = 0; i < size; ++i)
+        for (int i = 0; i < size; ++i) {
             result[i] = function(lanes[i]);
+        }
         return r::loadu(result.data());
     }
     static SCALARS_NOINLINE simd_t divide_fallback(simd_t a, simd_t b)
@@ -126,8 +131,9 @@ private:
         std::array<value_t, size> x, y;
         storeu(a, x.data());
         storeu(b, y.data());
-        for (int i = 0; i < size; ++i)
+        for (int i = 0; i < size; ++i) {
             x[i] /= y[i];
+        }
         return loadu(x.data());
     }
 
@@ -139,8 +145,9 @@ public:
     }
     static simd_t gather(const value_t* p, std::ptrdiff_t stride)
     {
-        if (stride == 1)
+        if (stride == 1) {
             return loadu(p);
+        }
         std::array<T, size> real, imag;
         for (int i = 0; i < size; ++i)
         {
@@ -159,16 +166,18 @@ public:
         std::array<T, size> real, imag;
         r::storeu(a.real, real.data());
         r::storeu(a.imag, imag.data());
-        for (int i = 0; i < size; ++i)
+        for (int i = 0; i < size; ++i) {
             p[i * stride] = value_t(real[i], imag[i]);
+        }
     }
     template <class Index>
         requires std::is_integral_v<Index>
     static simd_t gather(const value_t* p, const Index* indices)
     {
         std::array<value_t, size> lanes;
-        for (int i = 0; i < size; ++i)
+        for (int i = 0; i < size; ++i) {
             lanes[i] = p[indices[i]];
+        }
         return loadu(lanes.data());
     }
     template <class Index>
@@ -178,8 +187,9 @@ public:
         std::array<value_t, size> lanes;
         storeu(a, lanes.data());
         // Increasing-lane order makes repeated indices deterministic.
-        for (int i = 0; i < size; ++i)
+        for (int i = 0; i < size; ++i) {
             p[indices[i]] = lanes[i];
+        }
     }
     static simd_t loadu(const value_t* p)
     {
@@ -199,11 +209,13 @@ public:
     static simd_t loadu(const value_t* p, int count)
     {
         assert(count >= 0 && count <= size);
-        if (count == size)
+        if (count == size) {
             return loadu(p);
+        }
         std::array<value_t, size> lanes{};
-        for (int i = 0; i < count; ++i)
+        for (int i = 0; i < count; ++i) {
             lanes[i] = p[i];
+        }
         return loadu(lanes.data());
     }
     static simd_t loadu(std::nullptr_t, int count)
@@ -222,8 +234,9 @@ public:
         }
         std::array<value_t, size> lanes;
         storeu(a, lanes.data());
-        for (int i = 0; i < count; ++i)
+        for (int i = 0; i < count; ++i) {
             p[i] = lanes[i];
+        }
     }
     static simd_t set(value_t a) { return {r::set(a.real()), r::set(a.imag())}; }
     template <class U>
@@ -242,8 +255,9 @@ public:
     {
         assert(count >= 0 && count <= size);
         std::array<T, size> flags{};
-        for (int i = 0; i < count; ++i)
+        for (int i = 0; i < count; ++i) {
             flags[i] = p[i] != 0 ? T(1) : T(0);
+        }
         return r::neq(r::loadu(flags.data()), r::setzero());
     }
     static mask_t loadu(const int_t* p) { return loadu(p, size); }
@@ -253,8 +267,9 @@ public:
         assert(count >= 0 && count <= size);
         std::array<T, size> flags;
         r::storeu(r::if_else(a, r::set(T(1)), r::setzero()), flags.data());
-        for (int i = 0; i < count; ++i)
+        for (int i = 0; i < count; ++i) {
             p[i] = flags[i] != T(0) ? ~int_t(0) : int_t(0);
+        }
     }
     static void   storeu(mask_t a, int_t* p) { storeu(a, p, size); }
     static void   store(mask_t a, int_t* p) { storeu(a, p); }
@@ -288,8 +303,9 @@ public:
     {
         constexpr int             repeats = std::is_same_v<T, float> && size == 4 ? 2 : 4;
         std::array<value_t, size> lanes;
-        for (int i = 0; i < size; ++i)
+        for (int i = 0; i < size; ++i) {
             lanes[i] = p[i / repeats];
+        }
         return loadu(lanes.data());
     }
     template <int N>
@@ -298,26 +314,31 @@ public:
     {
         // Transpose N x size complete complex values, then repack into N packets.
         std::array<value_t, static_cast<std::size_t>(N) * size> input, output;
-        for (int row = 0; row < N; ++row)
+        for (int row = 0; row < N; ++row) {
             storeu(rows[row], input.data() + row * size);
-        for (std::size_t i = 0; i < input.size(); ++i)
+        }
+        for (std::size_t i = 0; i < input.size(); ++i) {
             output[i] = input[(i % N) * size + i / N];
-        for (int row = 0; row < N; ++row)
+        }
+        for (int row = 0; row < N; ++row) {
             rows[row] = loadu(output.data() + row * size);
+        }
     }
     static simd_half_t loadu_half(const value_t* p) { return {loadu(p, half_size)}; }
     static simd_half_t set(const value_t* p)
     {
         std::array<value_t, size> lanes{};
-        for (int i = 0; i < half_size; ++i)
+        for (int i = 0; i < half_size; ++i) {
             lanes[i] = *p;
+        }
         return {loadu(lanes.data())};
     }
     static simd_half_t gather_half(const value_t* p, std::ptrdiff_t stride)
     {
         std::array<value_t, size> lanes{};
-        for (int i = 0; i < half_size; ++i)
+        for (int i = 0; i < half_size; ++i) {
             lanes[i] = p[i * stride];
+        }
         return {loadu(lanes.data())};
     }
     template <class Index>
@@ -325,8 +346,9 @@ public:
     static simd_half_t gather_half(const value_t* p, const Index* indices)
     {
         std::array<value_t, size> lanes{};
-        for (int i = 0; i < half_size; ++i)
+        for (int i = 0; i < half_size; ++i) {
             lanes[i] = p[indices[i]];
+        }
         return {loadu(lanes.data())};
     }
     static void storeu(simd_half_t a, value_t* p) { storeu(a.value, p, half_size); }
@@ -335,8 +357,9 @@ public:
     {
         std::array<value_t, size> lanes;
         storeu(a.value, lanes.data());
-        for (int i = 0; i < half_size; ++i)
+        for (int i = 0; i < half_size; ++i) {
             p[i * stride] = lanes[i];
+        }
     }
     template <class Index>
         requires std::is_integral_v<Index>
@@ -344,8 +367,9 @@ public:
     {
         std::array<value_t, size> lanes;
         storeu(a.value, lanes.data());
-        for (int i = 0; i < half_size; ++i)
+        for (int i = 0; i < half_size; ++i) {
             p[indices[i]] = lanes[i];
+        }
     }
     static simd_half_t add(simd_half_t a, simd_half_t b) { return {add(a.value, b.value)}; }
     static simd_half_t sub(simd_half_t a, simd_half_t b) { return {sub(a.value, b.value)}; }
@@ -359,8 +383,9 @@ public:
     {
         std::array<value_t, size> lanes;
         storeu(a, lanes.data());
-        for (int i = 0; i < half_size; ++i)
+        for (int i = 0; i < half_size; ++i) {
             lanes[i] += lanes[i + half_size];
+        }
         return loadu_half(lanes.data());
     }
     static simd_t add(simd_t a, simd_t b)
@@ -390,7 +415,33 @@ public:
     static real_packet_t norm(simd_t a) { return abs2(a); }
     static real_packet_t abs(simd_t a)
     {
-        return map_real(a, [](value_t x) { return std::hypot(x.real(), x.imag()); });
+        return map_real(a, [](value_t x) {
+            // Robust magnitude computation that properly handles overflow to infinity.
+            // This avoids issues with std::hypot on some platforms (e.g., NEON).
+            const T re = std::fabs(x.real());
+            const T im = std::fabs(x.imag());
+            // std::fmin/std::fmax drop a NaN when the other argument is numeric,
+            // so classify before scaling. hypot(inf, nan) is inf.
+            if (std::isinf(re) || std::isinf(im)) {
+                return std::numeric_limits<T>::infinity();
+            }
+            if (std::isnan(re) || std::isnan(im)) {
+                return std::numeric_limits<T>::quiet_NaN();
+            }
+            const T max_component = std::fmax(re, im);
+            const T min_component = std::fmin(re, im);
+
+            if (!std::isfinite(max_component)) {
+                return max_component;  // infinity or NaN
+            }
+            if (max_component == 0) {
+                return T(0);
+            }
+
+            // Scale to avoid overflow: divide by max, compute, multiply back.
+            const T ratio = min_component / max_component;
+            return max_component * std::sqrt(T(1) + ratio * ratio);
+        });
     }
     // fabs is the magnitude alias, returning one real result per complex lane.
     static real_packet_t fabs(simd_t a) { return abs(a); }
@@ -433,10 +484,12 @@ public:
         return map(a,
             [](value_t x)
             {
-                if (x.imag() == T(0))
+                if (x.imag() == T(0)) {
                     return value_t(std::expm1(x.real()), x.imag());
-                if (scalars::isfinite(x))
+                }
+                if (scalars::isfinite(x)) {
                     return scalars::expm1(x);
+                }
                 const auto result = scalars::exp(x);
                 return value_t(result.real() - T(1), result.imag());
             });

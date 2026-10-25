@@ -14,7 +14,7 @@ void BM_ComplexMultiply(benchmark::State& state)
         benchmark::DoNotOptimize(left.imag());
     }
 }
-BENCHMARK(BM_ComplexMultiply);
+BENCHMARK(BM_ComplexMultiply);  // NOLINT(bugprone-throwing-static-initialization)
 
 void BM_ComplexSqrt(benchmark::State& state)
 {
@@ -26,4 +26,4 @@ void BM_ComplexSqrt(benchmark::State& state)
         benchmark::DoNotOptimize(result.imag());
     }
 }
-BENCHMARK(BM_ComplexSqrt);
+BENCHMARK(BM_ComplexSqrt);  // NOLINT(bugprone-throwing-static-initialization)

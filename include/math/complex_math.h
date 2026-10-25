@@ -325,6 +325,12 @@ template <typename T> SCALARS_HOST_DEVICE inline scalars::complex<T> log1p(const
 #else
     // CPU path
     // Based on https://github.com/numpy/numpy/pull/22611#issuecomment-1667945354
+    // A purely real input on or above the branch cut stays real. The
+    // rationalized path below can turn a -0 imaginary part into +0.
+    if (z.imag() == T(0) && !(z.real() < T(-1)))
+    {
+        return {std::log1p(z.real()), z.imag()};
+    }
     scalars::complex<T> u = z + T(1);
     if (u == T(1))
     {

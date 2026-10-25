@@ -180,7 +180,7 @@ template <class T> void check_division_ranges()
     using c = scalars::complex<T>;
     using s = simd<c>;
     std::array<c, s::size>             numerator, denominator, output;
-    std::mt19937                       random(342);
+    std::mt19937                       random(342);  // NOLINT(bugprone-random-generator-seed): constant seed for test reproducibility
     constexpr int                      exponent_limit = std::is_same_v<T, float> ? 29 : 249;
     std::uniform_int_distribution<int> exponent(-exponent_limit, exponent_limit);
     std::uniform_real_distribution<T>  mantissa(T(-1), T(1));

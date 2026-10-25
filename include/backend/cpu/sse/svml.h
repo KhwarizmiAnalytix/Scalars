@@ -77,6 +77,9 @@ extern "C"
 #endif
 }
 
+// MSVC provides these names as intrinsics once the compiler probe succeeds.
+// Defining them is error C2169. simd.h then calls the compiler entry points.
+#if !defined(_MSC_VER) || !SCALARS_COMPILER_SUPPORTS_SVML_EXTENSIONS
 #if defined(_MSC_VER)
 
 #define SVML_FUNCTION_ONE_ARG(op)                                                             \
@@ -174,6 +177,7 @@ SVML_FUNCTION_ONE_ARG(floor)
 #undef svml_ps_mask
 #undef svml_pd_mask
 
+#endif  // !MSVC or the compiler does not already provide the SVML intrinsics
 #elif SCALARS_HAS_SLEEF && SCALARS_HAS_SSE
 
 #include <sleef.h>

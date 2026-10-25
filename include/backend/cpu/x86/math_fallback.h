@@ -3,8 +3,8 @@
 // The x86 packet API uses SVML-style names for transcendental functions.
 // Supply scalar mappings when no external vector math provider is selected,
 // just as the NEON backend does. Arithmetic and format conversions remain SIMD.
-#if !SCALARS_HAS_SVML && !SCALARS_HAS_SLEEF && !defined(__INTEL_COMPILER) &&                       \
-    !defined(__INTEL_LLVM_COMPILER)
+#if !SCALARS_HAS_SVML && !SCALARS_HAS_SLEEF && !SCALARS_COMPILER_SUPPORTS_SVML_EXTENSIONS &&     \
+    !defined(__INTEL_COMPILER) && !defined(__INTEL_LLVM_COMPILER)
 
 #include <cmath>
 #include <cstring>
