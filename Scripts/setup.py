@@ -844,10 +844,18 @@ class scalars_configuration:
         return "clang" in arg and arg not in ["clang-cl", "clangtidy"]
 
     def __set_clang_compiler(self, arg):
-        compiler_path = Path(arg)
-        c_name = compiler_path.name.replace("clang++", "clang")
-        c_compiler = str(compiler_path.with_name(c_name))
-        cxx_compiler = str(compiler_path.with_name(c_name.replace("clang", "clang++")))
+        last_sep = max(arg.rfind("/"), arg.rfind("\\"))
+        prefix = "" if last_sep < 0 else arg[: last_sep + 1]
+        basename = arg if last_sep < 0 else arg[last_sep + 1 :]
+        if "clang++" in basename:
+            c_compiler = f"{prefix}{basename.replace('clang++', 'clang', 1)}"
+            cxx_compiler = f"{prefix}{basename}"
+        elif "clang" in basename:
+            c_compiler = f"{prefix}{basename}"
+            cxx_compiler = f"{prefix}{basename.replace('clang', 'clang++', 1)}"
+        else:
+            c_compiler = f"{prefix}{basename}"
+            cxx_compiler = f"{prefix}{basename}"
         self.__value["cmake_c_compiler"] = f"-DCMAKE_C_COMPILER={c_compiler}"
         self.__value["cmake_cxx_compiler"] = f"-DCMAKE_CXX_COMPILER={cxx_compiler}"
         self.__compiler_user_specified = True
@@ -856,16 +864,20 @@ class scalars_configuration:
         return ("gcc" in arg or "g++" in arg) and arg not in ["cppcheck"]
 
     def __set_gcc_compiler(self, arg):
-        if "g++" in arg:
-            self.__value["cmake_cxx_compiler"] = f"-DCMAKE_CXX_COMPILER={arg}"
-            self.__value["cmake_c_compiler"] = (
-                f"-DCMAKE_C_COMPILER={arg.replace('g++', 'gcc')}"
-            )
+        last_sep = max(arg.rfind("/"), arg.rfind("\\"))
+        prefix = "" if last_sep < 0 else arg[: last_sep + 1]
+        basename = arg if last_sep < 0 else arg[last_sep + 1 :]
+        if "g++" in basename:
+            cxx_compiler = f"{prefix}{basename}"
+            c_compiler = f"{prefix}{basename.replace('g++', 'gcc', 1)}"
+        elif "gcc" in basename:
+            c_compiler = f"{prefix}{basename}"
+            cxx_compiler = f"{prefix}{basename.replace('gcc', 'g++', 1)}"
         else:
-            self.__value["cmake_c_compiler"] = f"-DCMAKE_C_COMPILER={arg}"
-            self.__value["cmake_cxx_compiler"] = (
-                f"-DCMAKE_CXX_COMPILER={arg.replace('gcc', 'g++')}"
-            )
+            c_compiler = f"{prefix}{basename}"
+            cxx_compiler = f"{prefix}{basename}"
+        self.__value["cmake_cxx_compiler"] = f"-DCMAKE_CXX_COMPILER={cxx_compiler}"
+        self.__value["cmake_c_compiler"] = f"-DCMAKE_C_COMPILER={c_compiler}"
         self.__compiler_user_specified = True
 
     def __is_visual_studio(self, arg):
