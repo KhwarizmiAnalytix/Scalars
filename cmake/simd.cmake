@@ -210,16 +210,20 @@ function(scalars_apply_simd_compile_definitions target)
     if(SCALARS_CPU_BACKEND STREQUAL "avx512")
         target_compile_definitions(${target} PUBLIC SCALARS_CPU_CAPABILITY_AVX512)
     endif()
-    # Link ThirdParty SVML and stage its runtime binaries next to the output
-    # library. Same PUBLIC imported targets as Vectorization: SVML::SVML, and
-    # on Unix SVML::IRC and SVML::INTLC.
+    # Link ThirdParty SVML for this build and stage its runtimes next to the
+    # output library. SVML:: targets are not part of the Scalars install export,
+    # so they stay in BUILD_INTERFACE. Otherwise find_package(Scalars) fails
+    # because the consumer has no SVML::SVML target. libintlc.so.5 is a direct
+    # DT_NEEDED of libsvml; Linux ld.so does not use an executable RUNPATH to
+    # find a shared library's own dependencies, so the library searches $ORIGIN,
+    # where the installed copies live.
     if(SCALARS_ENABLE_SVML AND TARGET SVML::SVML)
-        target_link_libraries(${target} PUBLIC SVML::SVML)
+        target_link_libraries(${target} PUBLIC $<BUILD_INTERFACE:SVML::SVML>)
         if(TARGET SVML::IRC)
-            target_link_libraries(${target} PUBLIC SVML::IRC)
+            target_link_libraries(${target} PUBLIC $<BUILD_INTERFACE:SVML::IRC>)
         endif()
         if(TARGET SVML::INTLC)
-            target_link_libraries(${target} PUBLIC SVML::INTLC)
+            target_link_libraries(${target} PUBLIC $<BUILD_INTERFACE:SVML::INTLC>)
         endif()
         foreach(_svml_rt IN LISTS SVML_RUNTIME_LIBRARIES)
             if(_svml_rt)
@@ -233,6 +237,28 @@ function(scalars_apply_simd_compile_definitions target)
                 )
             endif()
         endforeach()
+        if(SVML_RUNTIME_LIBRARIES)
+            # Windows loads the DLL from the executable directory. Unix loaders
+            # find the staged objects next to libScalars via $ORIGIN.
+            if(WIN32)
+                install(FILES ${SVML_RUNTIME_LIBRARIES} DESTINATION ${CMAKE_INSTALL_BINDIR})
+            else()
+                install(FILES ${SVML_RUNTIME_LIBRARIES} DESTINATION ${CMAKE_INSTALL_LIBDIR})
+            endif()
+        endif()
+        if(UNIX AND NOT APPLE)
+            set_property(TARGET ${target} APPEND PROPERTY BUILD_RPATH "\$ORIGIN")
+            set_property(TARGET ${target} APPEND PROPERTY INSTALL_RPATH "\$ORIGIN")
+            if(SVML_LIBRARY_SVML)
+                get_filename_component(_svml_rt_dir "${SVML_LIBRARY_SVML}" DIRECTORY)
+                target_link_options(
+                    ${target}
+                    PUBLIC
+                    "$<BUILD_INTERFACE:-Wl$<COMMA>-rpath$<COMMA>${_svml_rt_dir}>"
+                )
+                unset(_svml_rt_dir)
+            endif()
+        endif()
         unset(_svml_rt)
         message(STATUS
             "Scalars: linked SVML::SVML (ThirdParty); runtime files: ${SVML_RUNTIME_LIBRARIES}"
