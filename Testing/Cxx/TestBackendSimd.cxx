@@ -8,9 +8,6 @@
 
 #if SCALARS_VECTORIZED
 
-#include "backend/cpu/neon/double/simd.h"
-#include "backend/cpu/neon/float/simd.h"
-
 #include <gtest/gtest.h>
 #include <memory>
 #include <string>
