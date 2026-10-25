@@ -456,7 +456,8 @@ template <typename T> void run_gpu_complex_simd_test()
         k_complex_cmp_reduce<<<kGrid, kBlock>>>(da.d, r_eq.d, r_acc.d, N);
         GPU_CHECK(gpuDeviceSynchronize());
 
-        auto veq = r_eq.download(), vacc = r_acc.download();
+        auto veq  = r_eq.download();
+        auto vacc = r_acc.download();
         for (size_t i = 0; i < N; ++i)
         {
             EXPECT_EQ(veq[i], 1u) << "eq(x,x) must be true at i=" << i;
