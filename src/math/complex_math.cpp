@@ -1,6 +1,5 @@
 #include "types/complex.h"
 
-#include <__config>
 #include <cmath>
 #include <complex>
 
