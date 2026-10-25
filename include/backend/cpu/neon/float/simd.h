@@ -354,7 +354,7 @@ template <> struct simd<float>
         }
         else
         {
-            static_assert(sizeof(simd_t) == 0, "ptranspose: unsupported N for NEON float");
+            static_assert(sizeof(simd_t) == 0 && N != 0, "ptranspose: unsupported N for NEON float");
         }
     }
 
