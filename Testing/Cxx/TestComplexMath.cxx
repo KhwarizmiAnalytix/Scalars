@@ -1,6 +1,5 @@
 #include "types/complex.h"
 
-#include <_stdlib.h>
 #include <cmath>
 #include <complex>
 #include <gtest/gtest.h>
