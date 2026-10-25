@@ -1,6 +1,6 @@
 #pragma once
 
-#include <arm_neon.h>
+#include "common/intrinsics.h"
 
 #include <algorithm>
 #include <cmath>

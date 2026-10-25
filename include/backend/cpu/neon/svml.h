@@ -5,7 +5,7 @@
 // wrappers must also be emitted when only SCALARS_HAS_SVE is set.
 #if SCALARS_HAS_NEON || SCALARS_HAS_SVE
 
-#include <arm_neon.h>
+#include "common/intrinsics.h"
 
 #include <cmath>
 

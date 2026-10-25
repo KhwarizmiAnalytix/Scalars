@@ -2,7 +2,7 @@
 #include "math/complex_vector.h"
 #include "types/complex.h"
 
-#include <arm_neon.h>
+#include "common/intrinsics.h"
 #include <complex>
 #include <cstddef>
 #include <gtest/gtest.h>

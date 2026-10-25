@@ -1,6 +1,6 @@
 #pragma once
 
-#include <arm_sve.h>
+#include "common/intrinsics.h"
 
 #if !defined(__ARM_FEATURE_SVE_BITS)
 #error "SCALARS_HAS_SVE: compile with SVE enabled and a fixed vector length, e.g. \
