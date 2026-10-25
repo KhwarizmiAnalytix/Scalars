@@ -118,11 +118,15 @@ static_assert(excludes_real_only<simd<scalars::complex<double>>>());
 
 template <class T> void expect_component(T actual, T expected, bool check_zero_sign = false)
 {
-    if (std::isnan(expected)) {
+    if (std::isnan(expected))
+    {
         EXPECT_TRUE(std::isnan(actual));
-    } else if (std::isinf(expected)) {
+    }
+    else if (std::isinf(expected))
+    {
         EXPECT_EQ(actual, expected);
-    } else
+    }
+    else
     {
         const T tolerance = 64 * std::numeric_limits<T>::epsilon() * (T(1) + std::fabs(expected));
         EXPECT_NEAR(actual, expected, tolerance);
@@ -161,9 +165,10 @@ template <class T> void check_masks()
         {
             x[i] = c(T(i), T(-i));
             y[i] = x[i];
-            if ((i + trial) % 3 == 0) {
+            if ((i + trial) % 3 == 0)
+            {
                 y[i].imag(T(i + 1));
-}
+            }
             if ((i + trial) % 5 == 0)
             {
                 x[i] = c(T(0), T(-0.0));
@@ -178,68 +183,82 @@ template <class T> void check_masks()
         const auto a = s::loadu(x.data()), b = s::loadu(y.data());
         const auto equal = s::eq(a, b), different = s::neq(a, b);
         s::storeu(equal, flags.data());
-        for (int i = 0; i < s::size; ++i) {
+        for (int i = 0; i < s::size; ++i)
+        {
             EXPECT_EQ(flags[i], x[i] == y[i] ? ~bits(0) : bits(0));
-}
+        }
         s::storeu(different, flags.data());
-        for (int i = 0; i < s::size; ++i) {
+        for (int i = 0; i < s::size; ++i)
+        {
             EXPECT_EQ(flags[i], x[i] != y[i] ? ~bits(0) : bits(0));
-}
+        }
         s::storeu(s::if_else(equal, a, b), out.data());
-        for (int i = 0; i < s::size; ++i) {
+        for (int i = 0; i < s::size; ++i)
+        {
             expect_bits(out[i], x[i] == y[i] ? x[i] : y[i]);
-}
+        }
         s::storeu(s::and_mask(equal, different), flags.data());
-        for (const auto flag : flags) {
+        for (const auto flag : flags)
+        {
             EXPECT_EQ(flag, bits(0));
-}
+        }
         s::storeu(s::or_mask(equal, different), flags.data());
-        for (const auto flag : flags) {
+        for (const auto flag : flags)
+        {
             EXPECT_EQ(flag, ~bits(0));
-}
+        }
         s::storeu(s::xor_mask(equal, different), flags.data());
-        for (const auto flag : flags) {
+        for (const auto flag : flags)
+        {
             EXPECT_EQ(flag, ~bits(0));
-}
+        }
         s::storeu(s::not_mask(equal), flags.data());
-        for (int i = 0; i < s::size; ++i) {
+        for (int i = 0; i < s::size; ++i)
+        {
             EXPECT_EQ(flags[i], x[i] != y[i] ? ~bits(0) : bits(0));
-}
+        }
     }
-    for (int i = 0; i < s::size; ++i) {
+    for (int i = 0; i < s::size; ++i)
+    {
         flags[i] = i % 2 ? bits(7) : bits(0);
-}
+    }
     const auto memory_mask = s::loadu(flags.data());
     s::storeu(memory_mask, flags.data());
-    for (int i = 0; i < s::size; ++i) {
+    for (int i = 0; i < s::size; ++i)
+    {
         EXPECT_EQ(flags[i], i % 2 ? ~bits(0) : bits(0));
-}
+    }
     for (int count = 0; count <= s::size; ++count)
     {
         std::array<bits, s::size + 2> partial;
         partial.fill(bits(42));
         s::storeu(s::loadu(flags.data(), count), partial.data() + 1, count);
         EXPECT_EQ(partial.front(), bits(42));
-        for (int i = 0; i < count; ++i) {
+        for (int i = 0; i < count; ++i)
+        {
             EXPECT_EQ(partial[i + 1], flags[i]);
-}
-        for (int i = count + 1; i < s::size + 2; ++i) {
+        }
+        for (int i = count + 1; i < s::size + 2; ++i)
+        {
             EXPECT_EQ(partial[i], bits(42));
-}
+        }
     }
     s::storeu(s::loadu(static_cast<const bits*>(nullptr), 0), static_cast<bits*>(nullptr), 0);
     s::storeu(s::set(bits(1)), flags.data());
-    for (const auto flag : flags) {
+    for (const auto flag : flags)
+    {
         EXPECT_EQ(flag, ~bits(0));
-}
+    }
     s::storeu(s::set_mask(false), flags.data());
-    for (const auto flag : flags) {
+    for (const auto flag : flags)
+    {
         EXPECT_EQ(flag, bits(0));
-}
+    }
     s::storeu(s::set(2), out.data());
-    for (const auto value : out) {
+    for (const auto value : out)
+    {
         EXPECT_EQ(value, c(T(2), T(0)));
-}
+    }
 }
 
 template <class T, int N> void check_transpose()
@@ -248,19 +267,23 @@ template <class T, int N> void check_transpose()
     using s = simd<c>;
     std::array<typename s::simd_t, N>                    rows;
     std::array<c, static_cast<std::size_t>(N) * s::size> input, output;
-    for (std::size_t i = 0; i < input.size(); ++i) {
+    for (std::size_t i = 0; i < input.size(); ++i)
+    {
         input[i] = c(T(i + 1), -T(i + 3));
-}
-    for (int row = 0; row < N; ++row) {
+    }
+    for (int row = 0; row < N; ++row)
+    {
         rows[row] = s::loadu(input.data() + row * s::size);
-}
+    }
     s::template ptranspose<N>(rows.data());
-    for (int row = 0; row < N; ++row) {
+    for (int row = 0; row < N; ++row)
+    {
         s::storeu(rows[row], output.data() + row * s::size);
-}
-    for (std::size_t i = 0; i < input.size(); ++i) {
+    }
+    for (std::size_t i = 0; i < input.size(); ++i)
+    {
         EXPECT_EQ(output[i], input[(i % N) * s::size + i / N]);
-}
+    }
 }
 
 template <class T> void check_memory()
@@ -270,16 +293,18 @@ template <class T> void check_memory()
     constexpr int            w = s::size;
     const c                  sentinel(T(97), T(-63));
     std::array<c, 2 * w + 8> input, output, expected;
-    for (int i = 0; i < 2 * w + 8; ++i) {
+    for (int i = 0; i < 2 * w + 8; ++i)
+    {
         input[i] = c(T(i + 1) / 4, T(2 - i) / 8);
-}
+    }
     s::prefetch(input.data());
     output.fill(sentinel);
     s::copy(input.data() + 1, output.data() + 1);
     EXPECT_EQ(output.front(), sentinel);
-    for (int i = 1; i <= w; ++i) {
+    for (int i = 1; i <= w; ++i)
+    {
         EXPECT_EQ(output[i], input[i]);
-}
+    }
     EXPECT_EQ(output[w + 1], sentinel);
     typename s::simd_t a, b, c0, d;
     s::broadcast(input.data(), a, b, c0, d);
@@ -287,32 +312,38 @@ template <class T> void check_memory()
     for (int i = 0; i < 4; ++i)
     {
         s::storeu(broadcasts[i], output.data());
-        for (int j = 0; j < w; ++j) {
+        for (int j = 0; j < w; ++j)
+        {
             EXPECT_EQ(output[j], input[i]);
-}
+        }
     }
     constexpr int repeats = std::is_same_v<T, float> && w == 4 ? 2 : 4;
     s::storeu(s::ploadquad(input.data()), output.data());
-    for (int i = 0; i < w; ++i) {
+    for (int i = 0; i < w; ++i)
+    {
         EXPECT_EQ(output[i], input[i / repeats]);
-}
+    }
     std::array<int, w> indices;
-    for (int i = 0; i < w; ++i) {
+    for (int i = 0; i < w; ++i)
+    {
         indices[i] = w - 1 - i - w / 2;
-}
+    }
     a = s::gather(input.data() + w, indices.data());
     s::storeu(a, output.data());
-    for (int i = 0; i < w; ++i) {
+    for (int i = 0; i < w; ++i)
+    {
         EXPECT_EQ(output[i], input[w + indices[i]]);
-}
-    for (int i = 0; i < w; ++i) {
+    }
+    for (int i = 0; i < w; ++i)
+    {
         indices[i] = i % 2;
-}
+    }
     output.fill(sentinel);
     expected = output;
-    for (int i = 0; i < w; ++i) {
+    for (int i = 0; i < w; ++i)
+    {
         expected[indices[i]] = input[i];
-}
+    }
     s::scatter(s::loadu(input.data()), indices.data(), output.data());
     EXPECT_EQ(output, expected);
 
@@ -320,12 +351,14 @@ template <class T> void check_memory()
     const auto k = s::gather_half(input.data() + w, -1);
     output.fill(sentinel);
     s::storeu(s::add(h, h), output.data());
-    for (int i = 0; i < s::half_size; ++i) {
+    for (int i = 0; i < s::half_size; ++i)
+    {
         EXPECT_EQ(output[i], input[i] + input[i]);
-}
-    for (int i = s::half_size; i < 2 * w + 8; ++i) {
+    }
+    for (int i = s::half_size; i < 2 * w + 8; ++i)
+    {
         EXPECT_EQ(output[i], sentinel);
-}
+    }
     output.fill(sentinel);
     s::scatter(s::fma(h, k, h), 2, output.data());
     for (int i = 0; i < s::half_size; ++i)
@@ -337,26 +370,31 @@ template <class T> void check_memory()
     }
     output.fill(sentinel);
     s::storeu(s::set(input.data()).value, output.data());
-    for (int i = 0; i < s::half_size; ++i) {
+    for (int i = 0; i < s::half_size; ++i)
+    {
         EXPECT_EQ(output[i], input[0]);
-}
-    for (int i = s::half_size; i < w; ++i) {
+    }
+    for (int i = s::half_size; i < w; ++i)
+    {
         EXPECT_EQ(output[i], c{});
-}
-    for (int i = 0; i < w; ++i) {
+    }
+    for (int i = 0; i < w; ++i)
+    {
         indices[i] = 2 * i;
-}
+    }
     output.fill(sentinel);
     s::scatter(s::gather_half(input.data(), indices.data()), indices.data(), output.data());
-    for (int i = 0; i < s::half_size; ++i) {
+    for (int i = 0; i < s::half_size; ++i)
+    {
         EXPECT_EQ(output[indices[i]], input[indices[i]]);
-}
+    }
     if constexpr (w >= 4)
     {
         s::storeu(s::predux_downto4(s::loadu(input.data())), output.data());
-        for (int i = 0; i < s::half_size; ++i) {
+        for (int i = 0; i < s::half_size; ++i)
+        {
             EXPECT_EQ(output[i], input[i] + input[i + s::half_size]);
-}
+        }
     }
     check_transpose<T, 1>();
     check_transpose<T, 2>();
@@ -388,14 +426,16 @@ void check_unary(PacketFunction packet, Reference reference, bool zero_sign = fa
     std::array<c, s::size>  input, output;
     for (std::size_t start = 0; start < values.size(); start += s::size)
     {
-        for (int i = 0; i < s::size; ++i) {
+        for (int i = 0; i < s::size; ++i)
+        {
             input[i] = values[(start + i) % values.size()];
-}
+        }
         s::storeu(packet(s::loadu(input.data())), output.data());
-        for (int i = 0; i < s::size; ++i) {
+        for (int i = 0; i < s::size; ++i)
+        {
             expect_value(
                 output[i], reference(std::complex<T>(input[i].real(), input[i].imag())), zero_sign);
-}
+        }
     }
 }
 
@@ -421,7 +461,7 @@ template <class T> void check_math()
     check_unary<T>([](v a) { return s::cos(a); }, [](auto z) { return std::cos(z); });
     check_unary<T>([](v a) { return s::tan(a); }, [](auto z) { return std::tan(z); });
     check_unary<T>([](v a) { return s::asin(a); }, [](auto z) { return std::asin(z); });
-    check_unary<T>([](v a) { return s::acos(a); }, [](auto z) { return std::acos(z); });
+    check_unary<T>([](v a) { return s::acos(a); }, [](auto z) { return std::acos(z); }, true);
     check_unary<T>([](v a) { return s::atan(a); }, [](auto z) { return std::atan(z); });
     check_unary<T>([](v a) { return s::sinh(a); }, [](auto z) { return std::sinh(z); });
     check_unary<T>([](v a) { return s::cosh(a); }, [](auto z) { return std::cosh(z); });
@@ -443,6 +483,55 @@ template <class T> void check_math()
         [&](auto z) { return std::pow(z, std::complex<T>(exponent.real(), exponent.imag())); });
 }
 
+template <class T> void check_sqrt_bounds()
+{
+    using c                      = scalars::complex<T>;
+    using s                      = simd<c>;
+    const T                lower = scalars::detail_complex_simd::division_lower<T>();
+    const T                upper = scalars::detail_complex_simd::division_upper<T>();
+    const std::array<T, 9> values{T(0),
+        T(-0.0),
+        lower,
+        std::nextafter(lower, T(0)),
+        std::nextafter(lower, upper),
+        T(1),
+        std::nextafter(upper, T(0)),
+        upper,
+        std::nextafter(upper, std::numeric_limits<T>::infinity())};
+    std::array<c, s::size> input, output;
+    for (T real : values)
+    {
+        for (T imag : values)
+        {
+            for (T sign : {T(1), T(-1)})
+            {
+                for (int lane = 0; lane < s::size; ++lane)
+                {
+                    input[lane] = c(sign * real, lane % 2 ? -imag : imag);
+                }
+                s::storeu(s::sqrt(s::loadu(input.data())), output.data());
+                for (int lane = 0; lane < s::size; ++lane)
+                {
+                    // The scalar path normalizes before taking roots; compare
+                    // relative component errors, including small branch-cut parts.
+                    const auto reference = scalars::sqrt(input[lane]);
+                    for (const auto pair : {std::array<T, 2>{output[lane].real(), reference.real()},
+                             std::array<T, 2>{output[lane].imag(), reference.imag()}})
+                    {
+                        EXPECT_NEAR(pair[0],
+                            pair[1],
+                            T(16) * std::numeric_limits<T>::epsilon() * std::fabs(pair[1]));
+                        if (pair[1] == T(0))
+                        {
+                            EXPECT_EQ(std::signbit(pair[0]), std::signbit(pair[1]));
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
 template <class T> void check_magnitude_and_edges()
 {
     using c          = scalars::complex<T>;
@@ -451,7 +540,7 @@ template <class T> void check_magnitude_and_edges()
     const T infinity = std::numeric_limits<T>::infinity(),
             nan      = std::numeric_limits<T>::quiet_NaN();
     const T maximum = std::numeric_limits<T>::max(), tiny = std::numeric_limits<T>::denorm_min();
-    const std::array<c, 12>   edges{c(3, 4),
+    const std::array<c, 16>   edges{c(3, 4),
         c(maximum, maximum),
         c(tiny, -tiny),
         c(0, T(-0.0)),
@@ -462,7 +551,11 @@ template <class T> void check_magnitude_and_edges()
         c(nan, 1),
         c(infinity, nan),
         c(T(-4), T(-0.0)),
-        c(T(-4), T(0))};
+        c(T(-4), T(0)),
+        c(-maximum, -maximum),
+        c(T(0x1p31) + T(.5), -T(0x1p31) - T(.5)),
+        c(T(0x1p23) - T(.5), -T(0x1p23) + T(.5)),
+        c(T(.75), T(-.75))};
     std::array<c, s::size>    input, output;
     std::array<T, s::size>    real;
     std::array<bits, s::size> flags;
@@ -471,64 +564,112 @@ template <class T> void check_magnitude_and_edges()
         input.fill(edge);
         const auto a = s::loadu(input.data());
         s::storeu(s::abs(a), real.data());
-        for (const T value : real) {
+        for (const T value : real)
+        {
             expect_component(value, std::hypot(edge.real(), edge.imag()));
-}
+        }
         s::storeu(s::fabs(a), real.data());
-        for (const T value : real) {
+        for (const T value : real)
+        {
             expect_component(value, std::hypot(edge.real(), edge.imag()));
-}
+        }
         s::storeu(s::arg(a), real.data());
-        for (const T value : real) {
+        for (const T value : real)
+        {
             expect_component(value, std::atan2(edge.imag(), edge.real()), true);
-}
+        }
         s::storeu(s::abs2(a), real.data());
-        for (const T value : real) {
+        for (const T value : real)
+        {
             expect_component(value, edge.real() * edge.real() + edge.imag() * edge.imag());
-}
+        }
         s::storeu(s::real(a), real.data());
-        for (const T value : real) {
+        for (const T value : real)
+        {
             EXPECT_EQ(std::bit_cast<bits>(value), std::bit_cast<bits>(edge.real()));
-}
+        }
         s::storeu(s::imag(a), real.data());
-        for (const T value : real) {
+        for (const T value : real)
+        {
             EXPECT_EQ(std::bit_cast<bits>(value), std::bit_cast<bits>(edge.imag()));
         }
         s::storeu(s::isfinite(a), flags.data());
-        for (const auto flag : flags) {
+        for (const auto flag : flags)
+        {
             EXPECT_EQ(flag, scalars::isfinite(edge) ? ~bits(0) : bits(0));
         }
         s::storeu(s::isnan(a), flags.data());
-        for (const auto flag : flags) {
+        for (const auto flag : flags)
+        {
             EXPECT_EQ(
                 flag, std::isnan(edge.real()) || std::isnan(edge.imag()) ? ~bits(0) : bits(0));
         }
         s::storeu(s::isinf(a), flags.data());
-        for (const auto flag : flags) {
+        for (const auto flag : flags)
+        {
             EXPECT_EQ(
                 flag, std::isinf(edge.real()) || std::isinf(edge.imag()) ? ~bits(0) : bits(0));
         }
         s::storeu(s::sqrt(a), output.data());
-        for (const auto value : output) {
-            // Packet sqrt maps scalars::sqrt. libc++ std::sqrt overflows
-            // (max, max) to infinity; the scalar path keeps the finite result.
-            expect_value(value, static_cast<std::complex<T>>(scalars::sqrt(edge)), true);
+        for (const auto value : output)
+        {
+            if (std::isfinite(edge.real()) && std::isfinite(edge.imag()) &&
+                (std::fabs(edge.real()) > maximum / T(4) ||
+                    std::fabs(edge.imag()) > maximum / T(4)))
+            {
+                // Verify the square-root identity after scaling. Some standard
+                // libraries overflow their own reference sqrt(max + max*i).
+                EXPECT_TRUE(std::isfinite(value.real()));
+                EXPECT_TRUE(std::isfinite(value.imag()));
+                const T               scale = std::sqrt(maximum);
+                const std::complex<T> normalized(value.real() / scale, value.imag() / scale);
+                expect_value(c(normalized * normalized),
+                    std::complex<T>(edge.real() / maximum, edge.imag() / maximum));
+                EXPECT_GE(value.real(), T(0));
+                EXPECT_EQ(std::signbit(value.imag()), std::signbit(edge.imag()));
+            }
+            else
+            {
+                expect_value(value, std::sqrt(std::complex<T>(edge.real(), edge.imag())), true);
+            }
         }
         s::storeu(s::log(a), output.data());
-        for (const auto value : output) {
-            expect_value(value, static_cast<std::complex<T>>(scalars::log(edge)), true);
+        for (const auto value : output)
+        {
+            expect_value(value, std::log(std::complex<T>(edge.real(), edge.imag())), true);
+        }
+        const std::array<typename s::simd_t, 3> rounded{s::ceil(a), s::floor(a), s::trunc(a)};
+        const std::array<std::complex<T>, 3>    references{
+            std::complex<T>(std::ceil(edge.real()), std::ceil(edge.imag())),
+            std::complex<T>(std::floor(edge.real()), std::floor(edge.imag())),
+            std::complex<T>(std::trunc(edge.real()), std::trunc(edge.imag()))};
+        for (std::size_t operation = 0; operation < rounded.size(); ++operation)
+        {
+            s::storeu(rounded[operation], output.data());
+            for (const auto value : output)
+            {
+                expect_value(value, references[operation], true);
+            }
+        }
+        s::storeu(s::neg(a), output.data());
+        for (const auto value : output)
+        {
+            expect_bits(value, c(-edge.real(), -edge.imag()));
         }
     }
     for (T x : {T(0), T(-0.0), T(1e-8), T(-1e-8), tiny, infinity, -infinity})
     {
         const auto a = s::set(c(x, T(-0.0)));
         s::storeu(s::expm1(a), output.data());
-        for (const auto value : output) {
+        for (const auto value : output)
+        {
             expect_value(value, std::complex<T>(std::expm1(x), T(-0.0)), true);
         }
         s::storeu(s::log1p(a), output.data());
-        if (x >= T(-1)) {
-            for (const auto value : output) {
+        if (x >= T(-1))
+        {
+            for (const auto value : output)
+            {
                 expect_value(value, std::complex<T>(std::log1p(x), T(-0.0)), true);
             }
         }
@@ -561,6 +702,11 @@ TEST(SimdComplexParity, PrincipalMathAndRounding)
 {
     check_math<float>();
     check_math<double>();
+}
+TEST(SimdComplexParity, SquareRootRangeBoundaries)
+{
+    check_sqrt_bounds<float>();
+    check_sqrt_bounds<double>();
 }
 TEST(SimdComplexParity, MagnitudeSpecialValuesAndAccumulation)
 {

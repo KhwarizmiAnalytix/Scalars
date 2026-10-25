@@ -3,11 +3,11 @@
 
 import argparse
 import os
-from pathlib import Path
 import platform
 import shutil
 import subprocess
 import tempfile
+from pathlib import Path
 
 
 def main() -> None:
@@ -18,6 +18,55 @@ def main() -> None:
     parser.add_argument(
         "--backend", choices=("sse", "avx", "avx2", "avx512", "neon", "sve")
     )
+    parser.add_argument(
+        "--operations",
+        nargs="+",
+        default=["add", "mul", "div", "fma"],
+        choices=(
+            "all",
+            "add",
+            "sub",
+            "mul",
+            "div",
+            "fma",
+            "sqr",
+            "abs",
+            "arg",
+            "sqrt",
+            "invsqrt",
+            "reciprocal",
+            "exp",
+            "expm1",
+            "exp2",
+            "exp10",
+            "log",
+            "log1p",
+            "log2",
+            "log10",
+            "sin",
+            "cos",
+            "tan",
+            "asin",
+            "acos",
+            "atan",
+            "sinh",
+            "cosh",
+            "tanh",
+            "asinh",
+            "acosh",
+            "atanh",
+            "pow",
+            "ceil",
+            "floor",
+            "trunc",
+            "neg",
+            "conj",
+            "real",
+            "imag",
+            "eq",
+            "neq",
+        ),
+    )
     args = parser.parse_args()
 
     import torch
@@ -27,6 +76,19 @@ def main() -> None:
     if compiler is None:
         parser.error(f"C++ compiler not found: {args.cxx}")
     torch_include = Path(torch.__file__).parent / "include"
+    torch_library = Path(torch.__file__).parent / "lib"
+    if os.name == "nt":
+        library_flags = [
+            str(torch_library / "torch_cpu.lib"),
+            str(torch_library / "c10.lib"),
+        ]
+    else:
+        library_flags = [
+            f"-L{torch_library}",
+            "-ltorch_cpu",
+            "-lc10",
+            f"-Wl,-rpath,{torch_library}",
+        ]
     machine = platform.machine().lower()
     options = {
         "sse": ["-msse2", "-DSCALARS_HAS_SSE=1"],
@@ -83,18 +145,33 @@ def main() -> None:
                 "-DNDEBUG",
                 "-std=c++20",
                 "-DSCALARS_VECTORIZED=1",
+                "-DSCALARS_STATIC_DEFINE=1",
                 *options[backend],
                 f"-I{root / 'include'}",
                 f"-I{torch_include}",
                 str(root / "Testing/Benchmark/CompareComplexSimdPytorch.cpp"),
+                str(root / "src/math/complex_math.cpp"),
+                *library_flags,
                 "-o",
                 str(executable),
             ],
             check=True,
         )
+        run_environment = os.environ.copy()
+        if os.name == "nt":
+            run_environment["PATH"] = (
+                str(torch_library) + os.pathsep + run_environment.get("PATH", "")
+            )
         for elements in args.elements:
             subprocess.run(
-                [str(executable), str(elements), str(args.iterations)], check=True
+                [
+                    str(executable),
+                    str(elements),
+                    str(args.iterations),
+                    "all" if "all" in args.operations else ",".join(args.operations),
+                ],
+                check=True,
+                env=run_environment,
             )
 
 

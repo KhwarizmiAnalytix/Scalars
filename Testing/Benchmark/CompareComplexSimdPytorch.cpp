@@ -9,11 +9,18 @@
 
 #include <algorithm>
 #include <array>
+#include <charconv>
 #include <chrono>
 #include <cmath>
+#include <cstdint>
+#include <cstdio>
+#include <exception>
 #include <iomanip>
 #include <iostream>
+#include <numbers>
 #include <random>
+#include <string_view>
+#include <system_error>
 #include <vector>
 
 namespace
@@ -23,7 +30,237 @@ template <class T> using torch_complex_t = c10::complex<T>;
 template <class T> using packet          = simd<complex_t<T>>;
 template <class T> using torch_packet    = at::vec::Vectorized<torch_complex_t<T>>;
 
-template <int Op, class T>
+enum class operation : std::uint8_t
+{
+    add,
+    sub,
+    mul,
+    div,
+    fma,
+    sqr,
+    abs,
+    arg,
+    sqrt,
+    invsqrt,
+    reciprocal,
+    exp,
+    expm1,
+    exp2,
+    exp10,
+    log,
+    log1p,
+    log2,
+    log10,
+    sin,
+    cos,
+    tan,
+    asin,
+    acos,
+    atan,
+    sinh,
+    cosh,
+    tanh,
+    asinh,
+    acosh,
+    atanh,
+    pow,
+    ceil,
+    floor,
+    trunc,
+    neg,
+    conj,
+    real,
+    imag,
+    eq,
+    neq
+};
+
+template <operation Op, class T>
+SCALARS_FORCE_INLINE typename packet<T>::simd_t scalars_evaluate(
+    typename packet<T>::simd_t a, typename packet<T>::simd_t b, typename packet<T>::simd_t c)
+{
+    using p = packet<T>;
+    using r = simd<T>;
+    if constexpr (Op == operation::add)
+    {
+        return p::add(a, b);
+    }
+    if constexpr (Op == operation::sub)
+    {
+        return p::sub(a, b);
+    }
+    if constexpr (Op == operation::mul)
+    {
+        return p::mul(a, b);
+    }
+    if constexpr (Op == operation::div)
+    {
+        return p::div(a, b);
+    }
+    if constexpr (Op == operation::fma)
+    {
+        return p::fma(a, b, c);
+    }
+    if constexpr (Op == operation::abs)
+    {
+        return {p::abs(a), r::setzero()};
+    }
+    if constexpr (Op == operation::arg)
+    {
+        return {p::arg(a), r::setzero()};
+    }
+    if constexpr (Op == operation::real)
+    {
+        return {p::real(a), r::setzero()};
+    }
+    if constexpr (Op == operation::imag)
+    {
+        return {p::imag(a), r::setzero()};
+    }
+    if constexpr (Op == operation::eq)
+    {
+        return p::if_else(p::eq(a, b), p::set(T(1)), p::setzero());
+    }
+    if constexpr (Op == operation::neq)
+    {
+        return p::if_else(p::neq(a, b), p::set(T(1)), p::setzero());
+    }
+    if constexpr (Op == operation::pow)
+    {
+        return p::pow(a, b);
+    }
+#define SCALARS_COMPARE_UNARY(name)                                                                \
+    if constexpr (Op == operation::name)                                                           \
+    {                                                                                              \
+        return p::name(a);                                                                         \
+    }
+    SCALARS_COMPARE_UNARY(sqr);
+    SCALARS_COMPARE_UNARY(sqrt);
+    SCALARS_COMPARE_UNARY(invsqrt);
+    SCALARS_COMPARE_UNARY(reciprocal);
+    SCALARS_COMPARE_UNARY(exp);
+    SCALARS_COMPARE_UNARY(expm1);
+    SCALARS_COMPARE_UNARY(exp2);
+    SCALARS_COMPARE_UNARY(exp10);
+    SCALARS_COMPARE_UNARY(log);
+    SCALARS_COMPARE_UNARY(log1p);
+    SCALARS_COMPARE_UNARY(log2);
+    SCALARS_COMPARE_UNARY(log10);
+    SCALARS_COMPARE_UNARY(sin);
+    SCALARS_COMPARE_UNARY(cos);
+    SCALARS_COMPARE_UNARY(tan);
+    SCALARS_COMPARE_UNARY(asin);
+    SCALARS_COMPARE_UNARY(acos);
+    SCALARS_COMPARE_UNARY(atan);
+    SCALARS_COMPARE_UNARY(sinh);
+    SCALARS_COMPARE_UNARY(cosh);
+    SCALARS_COMPARE_UNARY(tanh);
+    SCALARS_COMPARE_UNARY(asinh);
+    SCALARS_COMPARE_UNARY(acosh);
+    SCALARS_COMPARE_UNARY(atanh);
+    SCALARS_COMPARE_UNARY(ceil);
+    SCALARS_COMPARE_UNARY(floor);
+    SCALARS_COMPARE_UNARY(trunc);
+    SCALARS_COMPARE_UNARY(neg);
+    SCALARS_COMPARE_UNARY(conj);
+#undef SCALARS_COMPARE_UNARY
+    std::abort();
+}
+
+template <operation Op, class T>
+SCALARS_FORCE_INLINE torch_packet<T> torch_evaluate(
+    torch_packet<T> a, torch_packet<T> b, torch_packet<T> c)
+{
+    if constexpr (Op == operation::add)
+    {
+        return a + b;
+    }
+    if constexpr (Op == operation::sub)
+    {
+        return a - b;
+    }
+    if constexpr (Op == operation::mul)
+    {
+        return a * b;
+    }
+    if constexpr (Op == operation::div)
+    {
+        return a / b;
+    }
+    if constexpr (Op == operation::fma)
+    {
+        return at::vec::fmadd(a, b, c);
+    }
+    if constexpr (Op == operation::sqr)
+    {
+        return a * a;
+    }
+    if constexpr (Op == operation::arg)
+    {
+        return a.angle();
+    }
+    if constexpr (Op == operation::invsqrt)
+    {
+        return a.rsqrt();
+    }
+    if constexpr (Op == operation::pow)
+    {
+        return a.pow(b);
+    }
+    if constexpr (Op == operation::eq)
+    {
+        return a.eq(b);
+    }
+    if constexpr (Op == operation::neq)
+    {
+        return a.ne(b);
+    }
+    // ATen has no exp10 packet method. Compose its scalar map with the same
+    // component scaling used by Scalars, without adding complex cross-products.
+    if constexpr (Op == operation::exp10)
+    {
+        return a.map(
+            [](const torch_complex_t<T>& z) { return std::exp(z * std::numbers::ln10_v<T>); });
+    }
+#define SCALARS_COMPARE_UNARY(name)                                                                \
+    if constexpr (Op == operation::name)                                                           \
+    {                                                                                              \
+        return a.name();                                                                           \
+    }
+    SCALARS_COMPARE_UNARY(abs);
+    SCALARS_COMPARE_UNARY(sqrt);
+    SCALARS_COMPARE_UNARY(reciprocal);
+    SCALARS_COMPARE_UNARY(exp);
+    SCALARS_COMPARE_UNARY(expm1);
+    SCALARS_COMPARE_UNARY(exp2);
+    SCALARS_COMPARE_UNARY(log);
+    SCALARS_COMPARE_UNARY(log1p);
+    SCALARS_COMPARE_UNARY(log2);
+    SCALARS_COMPARE_UNARY(log10);
+    SCALARS_COMPARE_UNARY(sin);
+    SCALARS_COMPARE_UNARY(cos);
+    SCALARS_COMPARE_UNARY(tan);
+    SCALARS_COMPARE_UNARY(asin);
+    SCALARS_COMPARE_UNARY(acos);
+    SCALARS_COMPARE_UNARY(atan);
+    SCALARS_COMPARE_UNARY(sinh);
+    SCALARS_COMPARE_UNARY(cosh);
+    SCALARS_COMPARE_UNARY(tanh);
+    SCALARS_COMPARE_UNARY(asinh);
+    SCALARS_COMPARE_UNARY(acosh);
+    SCALARS_COMPARE_UNARY(atanh);
+    SCALARS_COMPARE_UNARY(ceil);
+    SCALARS_COMPARE_UNARY(floor);
+    SCALARS_COMPARE_UNARY(trunc);
+    SCALARS_COMPARE_UNARY(neg);
+    SCALARS_COMPARE_UNARY(conj);
+    SCALARS_COMPARE_UNARY(real);
+    SCALARS_COMPARE_UNARY(imag);
+#undef SCALARS_COMPARE_UNARY
+    std::abort();
+}
+
+template <operation Op, class T>
 SCALARS_NOINLINE void scalars_kernel(const complex_t<T>* a,
     const complex_t<T>*                                  b,
     const complex_t<T>*                                  c,
@@ -34,18 +271,11 @@ SCALARS_NOINLINE void scalars_kernel(const complex_t<T>* a,
     for (int i = 0; i < count; i += p::size)
     {
         const auto x = p::loadu(a + i), y = p::loadu(b + i);
-        if constexpr (Op == 0)
-            p::storeu(p::add(x, y), out + i);
-        if constexpr (Op == 1)
-            p::storeu(p::mul(x, y), out + i);
-        if constexpr (Op == 2)
-            p::storeu(p::div(x, y), out + i);
-        if constexpr (Op == 3)
-            p::storeu(p::fma(x, y, p::loadu(c + i)), out + i);
+        p::storeu(scalars_evaluate<Op, T>(x, y, p::loadu(c + i)), out + i);
     }
 }
 
-template <int Op, class T>
+template <operation Op, class T>
 SCALARS_NOINLINE void torch_kernel(const torch_complex_t<T>* a,
     const torch_complex_t<T>*                                b,
     const torch_complex_t<T>*                                c,
@@ -56,28 +286,29 @@ SCALARS_NOINLINE void torch_kernel(const torch_complex_t<T>* a,
     for (int i = 0; i < count; i += p::size())
     {
         const auto x = p::loadu(a + i), y = p::loadu(b + i);
-        if constexpr (Op == 0)
-            (x + y).store(out + i);
-        if constexpr (Op == 1)
-            (x * y).store(out + i);
-        if constexpr (Op == 2)
-            (x / y).store(out + i);
-        if constexpr (Op == 3)
-            at::vec::fmadd(x, y, p::loadu(c + i)).store(out + i);
+        torch_evaluate<Op, T>(x, y, p::loadu(c + i)).store(out + i);
     }
 }
 
-template <int Op, class T> void compare(const char* name, int count, int iterations)
+template <operation Op, class T> void compare(const char* name, int count, int iterations)
 {
-    std::vector<complex_t<T>>         a(count), b(count), c(count), out(count);
-    std::vector<torch_complex_t<T>>   ta(count), tb(count), tc(count), tout(count);
+    std::vector<complex_t<T>>       a(count), b(count), c(count), out(count);
+    std::vector<torch_complex_t<T>> ta(count), tb(count), tc(count), tout(count);
+    // NOLINTNEXTLINE(bugprone-random-generator-seed): reproducible benchmark inputs.
     std::mt19937                      random(123);
     std::uniform_real_distribution<T> sample(-2, 2);
     for (int i = 0; i < count; ++i)
     {
-        a[i]  = {sample(random), sample(random)};
-        b[i]  = {sample(random), sample(random)};
-        c[i]  = {sample(random), sample(random)};
+        a[i] = {sample(random), sample(random)};
+        b[i] = {sample(random), sample(random)};
+        c[i] = {sample(random), sample(random)};
+        if constexpr (Op == operation::eq || Op == operation::neq)
+        {
+            if (i % 2 == 0)
+            {
+                b[i] = a[i];
+            }
+        }
         ta[i] = {a[i].real(), a[i].imag()};
         tb[i] = {b[i].real(), b[i].imag()};
         tc[i] = {c[i].real(), c[i].imag()};
@@ -97,11 +328,16 @@ template <int Op, class T> void compare(const char* name, int count, int iterati
                                       double(out[i].imag()) - tout[i].imag()) /
                                   scale;
         if (!std::isfinite(difference))
+        {
             std::exit(2);
+        }
         error = std::max(error, difference);
     }
     if (error > (std::is_same_v<T, float> ? 2e-6 : 2e-14))
+    {
+        std::cerr << "Numerical mismatch for " << name << ": " << error << '\n';
         std::exit(2);
+    }
 
     const auto time = [&](auto run, const auto* output)
     {
@@ -140,27 +376,121 @@ template <int Op, class T> void compare(const char* name, int count, int iterati
     std::cout << (std::is_same_v<T, float> ? "complex64" : "complex128") << ',' << name << ','
               << count << ',' << scalars_times[4] << ',' << torch_times[4] << ','
               << torch_times[4] / scalars_times[4] << ',' << error << '\n';
+    // Stream completed rows while long comparisons are still running.
+    std::cout.flush();
 }
 
-template <class T> void run(int count, int iterations)
+bool selected(std::string_view selection, std::string_view name)
+{
+    if (selection == "all")
+    {
+        return true;
+    }
+    while (!selection.empty())
+    {
+        const auto end = selection.find(',');
+        if (selection.substr(0, end) == name)
+        {
+            return true;
+        }
+        if (end == std::string_view::npos)
+        {
+            return false;
+        }
+        selection.remove_prefix(end + 1);
+    }
+    return false;
+}
+
+template <class T> bool run(int count, int iterations, std::string_view selection)
 {
     if (count % packet<T>::size != 0 || count % torch_packet<T>::size() != 0)
-        std::exit(1);
-    compare<0, T>("add", count, iterations);
-    compare<1, T>("mul", count, iterations);
-    compare<2, T>("div", count, iterations);
-    compare<3, T>("fma", count, iterations);
+    {
+        return false;
+    }
+    bool matched = false;
+#define SCALARS_COMPARE_RUN(name)                                                                  \
+    if (selected(selection, #name))                                                                \
+    {                                                                                              \
+        matched = true;                                                                            \
+        compare<operation::name, T>(#name, count, iterations);                                     \
+    }
+    SCALARS_COMPARE_RUN(add);
+    SCALARS_COMPARE_RUN(sub);
+    SCALARS_COMPARE_RUN(mul);
+    SCALARS_COMPARE_RUN(div);
+    SCALARS_COMPARE_RUN(fma);
+    SCALARS_COMPARE_RUN(sqr);
+    SCALARS_COMPARE_RUN(abs);
+    SCALARS_COMPARE_RUN(arg);
+    SCALARS_COMPARE_RUN(sqrt);
+    SCALARS_COMPARE_RUN(invsqrt);
+    SCALARS_COMPARE_RUN(reciprocal);
+    SCALARS_COMPARE_RUN(exp);
+    SCALARS_COMPARE_RUN(expm1);
+    SCALARS_COMPARE_RUN(exp2);
+    SCALARS_COMPARE_RUN(exp10);
+    SCALARS_COMPARE_RUN(log);
+    SCALARS_COMPARE_RUN(log1p);
+    SCALARS_COMPARE_RUN(log2);
+    SCALARS_COMPARE_RUN(log10);
+    SCALARS_COMPARE_RUN(sin);
+    SCALARS_COMPARE_RUN(cos);
+    SCALARS_COMPARE_RUN(tan);
+    SCALARS_COMPARE_RUN(asin);
+    SCALARS_COMPARE_RUN(acos);
+    SCALARS_COMPARE_RUN(atan);
+    SCALARS_COMPARE_RUN(sinh);
+    SCALARS_COMPARE_RUN(cosh);
+    SCALARS_COMPARE_RUN(tanh);
+    SCALARS_COMPARE_RUN(asinh);
+    SCALARS_COMPARE_RUN(acosh);
+    SCALARS_COMPARE_RUN(atanh);
+    SCALARS_COMPARE_RUN(pow);
+    SCALARS_COMPARE_RUN(ceil);
+    SCALARS_COMPARE_RUN(floor);
+    SCALARS_COMPARE_RUN(trunc);
+    SCALARS_COMPARE_RUN(neg);
+    SCALARS_COMPARE_RUN(conj);
+    SCALARS_COMPARE_RUN(real);
+    SCALARS_COMPARE_RUN(imag);
+    SCALARS_COMPARE_RUN(eq);
+    SCALARS_COMPARE_RUN(neq);
+#undef SCALARS_COMPARE_RUN
+    return matched;
+}
+
+bool parse_positive(std::string_view text, int& value)
+{
+    const auto result = std::from_chars(text.data(), text.data() + text.size(), value);
+    return result.ec == std::errc{} && result.ptr == text.data() + text.size() && value > 0;
 }
 }  // namespace
 
 int main(int argc, char** argv)
+try
 {
-    const int count      = argc > 1 ? std::atoi(argv[1]) : 4096;
-    const int iterations = argc > 2 ? std::atoi(argv[2]) : 1000;
-    if (count <= 0 || iterations <= 0)
+    int count = 4096, iterations = 1000;
+    if ((argc > 1 && !parse_positive(argv[1], count)) ||
+        (argc > 2 && !parse_positive(argv[2], iterations)))
+    {
         return 1;
+    }
     std::cout << std::setprecision(8)
               << "dtype,operation,elements,scalars_ns,aten_ns,speedup,max_normalized_error\n";
-    run<float>(count, iterations);
-    run<double>(count, iterations);
+    const std::string_view selection = argc > 3 ? argv[3] : "add,mul,div,fma";
+    return run<float>(count, iterations, selection) && run<double>(count, iterations, selection)
+               ? 0
+               : 1;
+}
+catch (const std::exception& error)
+{
+    std::fputs(error.what(), stderr);
+    std::fputc('\n', stderr);
+    return 1;
+}
+catch (...)
+{
+    std::fputs("Unexpected benchmark failure\n", stderr);
+    return 1;
 }

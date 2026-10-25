@@ -29,8 +29,7 @@ SCALARS_FORCE_INLINE float32x4_t map1_f32(float32x4_t v, float (*fn)(float))
 }  // namespace detail_neon
 }  // namespace scalars
 
-template <>
-struct simd<float>
+template <> struct simd<float>
 {
     using simd_t      = float32x4_t;
     using mask_t      = uint32x4_t;
@@ -55,18 +54,14 @@ struct simd<float>
 
     SCALARS_SIMD_RETURN_TYPE storeu(simd_t from, value_t* to) { vst1q_f32(to, from); }
 
-    template <
-        typename scalar_t,
+    template <typename scalar_t,
         typename std::enable_if<std::is_fundamental<scalar_t>::value, bool>::type = true>
     SCALARS_SIMD_METHOD simd_t set(scalar_t alpha)
     {
         return vdupq_n_f32(static_cast<value_t>(alpha));
     }
 
-    SCALARS_SIMD_METHOD mask_t set(int_t const from)
-    {
-        return vdupq_n_u32(from != 0 ? ~0u : 0u);
-    }
+    SCALARS_SIMD_METHOD mask_t set(int_t const from) { return vdupq_n_u32(from != 0 ? ~0u : 0u); }
 
     SCALARS_SIMD_METHOD simd_t setzero() { return vdupq_n_f32(0.f); }
 
@@ -89,10 +84,7 @@ struct simd<float>
 
     SCALARS_SIMD_METHOD simd_t max(simd_t x, simd_t y) { return vmaxq_f32(x, y); }
 
-    SCALARS_SIMD_METHOD simd_t fma(simd_t x, simd_t y, simd_t z)
-    {
-        return vfmaq_f32(z, x, y);
-    }
+    SCALARS_SIMD_METHOD simd_t fma(simd_t x, simd_t y, simd_t z) { return vfmaq_f32(z, x, y); }
 
     SCALARS_SIMD_METHOD simd_t signcopy(simd_t x, simd_t sign)
     {
@@ -153,10 +145,7 @@ struct simd<float>
         return vld1q_f32(b);
     }
 
-    SCALARS_SIMD_METHOD simd_t trunc(simd_t x)
-    {
-        return scalars::detail_neon::map1_f32(x, static_cast<float (*)(float)>(&std::trunc));
-    }
+    SCALARS_SIMD_METHOD simd_t trunc(simd_t x) { return vrndq_f32(x); }
 
     SCALARS_SIMD_METHOD simd_t invsqrt(simd_t x)
     {
@@ -170,10 +159,7 @@ struct simd<float>
         return vreinterpretq_f32_u32(vbicq_u32(vreinterpretq_u32_f32(x), sign_mask));
     }
 
-    SCALARS_SIMD_METHOD simd_t neg(simd_t x)
-    {
-        return vreinterpretq_f32_u32(veorq_u32(vreinterpretq_u32_f32(x), sign_mask));
-    }
+    SCALARS_SIMD_METHOD simd_t neg(simd_t x) { return vnegq_f32(x); }
 
     SCALARS_FORCE_INLINE static double accumulate(simd_t x)
     {
@@ -198,7 +184,7 @@ struct simd<float>
 
     SCALARS_SIMD_METHOD simd_t gather(value_t const* from, int stride)
     {
-        const std::ptrdiff_t s = stride;
+        const std::ptrdiff_t s      = stride;
         alignas(16) value_t  tmp[4] = {
             from[0],
             from[s],
@@ -272,10 +258,7 @@ struct simd<float>
         return vandq_u32(x, y);
     }
 
-    SCALARS_SIMD_METHOD mask_t or_mask(const mask_t& x, const mask_t& y)
-    {
-        return vorrq_u32(x, y);
-    }
+    SCALARS_SIMD_METHOD mask_t or_mask(const mask_t& x, const mask_t& y) { return vorrq_u32(x, y); }
 
     SCALARS_SIMD_METHOD mask_t xor_mask(const mask_t& x, const mask_t& y)
     {
@@ -291,8 +274,7 @@ struct simd<float>
         a3 = vdupq_n_f32(from[3]);
     }
 
-    template <int N>
-    SCALARS_SIMD_RETURN_TYPE ptranspose(simd_t simd[N])  // NOLINT
+    template <int N> SCALARS_SIMD_RETURN_TYPE ptranspose(simd_t simd[N])  // NOLINT
     {
         constexpr int L = size;
         if constexpr (N == 4 && L == 4)
@@ -401,13 +383,10 @@ struct simd<float>
         return vld1_f32(from);
     }
 
-    SCALARS_FORCE_INLINE static simd_half_t set(const value_t* from)
-    {
-        return vld1_dup_f32(from);
-    }
+    SCALARS_FORCE_INLINE static simd_half_t set(const value_t* from) { return vld1_dup_f32(from); }
 
-    SCALARS_SIMD_METHOD simd_half_t
-    fma(const simd_half_t& x, const simd_half_t& y, const simd_half_t& z)
+    SCALARS_SIMD_METHOD simd_half_t fma(
+        const simd_half_t& x, const simd_half_t& y, const simd_half_t& z)
     {
         return vfma_f32(z, x, y);
     }

@@ -28,8 +28,7 @@ SCALARS_FORCE_INLINE float64x2_t map1_f64(float64x2_t v, double (*fn)(double))
 }  // namespace detail_neon
 }  // namespace scalars
 
-template <>
-struct simd<double>
+template <> struct simd<double>
 {
     using simd_t      = float64x2_t;
     using mask_t      = uint64x2_t;
@@ -54,8 +53,7 @@ struct simd<double>
 
     SCALARS_SIMD_RETURN_TYPE storeu(simd_t from, value_t* to) { vst1q_f64(to, from); }
 
-    template <
-        typename scalar_t,
+    template <typename scalar_t,
         typename std::enable_if<std::is_fundamental<scalar_t>::value, bool>::type = true>
     SCALARS_SIMD_METHOD simd_t set(const scalar_t alpha)
     {
@@ -77,10 +75,7 @@ struct simd<double>
 
     SCALARS_SIMD_METHOD simd_t div(simd_t x, simd_t y) { return vdivq_f64(x, y); }
 
-    SCALARS_SIMD_METHOD simd_t fma(simd_t x, simd_t y, simd_t z)
-    {
-        return vfmaq_f64(z, x, y);
-    }
+    SCALARS_SIMD_METHOD simd_t fma(simd_t x, simd_t y, simd_t z) { return vfmaq_f64(z, x, y); }
 
     SCALARS_SIMD_METHOD simd_t pow(simd_t x, simd_t y) { return vpowq_f64(x, y); }
 
@@ -148,11 +143,7 @@ struct simd<double>
         return vld1q_f64(b);
     }
 
-    SCALARS_SIMD_METHOD simd_t trunc(simd_t x)
-    {
-        return scalars::detail_neon::map1_f64(
-            x, static_cast<double (*)(double)>(&std::trunc));
-    }
+    SCALARS_SIMD_METHOD simd_t trunc(simd_t x) { return vrndq_f64(x); }
 
     SCALARS_SIMD_METHOD simd_t invsqrt(simd_t x)
     {
@@ -167,10 +158,7 @@ struct simd<double>
         return vreinterpretq_f64_u64(vbicq_u64(vreinterpretq_u64_f64(x), sign_mask));
     }
 
-    SCALARS_SIMD_METHOD simd_t neg(simd_t x)
-    {
-        return vreinterpretq_f64_u64(veorq_u64(vreinterpretq_u64_f64(x), sign_mask));
-    }
+    SCALARS_SIMD_METHOD simd_t neg(simd_t x) { return vnegq_f64(x); }
 
     SCALARS_FORCE_INLINE static double accumulate(simd_t x)
     {
@@ -250,10 +238,7 @@ struct simd<double>
         return u32_mask_to_u64(from[0], from[1]);
     }
 
-    SCALARS_SIMD_METHOD mask_t load(int_t const* from)
-    {
-        return u32_mask_to_u64(from[0], from[1]);
-    }
+    SCALARS_SIMD_METHOD mask_t load(int_t const* from) { return u32_mask_to_u64(from[0], from[1]); }
 
     SCALARS_SIMD_RETURN_TYPE storeu(const mask_t& from, int_t* to)
     {
@@ -273,10 +258,7 @@ struct simd<double>
         return vandq_u64(x, y);
     }
 
-    SCALARS_SIMD_METHOD mask_t or_mask(const mask_t& x, const mask_t& y)
-    {
-        return vorrq_u64(x, y);
-    }
+    SCALARS_SIMD_METHOD mask_t or_mask(const mask_t& x, const mask_t& y) { return vorrq_u64(x, y); }
 
     SCALARS_SIMD_METHOD mask_t xor_mask(const mask_t& x, const mask_t& y)
     {
@@ -292,8 +274,7 @@ struct simd<double>
         a3 = vdupq_n_f64(from[3]);
     }
 
-    template <int N>
-    SCALARS_SIMD_RETURN_TYPE ptranspose(simd_t simd[N])  // NOLINT
+    template <int N> SCALARS_SIMD_RETURN_TYPE ptranspose(simd_t simd[N])  // NOLINT
     {
         constexpr int L = size;
         if constexpr (N == 2 && L == 2)

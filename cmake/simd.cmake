@@ -29,11 +29,20 @@ endif()
 set(SCALARS_CPU_BACKEND "${_scalars_cpu_backend_default}"
     CACHE STRING "CPU SIMD backend for Scalars. Options: no, sse, avx, avx2, avx512, neon, sve"
 )
-set_property(CACHE SCALARS_CPU_BACKEND PROPERTY STRINGS no sse avx avx2 avx512 neon sve)
+set_property(
+    CACHE SCALARS_CPU_BACKEND
+    PROPERTY STRINGS
+             no
+             sse
+             avx
+             avx2
+             avx512
+             neon
+             sve
+)
 if(NOT SCALARS_CPU_BACKEND MATCHES "^(no|sse|avx|avx2|avx512|neon|sve)$")
-    message(FATAL_ERROR
-        "SCALARS_CPU_BACKEND must be one of: no, sse, avx, avx2, avx512, neon, sve "
-        "(got '${SCALARS_CPU_BACKEND}')"
+    message(FATAL_ERROR "SCALARS_CPU_BACKEND must be one of: no, sse, avx, avx2, avx512, neon, sve "
+                        "(got '${SCALARS_CPU_BACKEND}')"
     )
 endif()
 
@@ -58,14 +67,19 @@ if(SCALARS_ENABLE_MKL)
     string(TOLOWER "${CMAKE_SYSTEM_PROCESSOR}" _scalars_mkl_proc)
     if(NOT _scalars_mkl_proc MATCHES "^(x86_64|amd64|i686|i386)$")
         message(WARNING "SCALARS_ENABLE_MKL=ON is only supported on x86_64; disabling.")
-        set(SCALARS_ENABLE_MKL OFF CACHE BOOL "Enable Intel MKL VML vector math backend (x86 only, static link)" FORCE)
+        set(SCALARS_ENABLE_MKL OFF
+            CACHE BOOL "Enable Intel MKL VML vector math backend (x86 only, static link)" FORCE
+        )
     else()
         set(MKL_THREADING "SEQ" CACHE STRING "MKL threading flavour used by Scalars" FORCE)
         set(ENABLE_STATIC_MKL OFF CACHE BOOL "Link MKL statically for Scalars" FORCE)
         find_package(MKL QUIET)
         if(MKL_FOUND)
             set(SCALARS_HAS_MKL 1)
-            message(STATUS "Scalars: MKL VML found (version ${MKL_VERSION}). Include: ${MKL_INCLUDE_DIR}")
+            message(
+                STATUS
+                    "Scalars: MKL VML found (version ${MKL_VERSION}). Include: ${MKL_INCLUDE_DIR}"
+            )
             if(NOT TARGET MKL::MKL)
                 add_library(MKL::MKL INTERFACE IMPORTED GLOBAL)
                 target_include_directories(MKL::MKL INTERFACE "${MKL_INCLUDE_DIR}")
@@ -81,11 +95,13 @@ if(SCALARS_ENABLE_MKL)
                 endif()
             endif()
         else()
-            message(WARNING
-                "SCALARS_ENABLE_MKL=ON but MKL was not found -- disabling MKL VML backend. "
-                "Set MKLROOT or INTEL_MKL_DIR to your MKL installation root."
+            message(
+                WARNING "SCALARS_ENABLE_MKL=ON but MKL was not found -- disabling MKL VML backend. "
+                        "Set MKLROOT or INTEL_MKL_DIR to your MKL installation root."
             )
-            set(SCALARS_ENABLE_MKL OFF CACHE BOOL "Enable Intel MKL VML vector math backend (x86 only, static link)" FORCE)
+            set(SCALARS_ENABLE_MKL OFF
+                CACHE BOOL "Enable Intel MKL VML vector math backend (x86 only, static link)" FORCE
+            )
         endif()
     endif()
     unset(_scalars_mkl_proc)
@@ -96,7 +112,10 @@ endif()
 set(SCALARS_SVE_VECTOR_BITS "128" CACHE STRING "SVE vector register width in bits: 128, 256, 512")
 set_property(CACHE SCALARS_SVE_VECTOR_BITS PROPERTY STRINGS 128 256 512)
 if(NOT SCALARS_SVE_VECTOR_BITS MATCHES "^(128|256|512)$")
-    message(FATAL_ERROR "SCALARS_SVE_VECTOR_BITS must be 128, 256, or 512 (got '${SCALARS_SVE_VECTOR_BITS}')")
+    message(
+        FATAL_ERROR
+            "SCALARS_SVE_VECTOR_BITS must be 128, 256, or 512 (got '${SCALARS_SVE_VECTOR_BITS}')"
+    )
 endif()
 
 include("${CMAKE_CURRENT_LIST_DIR}/utils.cmake")
@@ -115,15 +134,22 @@ else()
     set(SCALARS_COMPILER_SUPPORTS_SVML_EXTENSIONS 0)
 endif()
 
-if(NOT SCALARS_CPU_BACKEND STREQUAL "no" AND NOT _scalars_has_sse AND NOT _scalars_has_avx
-   AND NOT _scalars_has_avx2 AND NOT _scalars_has_avx512 AND NOT _scalars_has_neon AND NOT _scalars_has_sve
+if(NOT SCALARS_CPU_BACKEND STREQUAL "no"
+   AND NOT _scalars_has_sse
+   AND NOT _scalars_has_avx
+   AND NOT _scalars_has_avx2
+   AND NOT _scalars_has_avx512
+   AND NOT _scalars_has_neon
+   AND NOT _scalars_has_sve
 )
-    message(WARNING
-        "SCALARS_CPU_BACKEND '${SCALARS_CPU_BACKEND}' is not supported by this compiler/architecture. "
-        "Falling back to SCALARS_CPU_BACKEND=no."
+    message(
+        WARNING
+            "SCALARS_CPU_BACKEND '${SCALARS_CPU_BACKEND}' is not supported by this compiler/architecture. "
+            "Falling back to SCALARS_CPU_BACKEND=no."
     )
     set(SCALARS_CPU_BACKEND "no"
-        CACHE STRING "CPU SIMD backend for Scalars. Options: no, sse, avx, avx2, avx512, neon, sve" FORCE
+        CACHE STRING "CPU SIMD backend for Scalars. Options: no, sse, avx, avx2, avx512, neon, sve"
+              FORCE
     )
 endif()
 
@@ -152,7 +178,9 @@ endif()
 set(SCALARS_HAS_ACCELERATE 0)
 if(SCALARS_ENABLE_ACCELERATE)
     if(NOT APPLE)
-        message(WARNING "SCALARS_ENABLE_ACCELERATE=ON is only supported on Apple platforms; disabling.")
+        message(
+            WARNING "SCALARS_ENABLE_ACCELERATE=ON is only supported on Apple platforms; disabling."
+        )
         set(SCALARS_ENABLE_ACCELERATE OFF
             CACHE BOOL "Enable Apple Accelerate vForce on AArch64 NEON" FORCE
         )
@@ -163,8 +191,12 @@ endif()
 
 # 1 when any CPU SIMD backend/cpu/* tree is active (GPU does not affect this) --
 # gates backend/simd.h's system-intrinsic-header include block.
-if(_scalars_has_sse OR _scalars_has_avx OR _scalars_has_avx2 OR _scalars_has_avx512
-   OR _scalars_has_neon OR _scalars_has_sve
+if(_scalars_has_sse
+   OR _scalars_has_avx
+   OR _scalars_has_avx2
+   OR _scalars_has_avx512
+   OR _scalars_has_neon
+   OR _scalars_has_sve
 )
     set(SCALARS_VECTORIZED 1)
 else()
@@ -190,19 +222,20 @@ unset(_scalars_has_sve)
 function(scalars_apply_simd_compile_definitions target)
     target_compile_definitions(
         ${target}
-        PUBLIC SCALARS_HAS_SSE=${SCALARS_HAS_SSE}
-               SCALARS_HAS_AVX=${SCALARS_HAS_AVX}
-               SCALARS_HAS_AVX2=${SCALARS_HAS_AVX2}
-               SCALARS_HAS_AVX512=${SCALARS_HAS_AVX512}
-               SCALARS_HAS_NEON=${SCALARS_HAS_NEON}
-               SCALARS_HAS_SVE=${SCALARS_HAS_SVE}
-               SCALARS_HAS_SVML=${SCALARS_HAS_SVML}
-               SCALARS_COMPILER_SUPPORTS_SVML_EXTENSIONS=${SCALARS_COMPILER_SUPPORTS_SVML_EXTENSIONS}
-               SCALARS_HAS_MKL=${SCALARS_HAS_MKL}
-               SCALARS_HAS_SLEEF=${SCALARS_HAS_SLEEF}
-               SCALARS_HAS_ACCELERATE=${SCALARS_HAS_ACCELERATE}
-               SCALARS_VECTORIZED=${SCALARS_VECTORIZED}
-               SCALARS_PACKET_SIZE=${SCALARS_PACKET_SIZE}
+        PUBLIC
+            SCALARS_HAS_SSE=${SCALARS_HAS_SSE}
+            SCALARS_HAS_AVX=${SCALARS_HAS_AVX}
+            SCALARS_HAS_AVX2=${SCALARS_HAS_AVX2}
+            SCALARS_HAS_AVX512=${SCALARS_HAS_AVX512}
+            SCALARS_HAS_NEON=${SCALARS_HAS_NEON}
+            SCALARS_HAS_SVE=${SCALARS_HAS_SVE}
+            SCALARS_HAS_SVML=${SCALARS_HAS_SVML}
+            SCALARS_COMPILER_SUPPORTS_SVML_EXTENSIONS=${SCALARS_COMPILER_SUPPORTS_SVML_EXTENSIONS}
+            SCALARS_HAS_MKL=${SCALARS_HAS_MKL}
+            SCALARS_HAS_SLEEF=${SCALARS_HAS_SLEEF}
+            SCALARS_HAS_ACCELERATE=${SCALARS_HAS_ACCELERATE}
+            SCALARS_VECTORIZED=${SCALARS_VECTORIZED}
+            SCALARS_PACKET_SIZE=${SCALARS_PACKET_SIZE}
     )
     if(SCALARS_CPU_BACKEND STREQUAL "avx2")
         target_compile_definitions(${target} PUBLIC SCALARS_CPU_CAPABILITY_AVX2)
@@ -266,17 +299,25 @@ function(scalars_apply_simd_compile_definitions target)
             set_property(TARGET ${target} APPEND PROPERTY INSTALL_RPATH "\$ORIGIN")
             if(SVML_LIBRARY_SVML)
                 get_filename_component(_svml_rt_dir "${SVML_LIBRARY_SVML}" DIRECTORY)
+                # INTERFACE only: ${target} itself already resolves SVML via its
+                # own $ORIGIN rpath plus the staged copy_if_different above, so
+                # applying this PUBLIC would additionally bake the build
+                # machine's absolute ThirdParty/svml path into *this* target's
+                # own RUNPATH -- which then survives into the installed
+                # library. In-tree consumers built in the same tree (e.g.
+                # ScalarsCxxTests), which have no staged copy of their own,
+                # still need it and get it via this INTERFACE propagation.
                 target_link_options(
-                    ${target}
-                    PUBLIC
+                    ${target} INTERFACE
                     "$<BUILD_INTERFACE:-Wl$<COMMA>-rpath$<COMMA>${_svml_rt_dir}>"
                 )
                 unset(_svml_rt_dir)
             endif()
         endif()
         unset(_svml_rt)
-        message(STATUS
-            "Scalars: linked SVML::SVML (ThirdParty); runtime files: ${SVML_RUNTIME_LIBRARIES}"
+        message(
+            STATUS
+                "Scalars: linked SVML::SVML (ThirdParty); runtime files: ${SVML_RUNTIME_LIBRARIES}"
         )
     endif()
     if(SCALARS_ENABLE_MKL)
@@ -284,9 +325,8 @@ function(scalars_apply_simd_compile_definitions target)
             target_link_libraries(${target} PUBLIC MKL::MKL)
             message(STATUS "Scalars: linked MKL VML via MKL::MKL.")
         else()
-            message(FATAL_ERROR
-                "SCALARS_ENABLE_MKL=ON but the MKL::MKL target is not available. "
-                "Set MKLROOT or INTEL_MKL_DIR to your MKL installation root."
+            message(FATAL_ERROR "SCALARS_ENABLE_MKL=ON but the MKL::MKL target is not available. "
+                                "Set MKLROOT or INTEL_MKL_DIR to your MKL installation root."
             )
         endif()
     endif()
@@ -299,20 +339,23 @@ function(scalars_apply_simd_compile_definitions target)
     endif()
     if(SCALARS_SIMD_COMPILER_FLAGS)
         if(MSVC)
-            separate_arguments(_scalars_simd_flags_list WINDOWS_COMMAND "${SCALARS_SIMD_COMPILER_FLAGS}")
+            separate_arguments(
+                _scalars_simd_flags_list WINDOWS_COMMAND "${SCALARS_SIMD_COMPILER_FLAGS}"
+            )
             # nvcc treats a bare /arch or /D option as another input file and stops
             # with "A single input file is required". -Xcompiler forwards them to
             # cl.exe, so /D__F16C__ still enables F16C half conversion in .cu files.
             foreach(_flag IN LISTS _scalars_simd_flags_list)
                 target_compile_options(
-                    ${target}
-                    PUBLIC "$<$<COMPILE_LANGUAGE:CUDA>:-Xcompiler=${_flag}>"
-                           "$<$<NOT:$<COMPILE_LANGUAGE:CUDA>>:${_flag}>"
+                    ${target} PUBLIC "$<$<COMPILE_LANGUAGE:CUDA>:-Xcompiler=${_flag}>"
+                                     "$<$<NOT:$<COMPILE_LANGUAGE:CUDA>>:${_flag}>"
                 )
             endforeach()
             unset(_flag)
         else()
-            separate_arguments(_scalars_simd_flags_list UNIX_COMMAND "${SCALARS_SIMD_COMPILER_FLAGS}")
+            separate_arguments(
+                _scalars_simd_flags_list UNIX_COMMAND "${SCALARS_SIMD_COMPILER_FLAGS}"
+            )
             target_compile_options(${target} PUBLIC ${_scalars_simd_flags_list})
         endif()
         unset(_scalars_simd_flags_list)
@@ -320,12 +363,18 @@ function(scalars_apply_simd_compile_definitions target)
 endfunction()
 
 if(NOT DEFINED SCALARS_PACKET_SIZE)
-    set(SCALARS_PACKET_SIZE "1" CACHE STRING
-        "SIMD registers processed per unrolled loop iteration in the ported backend/ kernels (1,2,3,...)"
+    set(SCALARS_PACKET_SIZE
+        "1"
+        CACHE
+            STRING
+            "SIMD registers processed per unrolled loop iteration in the ported backend/ kernels (1,2,3,...)"
     )
 endif()
 if(NOT SCALARS_PACKET_SIZE MATCHES "^[1-9][0-9]*$")
-    message(FATAL_ERROR "SCALARS_PACKET_SIZE must be a positive decimal integer (got '${SCALARS_PACKET_SIZE}')")
+    message(
+        FATAL_ERROR
+            "SCALARS_PACKET_SIZE must be a positive decimal integer (got '${SCALARS_PACKET_SIZE}')"
+    )
 endif()
 
 message(STATUS "Scalars: SIMD compiler flags: ${SCALARS_SIMD_COMPILER_FLAGS}")

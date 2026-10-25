@@ -443,13 +443,17 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest]
+        os: [ubuntu-latest, macos-latest, windows-2022]
         shared: ['ON', 'OFF']
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v7
         with:
           python-version: '3.12'
+      - uses: ilammy/msvc-dev-cmd@v1
+        if: runner.os == 'Windows'
+        with:
+          arch: x64
       - run: python -m pip install cmake==4.1.2 ninja
 
       - name: Build, install, then build/run the external consumer
@@ -458,11 +462,14 @@ jobs:
         shell: bash
         run: |
           package_prefix="$RUNNER_TEMP/scalars-package"
+          # Windows has no RPATH equivalent: the loader resolves Scalars.dll
+          # via PATH instead, set further down before running the consumer.
+          rpath_args=()
           if [[ "$RUNNER_OS" == macOS ]]; then
-            runtime_origin='@loader_path'
-          else
+            rpath_args=(-DCMAKE_INSTALL_RPATH='@loader_path/../lib')
+          elif [[ "$RUNNER_OS" == Linux ]]; then
             # shellcheck disable=SC2016 # Keep the loader's literal origin token.
-            runtime_origin='$ORIGIN'
+            rpath_args=(-DCMAKE_INSTALL_RPATH='$ORIGIN/../lib')
           fi
           # Force a fixed "lib" layout: GNUInstallDirs picks a Debian
           # multiarch lib dir (e.g. lib/x86_64-linux-gnu) by default on
@@ -471,7 +478,7 @@ jobs:
           cmake -S . -B build-install -G Ninja -DCMAKE_BUILD_TYPE=Release \
             -DBUILD_SHARED_LIBS="$BUILD_SHARED" -DSCALARS_ENABLE_TESTING=OFF \
             -DCMAKE_INSTALL_LIBDIR=lib -DCMAKE_INSTALL_PREFIX="$package_prefix" \
-            -DCMAKE_INSTALL_RPATH="$runtime_origin/../lib"
+            "${rpath_args[@]}"
           cmake --build build-install --parallel 4
           cmake --install build-install
           mv "$package_prefix" "$RUNNER_TEMP/scalars-package-moved"
@@ -482,6 +489,11 @@ jobs:
             -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_PREFIX_PATH="$package_prefix" \
             -DScalars_DIR="$package_prefix/lib/cmake/Scalars"
           cmake --build "$RUNNER_TEMP/scalars-consumer-build" --parallel 4
+          if [[ "$RUNNER_OS" == Windows ]]; then
+            # Scalars.dll lives in bin/, next to the import lib in lib/; put
+            # it on PATH so the consumer executables can load it at test time.
+            export PATH="$package_prefix/bin:$PATH"
+          fi
           ctest --test-dir "$RUNNER_TEMP/scalars-consumer-build" --output-on-failure --no-tests=error
 
   # ---------------------------------------------------------------------------

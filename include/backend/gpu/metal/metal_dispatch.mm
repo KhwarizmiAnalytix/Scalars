@@ -1,6 +1,9 @@
 #include "backend/gpu/metal/metal_dispatch.h"
 
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wdeprecated-declarations"
 #import <Foundation/Foundation.h>
+#pragma clang diagnostic pop
 #import <Metal/Metal.h>
 
 #include <cstdint>

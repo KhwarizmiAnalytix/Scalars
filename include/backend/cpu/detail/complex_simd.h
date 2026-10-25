@@ -44,17 +44,23 @@ template <class T> struct packed_registers
 // All backends use the same conservative range for ordinary vector division.
 template <class T> constexpr T division_lower()
 {
-    if constexpr (std::is_same_v<T, float>) {
+    if constexpr (std::is_same_v<T, float>)
+    {
         return T(0x1p-30);
-    } else {
+    }
+    else
+    {
         return T(0x1p-250);
     }
 }
 template <class T> constexpr T division_upper()
 {
-    if constexpr (std::is_same_v<T, float>) {
+    if constexpr (std::is_same_v<T, float>)
+    {
         return T(0x1p31);
-    } else {
+    }
+    else
+    {
         return T(0x1p251);
     }
 }
@@ -101,7 +107,8 @@ private:
     {
         std::array<value_t, size> lanes;
         storeu(a, lanes.data());
-        for (auto& lane : lanes) {
+        for (auto& lane : lanes)
+        {
             lane = function(lane);
         }
         return loadu(lanes.data());
@@ -111,7 +118,8 @@ private:
         std::array<value_t, size> x, y;
         storeu(a, x.data());
         storeu(b, y.data());
-        for (int i = 0; i < size; ++i) {
+        for (int i = 0; i < size; ++i)
+        {
             x[i] = function(x[i], y[i]);
         }
         return loadu(x.data());
@@ -121,7 +129,8 @@ private:
         std::array<value_t, size> lanes;
         std::array<T, size>       result;
         storeu(a, lanes.data());
-        for (int i = 0; i < size; ++i) {
+        for (int i = 0; i < size; ++i)
+        {
             result[i] = function(lanes[i]);
         }
         return r::loadu(result.data());
@@ -131,7 +140,8 @@ private:
         std::array<value_t, size> x, y;
         storeu(a, x.data());
         storeu(b, y.data());
-        for (int i = 0; i < size; ++i) {
+        for (int i = 0; i < size; ++i)
+        {
             x[i] /= y[i];
         }
         return loadu(x.data());
@@ -145,7 +155,8 @@ public:
     }
     static simd_t gather(const value_t* p, std::ptrdiff_t stride)
     {
-        if (stride == 1) {
+        if (stride == 1)
+        {
             return loadu(p);
         }
         std::array<T, size> real, imag;
@@ -166,7 +177,8 @@ public:
         std::array<T, size> real, imag;
         r::storeu(a.real, real.data());
         r::storeu(a.imag, imag.data());
-        for (int i = 0; i < size; ++i) {
+        for (int i = 0; i < size; ++i)
+        {
             p[i * stride] = value_t(real[i], imag[i]);
         }
     }
@@ -175,7 +187,8 @@ public:
     static simd_t gather(const value_t* p, const Index* indices)
     {
         std::array<value_t, size> lanes;
-        for (int i = 0; i < size; ++i) {
+        for (int i = 0; i < size; ++i)
+        {
             lanes[i] = p[indices[i]];
         }
         return loadu(lanes.data());
@@ -187,7 +200,8 @@ public:
         std::array<value_t, size> lanes;
         storeu(a, lanes.data());
         // Increasing-lane order makes repeated indices deterministic.
-        for (int i = 0; i < size; ++i) {
+        for (int i = 0; i < size; ++i)
+        {
             p[indices[i]] = lanes[i];
         }
     }
@@ -209,11 +223,13 @@ public:
     static simd_t loadu(const value_t* p, int count)
     {
         assert(count >= 0 && count <= size);
-        if (count == size) {
+        if (count == size)
+        {
             return loadu(p);
         }
         std::array<value_t, size> lanes{};
-        for (int i = 0; i < count; ++i) {
+        for (int i = 0; i < count; ++i)
+        {
             lanes[i] = p[i];
         }
         return loadu(lanes.data());
@@ -234,7 +250,8 @@ public:
         }
         std::array<value_t, size> lanes;
         storeu(a, lanes.data());
-        for (int i = 0; i < count; ++i) {
+        for (int i = 0; i < count; ++i)
+        {
             p[i] = lanes[i];
         }
     }
@@ -255,7 +272,8 @@ public:
     {
         assert(count >= 0 && count <= size);
         std::array<T, size> flags{};
-        for (int i = 0; i < count; ++i) {
+        for (int i = 0; i < count; ++i)
+        {
             flags[i] = p[i] != 0 ? T(1) : T(0);
         }
         return r::neq(r::loadu(flags.data()), r::setzero());
@@ -267,7 +285,8 @@ public:
         assert(count >= 0 && count <= size);
         std::array<T, size> flags;
         r::storeu(r::if_else(a, r::set(T(1)), r::setzero()), flags.data());
-        for (int i = 0; i < count; ++i) {
+        for (int i = 0; i < count; ++i)
+        {
             p[i] = flags[i] != T(0) ? ~int_t(0) : int_t(0);
         }
     }
@@ -303,7 +322,8 @@ public:
     {
         constexpr int             repeats = std::is_same_v<T, float> && size == 4 ? 2 : 4;
         std::array<value_t, size> lanes;
-        for (int i = 0; i < size; ++i) {
+        for (int i = 0; i < size; ++i)
+        {
             lanes[i] = p[i / repeats];
         }
         return loadu(lanes.data());
@@ -314,13 +334,16 @@ public:
     {
         // Transpose N x size complete complex values, then repack into N packets.
         std::array<value_t, static_cast<std::size_t>(N) * size> input, output;
-        for (int row = 0; row < N; ++row) {
+        for (int row = 0; row < N; ++row)
+        {
             storeu(rows[row], input.data() + row * size);
         }
-        for (std::size_t i = 0; i < input.size(); ++i) {
+        for (std::size_t i = 0; i < input.size(); ++i)
+        {
             output[i] = input[(i % N) * size + i / N];
         }
-        for (int row = 0; row < N; ++row) {
+        for (int row = 0; row < N; ++row)
+        {
             rows[row] = loadu(output.data() + row * size);
         }
     }
@@ -328,7 +351,8 @@ public:
     static simd_half_t set(const value_t* p)
     {
         std::array<value_t, size> lanes{};
-        for (int i = 0; i < half_size; ++i) {
+        for (int i = 0; i < half_size; ++i)
+        {
             lanes[i] = *p;
         }
         return {loadu(lanes.data())};
@@ -336,7 +360,8 @@ public:
     static simd_half_t gather_half(const value_t* p, std::ptrdiff_t stride)
     {
         std::array<value_t, size> lanes{};
-        for (int i = 0; i < half_size; ++i) {
+        for (int i = 0; i < half_size; ++i)
+        {
             lanes[i] = p[i * stride];
         }
         return {loadu(lanes.data())};
@@ -346,7 +371,8 @@ public:
     static simd_half_t gather_half(const value_t* p, const Index* indices)
     {
         std::array<value_t, size> lanes{};
-        for (int i = 0; i < half_size; ++i) {
+        for (int i = 0; i < half_size; ++i)
+        {
             lanes[i] = p[indices[i]];
         }
         return {loadu(lanes.data())};
@@ -357,7 +383,8 @@ public:
     {
         std::array<value_t, size> lanes;
         storeu(a.value, lanes.data());
-        for (int i = 0; i < half_size; ++i) {
+        for (int i = 0; i < half_size; ++i)
+        {
             p[i * stride] = lanes[i];
         }
     }
@@ -367,7 +394,8 @@ public:
     {
         std::array<value_t, size> lanes;
         storeu(a.value, lanes.data());
-        for (int i = 0; i < half_size; ++i) {
+        for (int i = 0; i < half_size; ++i)
+        {
             p[indices[i]] = lanes[i];
         }
     }
@@ -383,7 +411,8 @@ public:
     {
         std::array<value_t, size> lanes;
         storeu(a, lanes.data());
-        for (int i = 0; i < half_size; ++i) {
+        for (int i = 0; i < half_size; ++i)
+        {
             lanes[i] += lanes[i + half_size];
         }
         return loadu_half(lanes.data());
@@ -398,7 +427,11 @@ public:
         const auto x = Ops::interleave(a), y = Ops::interleave(b);
         return Ops::deinterleave({r::sub(x[0], y[0]), r::sub(x[1], y[1])});
     }
-    static simd_t neg(simd_t a) { return {r::neg(a.real), r::neg(a.imag)}; }
+    static simd_t neg(simd_t a)
+    {
+        const auto x = Ops::interleave(a);
+        return Ops::deinterleave({r::neg(x[0]), r::neg(x[1])});
+    }
     static simd_t conj(simd_t a) { return {a.real, r::neg(a.imag)}; }
     static simd_t mul(simd_t a, simd_t b)
     {
@@ -415,33 +448,39 @@ public:
     static real_packet_t norm(simd_t a) { return abs2(a); }
     static real_packet_t abs(simd_t a)
     {
-        return map_real(a, [](value_t x) {
-            // Robust magnitude computation that properly handles overflow to infinity.
-            // This avoids issues with std::hypot on some platforms (e.g., NEON).
-            const T re = std::fabs(x.real());
-            const T im = std::fabs(x.imag());
-            // std::fmin/std::fmax drop a NaN when the other argument is numeric,
-            // so classify before scaling. hypot(inf, nan) is inf.
-            if (std::isinf(re) || std::isinf(im)) {
-                return std::numeric_limits<T>::infinity();
-            }
-            if (std::isnan(re) || std::isnan(im)) {
-                return std::numeric_limits<T>::quiet_NaN();
-            }
-            const T max_component = std::fmax(re, im);
-            const T min_component = std::fmin(re, im);
+        return map_real(a,
+            [](value_t x)
+            {
+                // Robust magnitude computation that properly handles overflow to infinity.
+                // This avoids issues with std::hypot on some platforms (e.g., NEON).
+                const T re = std::fabs(x.real());
+                const T im = std::fabs(x.imag());
+                // std::fmin/std::fmax drop a NaN when the other argument is numeric,
+                // so classify before scaling. hypot(inf, nan) is inf.
+                if (std::isinf(re) || std::isinf(im))
+                {
+                    return std::numeric_limits<T>::infinity();
+                }
+                if (std::isnan(re) || std::isnan(im))
+                {
+                    return std::numeric_limits<T>::quiet_NaN();
+                }
+                const T max_component = std::fmax(re, im);
+                const T min_component = std::fmin(re, im);
 
-            if (!std::isfinite(max_component)) {
-                return max_component;  // infinity or NaN
-            }
-            if (max_component == 0) {
-                return T(0);
-            }
+                if (!std::isfinite(max_component))
+                {
+                    return max_component;  // infinity or NaN
+                }
+                if (max_component == 0)
+                {
+                    return T(0);
+                }
 
-            // Scale to avoid overflow: divide by max, compute, multiply back.
-            const T ratio = min_component / max_component;
-            return max_component * std::sqrt(T(1) + ratio * ratio);
-        });
+                // Scale to avoid overflow: divide by max, compute, multiply back.
+                const T ratio = min_component / max_component;
+                return max_component * std::sqrt(T(1) + ratio * ratio);
+            });
     }
     // fabs is the magnitude alias, returning one real result per complex lane.
     static real_packet_t fabs(simd_t a) { return abs(a); }
@@ -463,10 +502,21 @@ public:
         const auto infinity = r::set(std::numeric_limits<T>::infinity());
         return r::and_mask(r::lt(r::fabs(a.real), infinity), r::lt(r::fabs(a.imag), infinity));
     }
-    // Branch-sensitive functions deliberately map the scalar complex backend.
-    // They are packet API operations, not claims of native vector math.
     static simd_t sqrt(simd_t a)
     {
+        // The division bounds also keep these squares, their sum, and the
+        // component quotient normal. Retain the scaled scalar algorithm for
+        // extreme values, zero complex lanes, and nonfinite inputs.
+        if (Ops::division_is_safe(a, a))
+        {
+            const auto half      = r::set(T(.5));
+            const auto magnitude = r::sqrt(r::fma(a.imag, a.imag, r::mul(a.real, a.real)));
+            const auto large     = r::sqrt(r::mul(r::add(magnitude, r::fabs(a.real)), half));
+            const auto small     = r::mul(r::div(a.imag, large), half);
+            const auto positive  = r::ge(a.real, r::setzero());
+            return {r::if_else(positive, large, r::fabs(small)),
+                r::if_else(positive, small, r::signcopy(large, a.imag))};
+        }
         return map(a, [](value_t x) { return scalars::sqrt(x); });
     }
     static simd_t reciprocal(simd_t a) { return div(set(value_t(T(1), T(0))), a); }
@@ -484,10 +534,12 @@ public:
         return map(a,
             [](value_t x)
             {
-                if (x.imag() == T(0)) {
+                if (x.imag() == T(0))
+                {
                     return value_t(std::expm1(x.real()), x.imag());
                 }
-                if (scalars::isfinite(x)) {
+                if (scalars::isfinite(x))
+                {
                     return scalars::expm1(x);
                 }
                 const auto result = scalars::exp(x);
@@ -536,6 +588,22 @@ public:
     }
     static simd_t acos(simd_t a)
     {
+        if (Ops::division_is_safe(a, a))
+        {
+            // Kahan's branch-preserving formula, also used by the scalar
+            // backend. sqrt(conj(1+z)) is conj(sqrt(1+z)) for finite inputs,
+            // so two packet roots suffice.
+            const auto one   = r::set(T(1));
+            const auto left  = sqrt({r::sub(one, a.real), r::neg(a.imag)});
+            const auto right = sqrt({r::add(one, a.real), a.imag});
+            return map(left,
+                right,
+                [](value_t x, value_t y)
+                {
+                    return value_t(T(2) * std::atan2(x.real(), y.real()),
+                        std::asinh(x.imag() * y.real() - x.real() * y.imag()));
+                });
+        }
         return map(a, [](value_t x) { return scalars::acos(x); });
     }
     static simd_t atan(simd_t a)
@@ -566,19 +634,22 @@ public:
     {
         return map(a, [](value_t x) { return scalars::atanh(x); });
     }
+    // These componentwise operations work directly on interleaved registers,
+    // allowing the compiler to cancel the surrounding load/store shuffles.
     static simd_t ceil(simd_t a)
     {
-        return map(a, [](value_t x) { return value_t(std::ceil(x.real()), std::ceil(x.imag())); });
+        const auto x = Ops::interleave(a);
+        return Ops::deinterleave({r::ceil(x[0]), r::ceil(x[1])});
     }
     static simd_t floor(simd_t a)
     {
-        return map(
-            a, [](value_t x) { return value_t(std::floor(x.real()), std::floor(x.imag())); });
+        const auto x = Ops::interleave(a);
+        return Ops::deinterleave({r::floor(x[0]), r::floor(x[1])});
     }
     static simd_t trunc(simd_t a)
     {
-        return map(
-            a, [](value_t x) { return value_t(std::trunc(x.real()), std::trunc(x.imag())); });
+        const auto x = Ops::interleave(a);
+        return Ops::deinterleave({r::trunc(x[0]), r::trunc(x[1])});
     }
     static simd_t fma(simd_t a, simd_t b, simd_t c)
     {

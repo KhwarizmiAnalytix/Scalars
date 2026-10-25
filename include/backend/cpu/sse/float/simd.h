@@ -18,8 +18,7 @@
 #include "backend/cpu/sse/intrinsics.h"
 #include "scalars_macros.h"
 
-template <>
-struct simd<float>
+template <> struct simd<float>
 {
     using simd_t = __m128;
     using mask_t = __m128;
@@ -56,8 +55,7 @@ struct simd<float>
 
     SCALARS_SIMD_RETURN_TYPE storeu(simd_t from, value_t* to) { _mm_storeu_ps(to, from); }
 
-    template <
-        typename scalar_t,
+    template <typename scalar_t,
         typename std::enable_if<std::is_fundamental<scalar_t>::value, bool>::type = true>
     SCALARS_SIMD_METHOD simd_t set(scalar_t alpha)
     {
@@ -91,10 +89,7 @@ struct simd<float>
 #endif
     }
 
-    SCALARS_SIMD_METHOD simd_t signcopy(simd_t x, simd_t sign)
-    {
-        return _mm_signcopy_ps(x, sign);
-    }
+    SCALARS_SIMD_METHOD simd_t signcopy(simd_t x, simd_t sign) { return _mm_signcopy_ps(x, sign); }
 
     SCALARS_SIMD_METHOD simd_t sqrt(simd_t x) { return _mm_sqrt_ps(x); }
 
@@ -105,12 +100,15 @@ struct simd<float>
 #ifdef __SSE4_1__
         return _mm_ceil_ps(x);
 #else
-        simd_t f    = _mm_cvtepi32_ps(_mm_cvttps_epi32(x));
-        simd_t mask = _mm_cmplt_ps(f, x);
-        simd_t y    = _mm_add_ps(f, _mm_and_ps(mask, _mm_set1_ps(1.0f)));
+        // Above 2^23 every finite float is already integral. Preserve those
+        // lanes and nonfinite values without an out-of-range integer cast.
+        const simd_t bounded = _mm_cmplt_ps(fabs(x), _mm_set1_ps(0x1p23f));
+        simd_t       f       = _mm_cvtepi32_ps(_mm_cvttps_epi32(_mm_and_ps(x, bounded)));
+        simd_t       mask    = _mm_cmplt_ps(f, x);
+        simd_t       y       = _mm_add_ps(f, _mm_and_ps(mask, _mm_set1_ps(1.0f)));
         // cvttps turns (-1, -0] into +0. Put the input sign back on that zero.
-        return _mm_or_ps(
-            y, _mm_and_ps(x, _mm_and_ps(sign_mask, _mm_cmpeq_ps(y, _mm_setzero_ps()))));
+        y = _mm_or_ps(y, _mm_and_ps(x, _mm_and_ps(sign_mask, _mm_cmpeq_ps(y, _mm_setzero_ps()))));
+        return _mm_or_ps(_mm_and_ps(bounded, y), _mm_andnot_ps(bounded, x));
 #endif
     }
 
@@ -119,11 +117,12 @@ struct simd<float>
 #ifdef __SSE4_1__
         return _mm_floor_ps(x);
 #else
-        simd_t f    = _mm_cvtepi32_ps(_mm_cvttps_epi32(x));
-        simd_t mask = _mm_cmpgt_ps(f, x);
-        simd_t y    = _mm_sub_ps(f, _mm_and_ps(mask, _mm_set1_ps(1.0f)));
-        return _mm_or_ps(
-            y, _mm_and_ps(x, _mm_and_ps(sign_mask, _mm_cmpeq_ps(y, _mm_setzero_ps()))));
+        const simd_t bounded = _mm_cmplt_ps(fabs(x), _mm_set1_ps(0x1p23f));
+        simd_t       f       = _mm_cvtepi32_ps(_mm_cvttps_epi32(_mm_and_ps(x, bounded)));
+        simd_t       mask    = _mm_cmpgt_ps(f, x);
+        simd_t       y       = _mm_sub_ps(f, _mm_and_ps(mask, _mm_set1_ps(1.0f)));
+        y = _mm_or_ps(y, _mm_and_ps(x, _mm_and_ps(sign_mask, _mm_cmpeq_ps(y, _mm_setzero_ps()))));
+        return _mm_or_ps(_mm_and_ps(bounded, y), _mm_andnot_ps(bounded, x));
 #endif
     }
 
@@ -228,15 +227,9 @@ struct simd<float>
 
     SCALARS_SIMD_METHOD mask_t load(int_t const* from) { return _mm_load_mask_ps(from); }
 
-    SCALARS_SIMD_RETURN_TYPE storeu(const mask_t& from, int_t* to)
-    {
-        _mm_storeu_mask_ps(from, to);
-    }
+    SCALARS_SIMD_RETURN_TYPE storeu(const mask_t& from, int_t* to) { _mm_storeu_mask_ps(from, to); }
 
-    SCALARS_SIMD_RETURN_TYPE store(const mask_t& from, int_t* to)
-    {
-        _mm_store_mask_ps(from, to);
-    }
+    SCALARS_SIMD_RETURN_TYPE store(const mask_t& from, int_t* to) { _mm_store_mask_ps(from, to); }
 
     SCALARS_SIMD_METHOD mask_t not_mask(const mask_t& x) { return _mm_mask_not_ps(x); }
 
@@ -245,10 +238,7 @@ struct simd<float>
         return _mm_and_ps(x, y);
     }
 
-    SCALARS_SIMD_METHOD mask_t or_mask(const mask_t& x, const mask_t& y)
-    {
-        return _mm_or_ps(x, y);
-    }
+    SCALARS_SIMD_METHOD mask_t or_mask(const mask_t& x, const mask_t& y) { return _mm_or_ps(x, y); }
 
     SCALARS_SIMD_METHOD mask_t xor_mask(const mask_t& x, const mask_t& y)
     {
@@ -264,8 +254,7 @@ struct simd<float>
         a3 = _mm_set1_ps(from[3]);
     }
 
-    template <int N>
-    SCALARS_SIMD_RETURN_TYPE ptranspose(simd_t simd[N])  // NOLINT
+    template <int N> SCALARS_SIMD_RETURN_TYPE ptranspose(simd_t simd[N])  // NOLINT
     {
         constexpr int L = size;
         if constexpr (N == 4 && L == 4)
@@ -371,8 +360,8 @@ struct simd<float>
         return simd_half_t(_mm_set1_ps(*from));
     }
 
-    SCALARS_SIMD_METHOD simd_half_t
-    fma(const simd_half_t& x, const simd_half_t& y, const simd_half_t& z)
+    SCALARS_SIMD_METHOD simd_half_t fma(
+        const simd_half_t& x, const simd_half_t& y, const simd_half_t& z)
     {
 #ifdef __FMA__
         return simd_half_t(_mm_fmadd_ps(x.v, y.v, z.v));

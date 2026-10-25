@@ -20,8 +20,15 @@ function(_scalars_drop_hip_cxx_device_flags target)
     if(NOT TARGET "${target}")
         return()
     endif()
-    foreach(_prop IN ITEMS INTERFACE_COMPILE_OPTIONS INTERFACE_LINK_LIBRARIES INTERFACE_LINK_OPTIONS)
-        get_property(_prop_set TARGET "${target}" PROPERTY "${_prop}" SET)
+    foreach(_prop IN ITEMS INTERFACE_COMPILE_OPTIONS INTERFACE_LINK_LIBRARIES
+                           INTERFACE_LINK_OPTIONS
+    )
+        get_property(
+            _prop_set
+            TARGET "${target}"
+            PROPERTY "${_prop}"
+            SET
+        )
         if(NOT _prop_set)
             continue()
         endif()
@@ -48,7 +55,9 @@ function(_scalars_drop_hip_cxx_device_flags target)
                     endif()
                 endif()
             endif()
-            if(NOT _poison AND _opt MATCHES "--offload-arch|--hip-link|-xhip|-x[ ;]hip|SHELL:-x;hip")
+            if(NOT _poison AND _opt MATCHES
+                               "--offload-arch|--hip-link|-xhip|-x[ ;]hip|SHELL:-x;hip"
+            )
                 set(_poison 1)
             endif()
             if(_poison)
@@ -237,8 +246,8 @@ function(scalars_apply_gpu_backend target)
             # the standard-conforming preprocessor instead. -fPIC is a Unix
             # concept and is not passed to the MSVC host.
             target_compile_options(
-                ${target} PRIVATE
-                $<$<COMPILE_LANGUAGE:CUDA>:--use_fast_math -Xcompiler=/Zc:preprocessor>
+                ${target} PRIVATE $<$<COMPILE_LANGUAGE:CUDA>:--use_fast_math
+                                  -Xcompiler=/Zc:preprocessor>
             )
         else()
             target_compile_options(

@@ -18,8 +18,7 @@
 #include "backend/cpu/sse/intrinsics.h"
 #include "scalars_macros.h"
 
-template <>
-struct simd<double>
+template <> struct simd<double>
 {
     using simd_t      = __m128d;
     using mask_t      = __m128d;
@@ -46,8 +45,7 @@ struct simd<double>
 
     SCALARS_SIMD_RETURN_TYPE storeu(simd_t from, value_t* to) { _mm_storeu_pd(to, from); }
 
-    template <
-        typename scalar_t,
+    template <typename scalar_t,
         typename std::enable_if<std::is_fundamental<scalar_t>::value, bool>::type = true>
     SCALARS_SIMD_METHOD simd_t set(const scalar_t alpha)
     {
@@ -81,10 +79,7 @@ struct simd<double>
 
     SCALARS_SIMD_METHOD simd_t max(simd_t x, simd_t y) { return _mm_max_pd(x, y); }
 
-    SCALARS_SIMD_METHOD simd_t signcopy(simd_t x, simd_t sign)
-    {
-        return _mm_signcopy_pd(x, sign);
-    }
+    SCALARS_SIMD_METHOD simd_t signcopy(simd_t x, simd_t sign) { return _mm_signcopy_pd(x, sign); }
 
     SCALARS_SIMD_METHOD simd_t sqrt(simd_t x) { return _mm_sqrt_pd(x); }
 
@@ -95,6 +90,14 @@ struct simd<double>
 #ifdef __SSE4_1__
         return _mm_ceil_pd(x);
 #else
+        if (_mm_movemask_pd(_mm_cmplt_pd(fabs(x), _mm_set1_pd(0x1p31))) != 3)
+        {
+            alignas(16) double lanes[2];
+            _mm_store_pd(lanes, x);
+            lanes[0] = std::ceil(lanes[0]);
+            lanes[1] = std::ceil(lanes[1]);
+            return _mm_load_pd(lanes);
+        }
         simd_t f    = _mm_cvtepi32_pd(_mm_cvttpd_epi32(x));
         simd_t mask = _mm_cmplt_pd(f, x);
         simd_t y    = _mm_add_pd(f, _mm_and_pd(mask, _mm_set1_pd(1.0)));
@@ -109,6 +112,14 @@ struct simd<double>
 #ifdef __SSE4_1__
         return _mm_floor_pd(x);
 #else
+        if (_mm_movemask_pd(_mm_cmplt_pd(fabs(x), _mm_set1_pd(0x1p31))) != 3)
+        {
+            alignas(16) double lanes[2];
+            _mm_store_pd(lanes, x);
+            lanes[0] = std::floor(lanes[0]);
+            lanes[1] = std::floor(lanes[1]);
+            return _mm_load_pd(lanes);
+        }
         simd_t f    = _mm_cvtepi32_pd(_mm_cvttpd_epi32(x));
         simd_t mask = _mm_cmpgt_pd(f, x);
         simd_t y    = _mm_sub_pd(f, _mm_and_pd(mask, _mm_set1_pd(1.0)));
@@ -207,15 +218,9 @@ struct simd<double>
 
     SCALARS_SIMD_METHOD mask_t load(int_t const* from) { return _mm_load_mask_pd(from); }
 
-    SCALARS_SIMD_RETURN_TYPE storeu(const mask_t& from, int_t* to)
-    {
-        _mm_storeu_mask_pd(from, to);
-    }
+    SCALARS_SIMD_RETURN_TYPE storeu(const mask_t& from, int_t* to) { _mm_storeu_mask_pd(from, to); }
 
-    SCALARS_SIMD_RETURN_TYPE store(const mask_t& from, int_t* to)
-    {
-        _mm_store_mask_pd(from, to);
-    }
+    SCALARS_SIMD_RETURN_TYPE store(const mask_t& from, int_t* to) { _mm_store_mask_pd(from, to); }
 
     SCALARS_SIMD_METHOD mask_t not_mask(const mask_t& x) { return _mm_mask_not_pd(x); }
 
@@ -224,10 +229,7 @@ struct simd<double>
         return _mm_and_pd(x, y);
     }
 
-    SCALARS_SIMD_METHOD mask_t or_mask(const mask_t& x, const mask_t& y)
-    {
-        return _mm_or_pd(x, y);
-    }
+    SCALARS_SIMD_METHOD mask_t or_mask(const mask_t& x, const mask_t& y) { return _mm_or_pd(x, y); }
 
     SCALARS_SIMD_METHOD mask_t xor_mask(const mask_t& x, const mask_t& y)
     {
@@ -255,8 +257,7 @@ struct simd<double>
         _mm_store_pd(to, _mm_loadu_pd(from));
     }
 
-    template <int N>
-    SCALARS_SIMD_RETURN_TYPE ptranspose(simd_t simd[N])  // NOLINT
+    template <int N> SCALARS_SIMD_RETURN_TYPE ptranspose(simd_t simd[N])  // NOLINT
     {
         constexpr int L = size;
         if constexpr (N == 2 && L == 2)

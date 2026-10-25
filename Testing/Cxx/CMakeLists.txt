@@ -42,8 +42,7 @@ if(SCALARS_ENABLE_GTEST)
                 # See cmake/gpu_backend.cmake: cl.exe's traditional preprocessor
                 # trips a hard error in CCCL's headers under nvcc.
                 target_compile_options(
-                    ScalarsCxxTests PRIVATE
-                    $<$<COMPILE_LANGUAGE:CUDA>:-Xcompiler=/Zc:preprocessor>
+                    ScalarsCxxTests PRIVATE $<$<COMPILE_LANGUAGE:CUDA>:-Xcompiler=/Zc:preprocessor>
                 )
             endif()
         elseif(SCALARS_GPU_BACKEND STREQUAL "hip")

@@ -41,23 +41,30 @@ rather than a silent componentwise real-function application. An analytic
 complex extension of these would be a distinct, separately-reviewed API
 decision, not a parity gap.
 
-`sqrt`/`pow`/`exp`/the log family/trig/hyperbolic deliberately map the
+`pow`/`exp`/the log family/trig/hyperbolic generally map the
 existing scalar complex implementation
 ([`types/complex.h`](../include/types/complex.h),
 [`complex_math.h`](../include/math/complex_math.h)) lane-by-lane rather than
 claiming native vector transcendentals; this is a packet API completeness
-decision, documented here as scalar mapping, not a performance claim.
-Arithmetic, FMA, and division are the operations with genuine native-vector
-implementations (see
+decision. `sqrt` now uses real SIMD square roots, arithmetic, division,
+and branch selection within the conservative division bounds, retaining
+the scaled scalar fallback for extreme/exceptional inputs and packets
+containing a zero complex lane. `acos` uses two such packet roots in
+Kahan's formula, followed by scalar `atan2`/`asinh`, with a scalar fallback
+outside those bounds. Rounding reuses the real backend's componentwise
+operations, including native NEON truncation and negation. Componentwise
+rounding and negation use interleaved registers so surrounding packing
+shuffles can cancel. Arithmetic, FMA, and bounded division also use native vectors (see
 [`complex_simd_performance.md`](complex_simd_performance.md)).
 
-Verification for this revision: read `complex_simd.h` and all six
-`backend/cpu/<isa>/complex/simd.h` wrappers directly, and diffed
-`accumulate_type.h`'s CPU policy against `complex_simd<T,Ops>::accumulate`'s
-return type. This is a static-code audit, not a fresh set of compiler probes;
-the original probe methodology (C++20 `requires` probes compiled against
-each backend, results in `build_ninja/complex_api_audit/`) remains valid for
-future re-verification and is unchanged below.
+`Testing/Cxx/TestSimdComplexParity.cxx` now checks the applicable API and
+return types with C++20 `requires` expressions, and verifies masks,
+selection, packing, indexed memory, transpose, half-width helpers, math,
+signed zeros, special values, square-root range boundaries, and widened
+accumulation. The focused complex suites run on NEON and on SSE2,
+AVX without AVX2/FMA, and AVX2/FMA under Rosetta. AVX-512 executables and
+fixed-width SVE objects compile; those targets have not run on matching
+hardware. See the performance document for fresh measurements.
 
 ## Reduced precision, GPU, and Metal: now closed
 
