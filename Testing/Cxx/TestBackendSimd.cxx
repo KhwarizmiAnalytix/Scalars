@@ -8,9 +8,13 @@
 
 #if SCALARS_VECTORIZED
 
-#include <vector>
+#include "backend/cpu/neon/double/simd.h"
+#include "backend/cpu/neon/float/simd.h"
 
-#include "scalars_test.h"
+#include <gtest/gtest.h>
+#include <memory>
+#include <string>
+#include <vector>
 
 TEST(BackendSimd, FloatAddMatchesScalar)
 {

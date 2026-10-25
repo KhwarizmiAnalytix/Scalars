@@ -2,17 +2,19 @@
 
 #if SCALARS_HAS_METAL
 
+#include "backend/gpu/metal/metal_dispatch.h"
+#include "types/bfloat16.h"
+#include "types/half.h"
+
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
+#include <gtest/gtest.h>
 #include <limits>
+#include <memory>
 #include <string>
+#include <string_view>
 #include <type_traits>
-
-#include "backend/gpu/metal/metal_dispatch.h"
-#include "scalars_test.h"
-#include "types/bfloat16.h"
-#include "types/half.h"
 
 namespace
 {

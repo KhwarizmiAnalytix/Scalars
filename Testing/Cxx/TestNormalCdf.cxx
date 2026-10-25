@@ -1,6 +1,8 @@
 #include "math/normal_cdf.h"
 
-#include "scalars_test.h"
+#include <gtest/gtest.h>
+#include <memory>
+#include <string>
 
 using namespace scalars;
 

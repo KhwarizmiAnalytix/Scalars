@@ -2,10 +2,12 @@
 
 #include <cmath>
 #include <cstdint>
+#include <gtest/gtest.h>
 #include <limits>
+#include <memory>
 #include <sstream>
-
-#include "scalars_test.h"
+#include <string>
+#include <string_view>
 
 using namespace scalars;
 

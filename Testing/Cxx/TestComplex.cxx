@@ -1,12 +1,16 @@
+#include "types/bfloat16.h"
 #include "types/complex.h"
+#include "types/half.h"
 
 #include <cmath>
 #include <complex>
 #include <cstdint>
+#include <gtest/gtest.h>
 #include <limits>
+#include <memory>
 #include <sstream>
-
-#include "scalars_test.h"
+#include <string>
+#include <string_view>
 
 using namespace scalars;
 

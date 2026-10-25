@@ -3,9 +3,10 @@
 
 #include <complex>
 #include <cstdint>
+#include <gtest/gtest.h>
+#include <memory>
+#include <string>
 #include <type_traits>
-
-#include "scalars_test.h"
 
 using namespace scalars;
 

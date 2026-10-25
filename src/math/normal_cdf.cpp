@@ -1,9 +1,7 @@
 #include "math/normal_cdf.h"
 
-#include <algorithm>
 #include <array>
 #include <cmath>
-#include <limits>
 
 namespace scalars
 {

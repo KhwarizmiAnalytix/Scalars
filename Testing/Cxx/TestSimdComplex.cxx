@@ -3,10 +3,12 @@
 #include <algorithm>
 #include <array>
 #include <complex>
+#include <gtest/gtest.h>
 #include <limits>
+#include <memory>
 #include <random>
-
-#include "scalars_test.h"
+#include <string>
+#include <type_traits>
 
 #if SCALARS_VECTORIZED
 namespace

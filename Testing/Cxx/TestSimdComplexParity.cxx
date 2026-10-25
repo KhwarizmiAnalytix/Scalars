@@ -5,11 +5,12 @@
 #include <cmath>
 #include <complex>
 #include <concepts>
+#include <gtest/gtest.h>
 #include <limits>
+#include <memory>
 #include <numbers>
+#include <string>
 #include <type_traits>
-
-#include "scalars_test.h"
 
 #if SCALARS_VECTORIZED
 namespace

@@ -1,10 +1,13 @@
 #include "types/complex.h"
 
+#include <_stdlib.h>
 #include <cmath>
 #include <complex>
+#include <gtest/gtest.h>
 #include <limits>
-
-#include "scalars_test.h"
+#include <memory>
+#include <string>
+#include <string_view>
 
 using namespace scalars;
 

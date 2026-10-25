@@ -1,8 +1,9 @@
 #include "common/scalar_type.h"
 
 #include <cstdint>
-
-#include "scalars_test.h"
+#include <gtest/gtest.h>
+#include <memory>
+#include <string>
 
 using scalars::scalar_type;
 

@@ -4,10 +4,13 @@
 
 #include <cmath>
 #include <cstdint>
+#include <gtest/gtest.h>
 #include <limits>
+#include <memory>
 #include <sstream>
-
-#include "scalars_test.h"
+#include <string>
+#include <string_view>
+#include <type_traits>
 
 using namespace scalars;
 

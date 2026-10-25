@@ -1,8 +1,9 @@
 #include "math/scalar_math.h"
 
 #include <cmath>
-
-#include "scalars_test.h"
+#include <gtest/gtest.h>
+#include <memory>
+#include <string>
 
 using namespace scalars;
 

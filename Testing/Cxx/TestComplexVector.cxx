@@ -1,9 +1,16 @@
+#include "backend/simd.h"
 #include "math/complex_vector.h"
+#include "types/complex.h"
 
+#include <arm_neon.h>
 #include <complex>
+#include <cstddef>
+#include <gtest/gtest.h>
+#include <initializer_list>
+#include <memory>
+#include <string>
+#include <type_traits>
 #include <vector>
-
-#include "scalars_test.h"
 
 namespace
 {
