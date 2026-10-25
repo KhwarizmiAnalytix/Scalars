@@ -284,6 +284,8 @@ when its local scalar/SIMD implementations are replaced.
 ## GPU backends
 
 Select `-DSCALARS_GPU_BACKEND=cuda|hip|metal` independently of the CPU backend.
+HIP builds also require ROCm's rocThrust development headers (`rocthrust-dev`),
+which provide the `thrust/complex.h` dependency used by GPU complex operations.
 CUDA/HIP device compilation of `<backend/simd.h>` provides `simd<float>`,
 `simd<double>`, `simd<scalars::half>`, and `simd<scalars::bfloat16>`. Each packet
 has `size == 1`, with one logical lane per GPU thread. Reduced packets retain

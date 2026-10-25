@@ -321,7 +321,7 @@ jobs:
     steps:
       - name: Install build tools
         run: |
-          apt-get update && apt-get install -y ninja-build git python3-pip
+          apt-get update && apt-get install -y ninja-build git python3-pip rocthrust-dev
           python3 -m pip install "cmake>=3.24,<4"
           cmake --version
 
@@ -386,7 +386,7 @@ jobs:
     steps:
       - name: Install build tools
         run: |
-          apt-get update && apt-get install -y ninja-build git python3-pip
+          apt-get update && apt-get install -y ninja-build git python3-pip rocthrust-dev
           python3 -m pip install "cmake>=3.24,<4"
 
       - uses: actions/checkout@v4
