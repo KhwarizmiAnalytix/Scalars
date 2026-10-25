@@ -1,4 +1,5 @@
 #include "backend/simd.h"
+#include "math/normal_cdf.h"
 
 #if SCALARS_VECTORIZED
 

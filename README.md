@@ -199,9 +199,18 @@ LinearAlgebra can use the existing `<backend/simd.h>` interface directly.
 `simd<scalars::complex<float>>` and `simd<scalars::complex<double>>` extend
 that interface with complex load/store, counted load/store, set/setzero,
 add/sub/mul/div, FMA, negation, conjugation, accumulation, and strided
-gather/scatter. Arithmetic reuses the selected real SIMD backend; complex
-division maps scalar division over the lanes. Each complex SIMD value holds
-separate real and imaginary registers, with `size` complex elements.
+gather/scatter. Complex specializations live beside the real types in
+`backend/cpu/{sse,avx,avx512,neon,sve}/complex/simd.h` and are selected by the same
+dispatcher. AVX and AVX2 share the `avx` folder. SVE follows the real types' fixed
+128-bit NEON compatibility path. Backend headers implement their own native
+register shuffles, division checks, and reciprocals; common packet operations
+live in `backend/cpu/detail/complex_simd.h` without ISA conditionals.
+
+All CPU backends use contiguous interleaved memory operations and bounded vector
+division. SSE, AVX/AVX2, and AVX-512 use hardware vector division for the reciprocal;
+NEON uses Newton-refined reciprocal estimates. Packets containing extreme or
+nonfinite components, or a zero divisor, use scaled scalar division. Each complex
+SIMD value holds separate real and imaginary registers, with `size` complex elements.
 No packet adapter or additional public abstraction is needed.
 
 Link `Scalars::Scalars` to inherit the ISA, compiler flags, and math provider.
@@ -226,6 +235,10 @@ output ranges must be disjoint except for AXPY's exact in-place x/y case.
 Empty ranges accept null pointers. Complex counted loads zero-fill inactive
 lanes; counted stores write only active lanes (`0 <= count <= size`).
 SIMD accumulation order and FMA semantics follow the selected real backend.
+The division fast path follows the real backend's FMA behavior and has ordinary
+floating-point rounding differences from scalar division. See the
+[complex SIMD performance notes](docs/complex_simd_performance.md) for measured
+PyTorch comparisons and the standalone benchmark command.
 
 Real SIMD `ploadquad` uses PRETORIAN's implementation for each ISA:
 four-wide SSE/NEON float loads duplicate pairs; AVX float and AVX-512 double

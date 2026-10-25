@@ -1,7 +1,5 @@
-# CPU SIMD backend selection and compiler probing for Scalars, ported from
-# Vectorization's include/Cmake/utils.cmake (xsigma_/VECTORIZATION_ -> scalars_/SCALARS_),
-# trimmed of the Ubuntu-GCC-version check and INTERN_BUILD_MOBILE branch (not
-# applicable to Scalars).
+# CPU SIMD backend selection for Scalars. Compiler probes live in utils.cmake,
+# ported from Vectorization's include/Cmake/utils.cmake.
 #
 # SCALARS_CPU_BACKEND (cache: no|sse|avx|avx2|avx512|neon|sve) selects the CPU SIMD
 # backend used by include/backend/cpu/*. C++ preprocessor defines:
@@ -11,10 +9,6 @@
 # no value) exactly when backend is avx2 / avx512 -- these are what
 # include/types/half.h and include/detail/vec_half.h test via #if defined(...).
 include_guard(GLOBAL)
-
-include(CheckCXXSourceCompiles)
-include(CheckCXXCompilerFlag)
-include(CMakePushCheckState)
 
 # Host-aware default: x86 family -> avx2, aarch64 -> neon, anything else -> no.
 string(TOLOWER "${CMAKE_SYSTEM_PROCESSOR}" _scalars_simd_proc)
@@ -43,7 +37,7 @@ if(NOT SCALARS_CPU_BACKEND MATCHES "^(no|sse|avx|avx2|avx512|neon|sve)$")
     )
 endif()
 
-option(SCALARS_ENABLE_SVML "Enable Intel SVML short vector math library for Scalars backend/" OFF)
+option(SCALARS_ENABLE_SVML "Enable Intel SVML short vector math library" OFF)
 mark_as_advanced(SCALARS_ENABLE_SVML)
 option(SCALARS_ENABLE_MKL "Enable Intel MKL VML vector math backend (x86 only, static link)" OFF)
 mark_as_advanced(SCALARS_ENABLE_MKL)
@@ -54,23 +48,12 @@ option(SCALARS_ENABLE_SLEEF
 mark_as_advanced(SCALARS_ENABLE_SLEEF)
 option(SCALARS_ENABLE_ACCELERATE "Enable Apple Accelerate vForce on AArch64 NEON" OFF)
 mark_as_advanced(SCALARS_ENABLE_ACCELERATE)
+option(USE_NATIVE_ARCH "Prefer host CPU instruction tuning (-march=native, Clang/GCC only)" OFF)
 
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_LIST_DIR}/packages")
 
 set(SCALARS_HAS_SVML 0)
 set(SCALARS_HAS_MKL 0)
-if(SCALARS_ENABLE_SVML)
-    find_package(SVML QUIET)
-    if(SVML_FOUND)
-        set(SCALARS_HAS_SVML 1)
-        message(STATUS "Scalars: SVML ThirdParty package found.")
-    else()
-        message(WARNING
-            "SCALARS_ENABLE_SVML=ON but ThirdParty SVML binaries were not found. "
-            "Ensure ThirdParty/svml/ contains the required libraries."
-        )
-    endif()
-endif()
 if(SCALARS_ENABLE_MKL)
     string(TOLOWER "${CMAKE_SYSTEM_PROCESSOR}" _scalars_mkl_proc)
     if(NOT _scalars_mkl_proc MATCHES "^(x86_64|amd64|i686|i386)$")
@@ -99,200 +82,23 @@ if(SCALARS_ENABLE_MKL)
     unset(_scalars_mkl_proc)
 endif()
 
-set(SCALARS_SIMD_COMPILER_FLAGS "")
-set(_scalars_has_sse 0)
-set(_scalars_has_avx 0)
-set(_scalars_has_avx2 0)
-set(_scalars_has_avx512 0)
-set(_scalars_has_neon 0)
-set(_scalars_has_sve 0)
-
-if(_scalars_simd_is_x86)
-    cmake_push_check_state(RESET)
-    if(MSVC)
-        set(CMAKE_REQUIRED_FLAGS "/arch:SSE2")
-    else()
-        set(CMAKE_REQUIRED_FLAGS "-msse -msse2")
-    endif()
-    check_cxx_source_compiles(
-        "#include <immintrin.h>
-         int main() { __m128 a = _mm_set1_ps(1); _mm_add_ps(a, a); return 0; }"
-        SCALARS_COMPILER_SUPPORTS_SSE
-    )
-    if(SCALARS_COMPILER_SUPPORTS_SSE AND SCALARS_CPU_BACKEND STREQUAL "sse")
-        set(_scalars_has_sse 1)
-        set(SCALARS_SIMD_COMPILER_FLAGS "${CMAKE_REQUIRED_FLAGS}")
-    endif()
-    cmake_pop_check_state()
-
-    cmake_push_check_state(RESET)
-    if(MSVC)
-        set(CMAKE_REQUIRED_FLAGS "/arch:AVX /D__F16C__")
-    else()
-        set(CMAKE_REQUIRED_FLAGS "-mavx -mf16c")
-    endif()
-    check_cxx_source_compiles(
-        "#include <immintrin.h>
-         int main() { __m256 a = _mm256_set1_ps(1); _mm256_add_ps(a, a); return 0; }"
-        SCALARS_COMPILER_SUPPORTS_AVX
-    )
-    if(SCALARS_COMPILER_SUPPORTS_AVX AND SCALARS_CPU_BACKEND STREQUAL "avx")
-        set(_scalars_has_avx 1)
-        set(SCALARS_SIMD_COMPILER_FLAGS "${CMAKE_REQUIRED_FLAGS}")
-    endif()
-    cmake_pop_check_state()
-
-    cmake_push_check_state(RESET)
-    if(MSVC)
-        set(CMAKE_REQUIRED_FLAGS "/arch:AVX2 /D__F16C__")
-    else()
-        set(CMAKE_REQUIRED_FLAGS "-mavx2 -mf16c -mfma")
-    endif()
-    check_cxx_source_compiles(
-        "#include <immintrin.h>
-         int main() {
-           __m256i a = _mm256_set1_epi8(1);
-           _mm256_add_epi8(a, a);
-           __m256 x = _mm256_set1_ps(1.f); _mm256_fmadd_ps(x, x, x);
-           return 0;
-         }"
-        SCALARS_COMPILER_SUPPORTS_AVX2
-    )
-    if(SCALARS_COMPILER_SUPPORTS_AVX2 AND SCALARS_CPU_BACKEND STREQUAL "avx2")
-        set(_scalars_has_avx 1)
-        set(_scalars_has_avx2 1)
-        set(SCALARS_SIMD_COMPILER_FLAGS "${CMAKE_REQUIRED_FLAGS}")
-    endif()
-    cmake_pop_check_state()
-
-    # Compile-only: do not switch to check_cxx_source_runs() -- hosted CI can
-    # emit AVX-512 without avx512f silicon present.
-    cmake_push_check_state(RESET)
-    if(MSVC)
-        set(CMAKE_REQUIRED_FLAGS "/arch:AVX512 /D__F16C__")
-    else()
-        set(CMAKE_REQUIRED_FLAGS "-mavx512f -mavx512dq -mavx512vl -mavx512bw -mavx512cd -mf16c -mfma")
-    endif()
-    check_cxx_source_compiles(
-        "#if defined(_MSC_VER)
-         #include <intrin.h>
-         #else
-         #include <immintrin.h>
-         #endif
-         __m512 addConstant(__m512 arg) { return _mm512_add_ps(arg, _mm512_set1_ps(1.f)); }
-         __m512 andConstant(__m512 arg) { return _mm512_and_ps(arg, _mm512_set1_ps(1.f)); }
-         int main() {
-           __m512i a = _mm512_set1_epi32(1);
-           __m256i ymm = _mm512_extracti64x4_epi64(a, 0);
-           ymm = _mm256_abs_epi64(ymm);
-           __mmask16 m = _mm512_cmp_epi32_mask(a, a, _MM_CMPINT_EQ);
-           __m512i r = _mm512_andnot_si512(a, a);
-           return 0;
-         }"
-        SCALARS_COMPILER_SUPPORTS_AVX512
-    )
-    if(SCALARS_COMPILER_SUPPORTS_AVX512 AND SCALARS_CPU_BACKEND STREQUAL "avx512")
-        set(_scalars_has_avx512 1)
-        set(SCALARS_SIMD_COMPILER_FLAGS "${CMAKE_REQUIRED_FLAGS}")
-    endif()
-    cmake_pop_check_state()
+# SVE vector register width. include/backend/cpu/sve/* only supports 128 bits.
+# Set before utils.cmake, which passes it to -msve-vector-bits.
+set(SCALARS_SVE_VECTOR_BITS "128" CACHE STRING "SVE vector register width in bits: 128, 256, 512")
+set_property(CACHE SCALARS_SVE_VECTOR_BITS PROPERTY STRINGS 128 256 512)
+if(NOT SCALARS_SVE_VECTOR_BITS MATCHES "^(128|256|512)$")
+    message(FATAL_ERROR "SCALARS_SVE_VECTOR_BITS must be 128, 256, or 512 (got '${SCALARS_SVE_VECTOR_BITS}')")
 endif()
 
-if(_scalars_simd_is_aarch64)
-    cmake_push_check_state(RESET)
-    if(NOT MSVC)
-        check_cxx_compiler_flag("-march=armv8.2-a" _scalars_neon_armv82)
-        if(_scalars_neon_armv82)
-            set(CMAKE_REQUIRED_FLAGS "-march=armv8.2-a")
-        else()
-            set(CMAKE_REQUIRED_FLAGS "-march=armv8-a")
-        endif()
-    endif()
-    check_cxx_source_compiles(
-        "#include <arm_neon.h>
-         int main() { float32x4_t a = vdupq_n_f32(1.f); float32x4_t b = vfmaq_f32(a, a, a); (void)b; return 0; }"
-        SCALARS_COMPILER_SUPPORTS_NEON
-    )
-    if(SCALARS_COMPILER_SUPPORTS_NEON AND SCALARS_CPU_BACKEND STREQUAL "neon")
-        set(_scalars_has_neon 1)
-        if(NOT MSVC)
-            set(SCALARS_SIMD_COMPILER_FLAGS "${CMAKE_REQUIRED_FLAGS}")
-        endif()
-    endif()
-    cmake_pop_check_state()
+include("${CMAKE_CURRENT_LIST_DIR}/utils.cmake")
 
-    # SVE vector register width. include/backend/cpu/sve/* only supports 128 bits.
-    set(SCALARS_SVE_VECTOR_BITS "128" CACHE STRING "SVE vector register width in bits: 128, 256, 512")
-    set_property(CACHE SCALARS_SVE_VECTOR_BITS PROPERTY STRINGS 128 256 512)
-
-    cmake_push_check_state(RESET)
-    if(NOT MSVC)
-        set(CMAKE_REQUIRED_FLAGS "-march=armv8-a+sve -msve-vector-bits=${SCALARS_SVE_VECTOR_BITS}")
-    endif()
-    check_cxx_source_compiles(
-        "#include <arm_sve.h>
-         int main() { svbool_t pg = svptrue_b32(); (void)pg; return 0; }"
-        SCALARS_COMPILER_SUPPORTS_SVE
-    )
-    if(SCALARS_COMPILER_SUPPORTS_SVE AND SCALARS_CPU_BACKEND STREQUAL "sve")
-        set(_scalars_has_sve 1)
-        if(NOT MSVC)
-            set(SCALARS_SIMD_COMPILER_FLAGS "${CMAKE_REQUIRED_FLAGS}")
-        endif()
-    endif()
-    cmake_pop_check_state()
-
-    # Probe Apple Accelerate vForce (vvexpf/vvsinf/vvcosf/vvlogf) -- ported from
-    # Vectorization's include/Cmake/utils.cmake. include/backend/cpu/neon/svml.h
-    # reuses the same wrappers for SVE (fixed 128-bit lane layout), so either tier
-    # triggers the probe. When Accelerate is absent (Linux/Android AArch64, old SDK,
-    # non-Apple toolchain) SLEEF is auto-enabled so the caller never has to set the
-    # flag manually.
-    if(_scalars_has_neon OR _scalars_has_sve)
-        if(APPLE AND NOT SCALARS_ENABLE_SLEEF)
-            cmake_push_check_state(RESET)
-            set(CMAKE_REQUIRED_LIBRARIES "-framework Accelerate")
-            check_cxx_source_compiles(
-                "#include <Accelerate/Accelerate.h>
-                 int main() {
-                   const int n = 4;
-                   float x[4] = {1.f, 2.f, 3.f, 4.f};
-                   float y[4];
-                   vvexpf(y, x, &n);
-                   vvsinf(y, x, &n);
-                   vvcosf(y, x, &n);
-                   vvlogf(y, x, &n);
-                   return 0;
-                 }"
-                SCALARS_COMPILER_SUPPORTS_ACCELERATE
-            )
-            cmake_pop_check_state()
-            if(SCALARS_COMPILER_SUPPORTS_ACCELERATE)
-                message(STATUS "Scalars: Accelerate vForce available -- "
-                               "auto-enabling SCALARS_ENABLE_ACCELERATE."
-                )
-                set(SCALARS_ENABLE_ACCELERATE ON
-                    CACHE BOOL "Enable Apple Accelerate vForce on AArch64 NEON (auto-enabled)" FORCE
-                )
-            else()
-                message(STATUS "Scalars: Accelerate vForce unavailable -- "
-                               "auto-enabling SCALARS_ENABLE_SLEEF."
-                )
-                set(SCALARS_ENABLE_SLEEF ON
-                    CACHE BOOL "Enable SLEEF SIMD math library (auto-enabled: Accelerate vForce unavailable)"
-                    FORCE
-                )
-            endif()
-        elseif(NOT APPLE AND NOT SCALARS_ENABLE_SLEEF)
-            message(STATUS "Scalars: non-Apple AArch64 detected -- Accelerate vForce is "
-                           "unavailable, auto-enabling SCALARS_ENABLE_SLEEF."
-            )
-            set(SCALARS_ENABLE_SLEEF ON
-                CACHE BOOL "Enable SLEEF SIMD math library (auto-enabled: Accelerate unavailable on non-Apple)"
-                FORCE
-            )
-        endif()
-    endif()
+# compile_definition() in Vectorization maps VECTORIZATION_ENABLE_SVML to
+# VECTORIZATION_HAS_SVML=1/0 from the option itself, including when the probe
+# above forces it on. A missing ThirdParty package warns; it does not clear the flag.
+if(SCALARS_ENABLE_SVML)
+    set(SCALARS_HAS_SVML 1)
+else()
+    set(SCALARS_HAS_SVML 0)
 endif()
 
 if(NOT SCALARS_CPU_BACKEND STREQUAL "no" AND NOT _scalars_has_sse AND NOT _scalars_has_avx
@@ -389,8 +195,30 @@ function(scalars_apply_simd_compile_definitions target)
     if(SCALARS_CPU_BACKEND STREQUAL "avx512")
         target_compile_definitions(${target} PUBLIC SCALARS_CPU_CAPABILITY_AVX512)
     endif()
-    if(SCALARS_HAS_SVML AND TARGET SVML::SVML)
+    # Link ThirdParty SVML and stage its runtime next to the library, matching
+    # Vectorization. On Linux that directory is already on the test RPATH; on
+    # Windows it is the directory of the DLL, next to the test executables.
+    if(SCALARS_ENABLE_SVML AND TARGET SVML::SVML)
         target_link_libraries(${target} PUBLIC SVML::SVML)
+        if(TARGET SVML::IRC)
+            target_link_libraries(${target} PUBLIC SVML::IRC)
+        endif()
+        if(TARGET SVML::INTLC)
+            target_link_libraries(${target} PUBLIC SVML::INTLC)
+        endif()
+        foreach(_svml_rt IN LISTS SVML_RUNTIME_LIBRARIES)
+            if(_svml_rt)
+                add_custom_command(
+                    TARGET ${target}
+                    POST_BUILD
+                    COMMAND ${CMAKE_COMMAND} -E copy_if_different "${_svml_rt}"
+                            "$<TARGET_FILE_DIR:${target}>"
+                    COMMENT "Staging SVML runtime: ${_svml_rt}"
+                    VERBATIM
+                )
+            endif()
+        endforeach()
+        unset(_svml_rt)
     endif()
     if(SCALARS_HAS_MKL AND TARGET MKL::MKL)
         target_link_libraries(${target} PUBLIC MKL::MKL)

@@ -748,8 +748,32 @@ inline SCALARS_HOST_DEVICE half operator/(int64_t a, half b)
     return static_cast<half>(a) / b;
 }
 
-/// NOTE: we do not define comparisons directly and instead rely on the implicit
-/// conversion from scalars::half to float.
+// Compare in float. These operators are the single exact match for CUDA, where
+// half also converts to __half.
+inline SCALARS_HOST_DEVICE bool operator==(const half& lhs, const half& rhs)
+{
+    return static_cast<float>(lhs) == static_cast<float>(rhs);
+}
+inline SCALARS_HOST_DEVICE bool operator!=(const half& lhs, const half& rhs)
+{
+    return static_cast<float>(lhs) != static_cast<float>(rhs);
+}
+inline SCALARS_HOST_DEVICE bool operator<(const half& lhs, const half& rhs)
+{
+    return static_cast<float>(lhs) < static_cast<float>(rhs);
+}
+inline SCALARS_HOST_DEVICE bool operator>(const half& lhs, const half& rhs)
+{
+    return static_cast<float>(lhs) > static_cast<float>(rhs);
+}
+inline SCALARS_HOST_DEVICE bool operator<=(const half& lhs, const half& rhs)
+{
+    return static_cast<float>(lhs) <= static_cast<float>(rhs);
+}
+inline SCALARS_HOST_DEVICE bool operator>=(const half& lhs, const half& rhs)
+{
+    return static_cast<float>(lhs) >= static_cast<float>(rhs);
+}
 
 SCALARS_CLANG_DIAGNOSTIC_POP()
 

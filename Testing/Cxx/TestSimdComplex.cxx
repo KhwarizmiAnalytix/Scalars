@@ -4,13 +4,15 @@
 #include <array>
 #include <complex>
 #include <limits>
+#include <random>
 
 #include "scalars_test.h"
 
 #if SCALARS_VECTORIZED
 namespace
 {
-template <class T> void expect_complex(scalars::complex<T> actual, std::complex<T> expected)
+template <class T, class U>
+void expect_complex(scalars::complex<T> actual, std::complex<U> expected)
 {
     const double tolerance = std::is_same_v<T, float> ? 1e-4 : 1e-11;
     EXPECT_NEAR(actual.real(), expected.real(), tolerance);
@@ -90,9 +92,9 @@ template <class T> void check_complex_simd()
 
 template <class T> void check_matrix_product()
 {
-    using c                          = scalars::complex<T>;
-    using s                          = simd<c>;
-    constexpr int               rows = 2 * s::size + 1, depth = 7, cols = 5;
+    using c            = scalars::complex<T>;
+    using s            = simd<c>;
+    constexpr int rows = 2 * s::size + 1, depth = 7, cols = 5;
     std::array<c, static_cast<std::size_t>(rows) * depth> a;
     std::array<c, static_cast<std::size_t>(depth) * cols> b;
     std::array<c, static_cast<std::size_t>(rows) * cols>  result;
@@ -112,8 +114,9 @@ template <class T> void check_matrix_product()
             auto      sum   = s::setzero();
             for (int k = 0; k < depth; ++k)
             {
-                sum =
-                    s::fma(s::loadu(a.data() + static_cast<std::size_t>(k) * rows + r, count), s::set(b[static_cast<std::size_t>(k) + static_cast<std::size_t>(c) * depth]), sum);
+                sum = s::fma(s::loadu(a.data() + static_cast<std::size_t>(k) * rows + r, count),
+                    s::set(b[static_cast<std::size_t>(k) + static_cast<std::size_t>(c) * depth]),
+                    sum);
             }
             s::storeu(sum, result.data() + static_cast<std::size_t>(c) * rows + r, count);
         }
@@ -125,10 +128,130 @@ template <class T> void check_matrix_product()
             std::complex<T> expected{};
             for (int k = 0; k < depth; ++k)
             {
-                expected += std::complex<T>(a[static_cast<std::size_t>(k) * rows + r].real(), a[static_cast<std::size_t>(k) * rows + r].imag()) *
-                            std::complex<T>(b[static_cast<std::size_t>(k) + static_cast<std::size_t>(c) * depth].real(), b[static_cast<std::size_t>(k) + static_cast<std::size_t>(c) * depth].imag());
+                expected +=
+                    std::complex<T>(a[static_cast<std::size_t>(k) * rows + r].real(),
+                        a[static_cast<std::size_t>(k) * rows + r].imag()) *
+                    std::complex<T>(
+                        b[static_cast<std::size_t>(k) + static_cast<std::size_t>(c) * depth].real(),
+                        b[static_cast<std::size_t>(k) + static_cast<std::size_t>(c) * depth]
+                            .imag());
             }
             expect_complex(result[static_cast<std::size_t>(c) * rows + r], expected);
+        }
+    }
+}
+
+template <class T> void expect_quotient(scalars::complex<T> actual, scalars::complex<T> expected)
+{
+    const auto check_component = [](T a, T e)
+    {
+        if (std::isnan(e))
+        {
+            EXPECT_TRUE(std::isnan(a));
+        }
+        else if (std::isinf(e))
+        {
+            EXPECT_EQ(a, e);
+        }
+        else
+        {
+            EXPECT_TRUE(std::isfinite(a));
+        }
+    };
+    check_component(actual.real(), expected.real());
+    check_component(actual.imag(), expected.imag());
+    if (scalars::isfinite(expected))
+    {
+        const long double scale = std::hypot(
+            static_cast<long double>(expected.real()), static_cast<long double>(expected.imag()));
+        const long double error =
+            std::hypot(static_cast<long double>(actual.real()) - expected.real(),
+                static_cast<long double>(actual.imag()) - expected.imag());
+        EXPECT_LE(error,
+            16 * std::numeric_limits<T>::epsilon() * scale +
+                8 * static_cast<long double>(std::numeric_limits<T>::denorm_min()));
+    }
+}
+
+template <class T> void check_division_ranges()
+{
+    using c = scalars::complex<T>;
+    using s = simd<c>;
+    std::array<c, s::size>             numerator, denominator, output;
+    std::mt19937                       random(342);
+    constexpr int                      exponent_limit = std::is_same_v<T, float> ? 29 : 249;
+    std::uniform_int_distribution<int> exponent(-exponent_limit, exponent_limit);
+    std::uniform_real_distribution<T>  mantissa(T(-1), T(1));
+    const auto component = [&] { return std::ldexp(mantissa(random), exponent(random)); };
+    for (int trial = 0; trial < 4096; ++trial)
+    {
+        for (int i = 0; i < s::size; ++i)
+        {
+            numerator[i]   = c(component(), component());
+            denominator[i] = c(component(), component());
+            if ((trial + i) % 13 == 0)
+            {
+                numerator[i].real(T(0));
+                denominator[i].imag(T(0));
+            }
+        }
+        s::storeu(s::div(s::loadu(numerator.data()), s::loadu(denominator.data())), output.data());
+        for (int i = 0; i < s::size; ++i)
+        {
+            expect_quotient(output[i], numerator[i] / denominator[i]);
+        }
+    }
+
+    const T                 maximum  = std::numeric_limits<T>::max();
+    const T                 tiny     = std::numeric_limits<T>::denorm_min();
+    const T                 infinity = std::numeric_limits<T>::infinity();
+    const T                 nan      = std::numeric_limits<T>::quiet_NaN();
+    const T                 lower    = std::ldexp(T(1), std::is_same_v<T, float> ? -30 : -250);
+    const T                 upper    = std::ldexp(T(1), std::is_same_v<T, float> ? 31 : 251);
+    const std::array<c, 15> edge_numerator   = {c(maximum, maximum),
+        c(maximum, tiny),
+        c(maximum, 0),
+        c(tiny, tiny),
+        c(1, 2),
+        c(0, 0),
+        c(infinity, 1),
+        c(nan, 1),
+        c(1, -2),
+        c(1, 2),
+        c(lower, -lower),
+        c(upper, upper),
+        c(std::nextafter(lower, T(0)), lower),
+        c(std::nextafter(upper, T(0)), upper),
+        c(T(-0.0), T(0))};
+    const std::array<c, 15> edge_denominator = {c(maximum, maximum),
+        c(0, tiny),
+        c(tiny, 1),
+        c(tiny, tiny),
+        c(0, 0),
+        c(0, 0),
+        c(2, 3),
+        c(2, 3),
+        c(infinity, 0),
+        c(nan, 1),
+        c(upper, upper),
+        c(lower, -lower),
+        c(lower, lower),
+        c(upper, upper),
+        c(1, T(-0.0))};
+    for (std::size_t edge = 0; edge < edge_numerator.size(); ++edge)
+    {
+        for (int position = 0; position < s::size; ++position)
+        {
+            numerator.fill(c(1, -2));
+            denominator.fill(c(3, 4));
+            numerator[position]   = edge_numerator[edge];
+            denominator[position] = edge_denominator[edge];
+            s::storeu(
+                s::div(s::loadu(numerator.data()), s::loadu(denominator.data())), output.data());
+            for (int i = 0; i < s::size; ++i)
+            {
+                expect_quotient(output[i], numerator[i] / denominator[i]);
+            }
         }
     }
 }
@@ -194,6 +317,12 @@ TEST(SimdComplex, MatrixProduct)
 {
     check_matrix_product<float>();
     check_matrix_product<double>();
+}
+
+TEST(SimdComplex, DivisionRangesAndExceptionalLanes)
+{
+    check_division_ranges<float>();
+    check_division_ranges<double>();
 }
 
 TEST(Simd, MatrixPacking)

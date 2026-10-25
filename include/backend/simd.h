@@ -72,18 +72,28 @@ template <typename T> struct simd
 #if SCALARS_HAS_AVX512
 #include "backend/cpu/avx512/double/simd.h"
 #include "backend/cpu/avx512/float/simd.h"
+
+#include "backend/cpu/avx512/complex/simd.h"
 #elif SCALARS_HAS_AVX2 || SCALARS_HAS_AVX
 #include "backend/cpu/avx/double/simd.h"
 #include "backend/cpu/avx/float/simd.h"
+
+#include "backend/cpu/avx/complex/simd.h"
 #elif SCALARS_HAS_SSE
 #include "backend/cpu/sse/double/simd.h"
 #include "backend/cpu/sse/float/simd.h"
+
+#include "backend/cpu/sse/complex/simd.h"
 #elif SCALARS_HAS_SVE
 #include "backend/cpu/sve/double/simd.h"
 #include "backend/cpu/sve/float/simd.h"
+
+#include "backend/cpu/sve/complex/simd.h"
 #elif SCALARS_HAS_NEON
 #include "backend/cpu/neon/double/simd.h"
 #include "backend/cpu/neon/float/simd.h"
+
+#include "backend/cpu/neon/complex/simd.h"
 #endif
 
 // Reduced packets share the selected float backend's math and use explicit
@@ -91,7 +101,6 @@ template <typename T> struct simd
 // existing fixed-width NEON compatibility path.
 #if SCALARS_VECTORIZED
 #include "backend/cpu/reduced/simd.h"
-#include "backend/cpu/complex/simd.h"
 #endif
 // No CPU SIMD tier selected (SCALARS_CPU_BACKEND=no) and not compiling the
 // device pass: simd<T> is intentionally left without a specialization here.
