@@ -38,6 +38,14 @@ if(SCALARS_ENABLE_GTEST)
                 PROPERTIES CUDA_STANDARD ${SCALARS_CXX_STANDARD} CUDA_STANDARD_REQUIRED ON
                            CUDA_ARCHITECTURES "${SCALARS_CUDA_ARCHITECTURES}"
             )
+            if(MSVC)
+                # See cmake/gpu_backend.cmake: cl.exe's traditional preprocessor
+                # trips a hard error in CCCL's headers under nvcc.
+                target_compile_options(
+                    ScalarsCxxTests PRIVATE
+                    $<$<COMPILE_LANGUAGE:CUDA>:-Xcompiler=/Zc:preprocessor>
+                )
+            endif()
         elseif(SCALARS_GPU_BACKEND STREQUAL "hip")
             set_source_files_properties(${_scalars_gpu_test_sources} PROPERTIES LANGUAGE HIP)
             set_target_properties(

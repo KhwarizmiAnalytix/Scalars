@@ -231,6 +231,15 @@ function(scalars_apply_gpu_backend target)
             target_compile_options(
                 ${target} PRIVATE $<$<COMPILE_LANGUAGE:CUDA>:-std=c++${SCALARS_CXX_STANDARD}>
             )
+        elseif(MSVC)
+            # cl.exe's traditional preprocessor trips a hard error in CCCL's
+            # headers (cuda/std/__cccl/preprocessor.h); nvcc's MSVC host needs
+            # the standard-conforming preprocessor instead. -fPIC is a Unix
+            # concept and is not passed to the MSVC host.
+            target_compile_options(
+                ${target} PRIVATE
+                $<$<COMPILE_LANGUAGE:CUDA>:--use_fast_math -Xcompiler=/Zc:preprocessor>
+            )
         else()
             target_compile_options(
                 ${target} PRIVATE $<$<COMPILE_LANGUAGE:CUDA>:--use_fast_math -Xcompiler=-fPIC>
