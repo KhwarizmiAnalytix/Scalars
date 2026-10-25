@@ -30,7 +30,7 @@ struct simd<float>
     static constexpr int size      = 8;
     static constexpr int half_size = 4;
 
-    inline static simd_t const sign_mask = _mm256_set1_ps(-0.0F);
+    alignas(32) inline static simd_t const sign_mask = _mm256_set1_ps(-0.0F);
 
     SCALARS_SIMD_RETURN_TYPE prefetch(const value_t* addr)
     {

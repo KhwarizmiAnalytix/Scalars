@@ -30,8 +30,8 @@ struct simd<double>
     static constexpr int size      = 8;
     static constexpr int half_size = 4;
 
-    inline static simd_t const     sign_mask         = _mm512_set1_pd(-0.0);
-    inline static simd_int_t const stride_multiplier = _mm256_set_epi32(7, 6, 5, 4, 3, 2, 1, 0);
+    alignas(64) inline static simd_t const sign_mask = _mm512_set1_pd(-0.0);
+    alignas(32) inline static simd_int_t const stride_multiplier = _mm256_set_epi32(7, 6, 5, 4, 3, 2, 1, 0);
 
     SCALARS_SIMD_RETURN_TYPE prefetch(const value_t* addr)
     {
