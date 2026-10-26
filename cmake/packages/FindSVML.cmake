@@ -57,7 +57,26 @@ if(UNIX)
 
   find_library(SVML_LIBRARY_SVML   NAMES svml   PATHS "${_svml_lib_dir}" NO_DEFAULT_PATH)
   find_library(SVML_LIBRARY_IRC    NAMES irc    PATHS "${_svml_lib_dir}" NO_DEFAULT_PATH)
-  find_library(SVML_LIBRARY_INTLC  NAMES intlc  PATHS "${_svml_lib_dir}" NO_DEFAULT_PATH)
+  # libintlc.so is a GNU ld script ("INPUT (libintlc.so.5)"). mold does not
+  # search the script's directory for that name and fails the link with
+  # "library not found: libintlc.so.5". Link the real shared object. Its SONAME
+  # is libintlc.so.5, which is also libsvml's DT_NEEDED entry. A cached hit on
+  # the script (from an older configure) is replaced; an explicit ELF path is kept.
+  set(_svml_intlc_real "${_svml_lib_dir}/libintlc.so.5")
+  set(_svml_intlc_head "")
+  if(SVML_LIBRARY_INTLC AND EXISTS "${SVML_LIBRARY_INTLC}")
+    file(READ "${SVML_LIBRARY_INTLC}" _svml_intlc_head LIMIT 32)
+  endif()
+  if(NOT SVML_LIBRARY_INTLC OR _svml_intlc_head MATCHES "^[ \t]*INPUT")
+    if(EXISTS "${_svml_intlc_real}")
+      set(SVML_LIBRARY_INTLC "${_svml_intlc_real}"
+          CACHE FILEPATH "Path to the Intel libintlc runtime" FORCE)
+    else()
+      find_library(SVML_LIBRARY_INTLC NAMES intlc PATHS "${_svml_lib_dir}" NO_DEFAULT_PATH)
+    endif()
+  endif()
+  unset(_svml_intlc_head)
+  unset(_svml_intlc_real)
 
   foreach(_svml_var IN ITEMS SVML_LIBRARY_SVML SVML_LIBRARY_IRC SVML_LIBRARY_INTLC)
     if(${_svml_var})
@@ -67,10 +86,11 @@ if(UNIX)
   endforeach()
   unset(_svml_var)
 
-  # Also stage the versioned intlc file (libintlc.so.5) if present.
-  # libintlc.so is a linker script ("INPUT (libintlc.so.5)"), so the loader
-  # needs the versioned object next to it. Same runtime set as Vectorization.
-  if(EXISTS "${_svml_lib_dir}/libintlc.so.5")
+  # Stage libintlc.so.5 for the dynamic loader. libsvml's DT_NEEDED names that
+  # SONAME, and a linker script is not a runtime dependency. Skip the append
+  # when the loop above already recorded the real shared object.
+  if(EXISTS "${_svml_lib_dir}/libintlc.so.5"
+     AND NOT "${_svml_lib_dir}/libintlc.so.5" IN_LIST SVML_RUNTIME_LIBRARIES)
     list(APPEND SVML_RUNTIME_LIBRARIES "${_svml_lib_dir}/libintlc.so.5")
   endif()
 endif()
