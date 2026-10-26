@@ -20,6 +20,87 @@
 
 // clang-format off
 
+SCALARS_FORCE_INLINE float32x4_t vatan2q_f32(float32x4_t y, float32x4_t x)
+{
+#if SCALARS_HAS_SLEEF && !SCALARS_HAS_ACCELERATE
+    return Sleef_atan2f4_u10(y, x);
+#else
+    alignas(16) float by[4], bx[4], out[4];
+    vst1q_f32(by, y);
+    vst1q_f32(bx, x);
+#if SCALARS_HAS_ACCELERATE
+    const int n = 4;
+    vvatan2f(out, by, bx, &n);
+#else
+    for (int i = 0; i < 4; ++i) { out[i] = std::atan2(by[i], bx[i]); }
+#endif
+    return vld1q_f32(out);
+#endif
+}
+
+SCALARS_FORCE_INLINE float64x2_t vatan2q_f64(float64x2_t y, float64x2_t x)
+{
+#if SCALARS_HAS_SLEEF && !SCALARS_HAS_ACCELERATE
+    return Sleef_atan2d2_u10(y, x);
+#else
+    alignas(16) double by[2], bx[2], out[2];
+    vst1q_f64(by, y);
+    vst1q_f64(bx, x);
+#if SCALARS_HAS_ACCELERATE
+    const int n = 2;
+    vvatan2(out, by, bx, &n);
+#else
+    for (int i = 0; i < 2; ++i) { out[i] = std::atan2(by[i], bx[i]); }
+#endif
+    return vld1q_f64(out);
+#endif
+}
+
+// Share range reduction and avoid a second vForce call in complex kernels.
+SCALARS_FORCE_INLINE void vsincosq_f32(float32x4_t x, float32x4_t& sine, float32x4_t& cosine)
+{
+#if SCALARS_HAS_ACCELERATE
+    alignas(16) float in[4], s[4], c[4];
+    const int n = 4;
+    vst1q_f32(in, x);
+    vvsincosf(s, c, in, &n);
+    sine = vld1q_f32(s);
+    cosine = vld1q_f32(c);
+#elif SCALARS_HAS_SLEEF
+    const auto pair = Sleef_sincosf4_u10(x);
+    sine = pair.x;
+    cosine = pair.y;
+#else
+    alignas(16) float in[4], s[4], c[4];
+    vst1q_f32(in, x);
+    for (int i = 0; i < 4; ++i) { s[i] = std::sin(in[i]); c[i] = std::cos(in[i]); }
+    sine = vld1q_f32(s);
+    cosine = vld1q_f32(c);
+#endif
+}
+
+SCALARS_FORCE_INLINE void vsincosq_f64(float64x2_t x, float64x2_t& sine, float64x2_t& cosine)
+{
+#if SCALARS_HAS_ACCELERATE
+    alignas(16) double in[2], s[2], c[2];
+    const int n = 2;
+    vst1q_f64(in, x);
+    vvsincos(s, c, in, &n);
+    sine = vld1q_f64(s);
+    cosine = vld1q_f64(c);
+#elif SCALARS_HAS_SLEEF
+    const auto pair = Sleef_sincosd2_u10(x);
+    sine = pair.x;
+    cosine = pair.y;
+#else
+    alignas(16) double in[2], s[2], c[2];
+    vst1q_f64(in, x);
+    for (int i = 0; i < 2; ++i) { s[i] = std::sin(in[i]); c[i] = std::cos(in[i]); }
+    sine = vld1q_f64(s);
+    cosine = vld1q_f64(c);
+#endif
+}
+
 // ---------------------------------------------------------------------------
 // Internal dispatch macros — generate vXXXq_f32 / vXXXq_f64 wrappers.
 // Priority: Accelerate vForce  >  SLEEF  >  scalar std:: fallback.

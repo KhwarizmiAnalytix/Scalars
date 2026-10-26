@@ -26,6 +26,7 @@ template <> struct ops<float>
     {
         return _mm_movemask_ps(detail_complex_simd::division_mask(a, b)) == 0xf;
     }
+    static bool   all(__m128 mask) { return _mm_movemask_ps(mask) == 0xf; }
     static __m128 reciprocal(__m128 a) { return _mm_div_ps(_mm_set1_ps(1), a); }
 };
 
@@ -46,6 +47,7 @@ template <> struct ops<double>
     {
         return _mm_movemask_pd(detail_complex_simd::division_mask(a, b)) == 0x3;
     }
+    static bool    all(__m128d mask) { return _mm_movemask_pd(mask) == 0x3; }
     static __m128d reciprocal(__m128d a) { return _mm_div_pd(_mm_set1_pd(1), a); }
 };
 }  // namespace scalars::detail_sse_complex

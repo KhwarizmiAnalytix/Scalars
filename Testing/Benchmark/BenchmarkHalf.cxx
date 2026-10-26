@@ -1,28 +1,28 @@
-#include <benchmark/benchmark.h>
+#include "BenchmarkReduced.h"
 
 #include "types/half.h"
 
 void BM_HalfAddition(benchmark::State& state)
 {
-    scalars::half left(1.25f);
-    scalars::half right(2.5f);
-    for (auto _ : state)
-    {
-        left += right;
-        benchmark::DoNotOptimize(left.x);
-    }
+    benchmark_reduced_arithmetic<scalars::half, false, false>(state);
 }
-BENCHMARK(BM_HalfAddition);  // NOLINT(bugprone-throwing-static-initialization)
+// NOLINTBEGIN(bugprone-throwing-static-initialization): Google Benchmark registration.
+BENCHMARK(BM_HalfAddition)->Arg(257)->Arg(4096)->Arg(262144);
 
 void BM_HalfMultiply(benchmark::State& state)
 {
-    scalars::half left(1.25f);
-    scalars::half right(0.5f);
-    for (auto _ : state)
-    {
-        left *= right;
-        left += scalars::half(1.f);
-        benchmark::DoNotOptimize(left.x);
-    }
+    benchmark_reduced_arithmetic<scalars::half, true, false>(state);
 }
-BENCHMARK(BM_HalfMultiply);  // NOLINT(bugprone-throwing-static-initialization)
+BENCHMARK(BM_HalfMultiply)->Arg(257)->Arg(4096)->Arg(262144);
+
+#if SCALARS_VECTORIZED
+BENCHMARK_TEMPLATE(benchmark_reduced_arithmetic, scalars::half, false, true)
+    ->Arg(257)
+    ->Arg(4096)
+    ->Arg(262144);
+BENCHMARK_TEMPLATE(benchmark_reduced_arithmetic, scalars::half, true, true)
+    ->Arg(257)
+    ->Arg(4096)
+    ->Arg(262144);
+#endif
+// NOLINTEND(bugprone-throwing-static-initialization)

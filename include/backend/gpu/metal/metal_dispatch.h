@@ -11,6 +11,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <memory>
 #include <string>
 
 namespace scalars::metal_backend
@@ -38,6 +39,45 @@ bool device_available();
 void* allocate(std::size_t n_bytes);
 void  deallocate(void* ptr);
 
+// Thread-confined batch of dependent launches. dispatch* only encodes work;
+// submit() sends the current batch to the GPU without waiting, and wait()
+// submits any remaining work, waits for all submissions, and reports errors.
+// Do not read/write host-visible buffers until wait() completes. Encoded Metal
+// resources are retained even if their allocation is subsequently deallocated.
+// Destruction submits and drains outstanding work without throwing; use wait()
+// to observe GPU errors. Separate contexts may be used by separate threads.
+class execution_context
+{
+public:
+    execution_context();
+    ~execution_context();
+    execution_context(const execution_context&)            = delete;
+    execution_context& operator=(const execution_context&) = delete;
+
+    void dispatch(const char* kernel_name,
+        const void* const*    in_buffers,
+        int                   n_in,
+        void*                 out_buffer,
+        std::size_t           n_elems,
+        dtype                 type = dtype::float32);
+    void dispatch_fill(
+        void* out_buffer, float value, std::size_t n_elems, dtype type = dtype::float32);
+    void dispatch_fused(const std::string& kernel_source,
+        const void* const*                 in_buffers,
+        int                                n_in,
+        const float*                       scalars,
+        int                                n_scalars,
+        void*                              out_buffer,
+        std::size_t                        n_elems,
+        dtype                              type = dtype::float32);
+    void submit();
+    void wait();
+
+private:
+    struct impl;
+    std::unique_ptr<impl> impl_;
+};
+
 // Dispatches the kernel named kernel_name (e.g. "add" -> "add_float") over n_elems
 // threads. in_buffers holds n_in input pointers, consumed in the same order the
 // corresponding .metal kernel declares its [[buffer(k)]] arguments. Synchronous
@@ -63,7 +103,8 @@ void dispatch_fused(std::string const& kernel_source,
     std::size_t                        n_elems);
 
 // Multi-block reductions. Each threadgroup writes one partial; the host
-// launcher ping-pongs until a single value remains. n_elems is not limited
+// launcher encodes all ping-pong passes in one command buffer, reusing per-thread
+// scratch storage and waiting once for the result. n_elems is not limited
 // to maxTotalThreadsPerThreadgroup. Empty input returns the matching
 // accumulate / hmin / hmax identity (0, +infinity, -infinity).
 float reduce_sum(const void* buffer, std::size_t n_elems);

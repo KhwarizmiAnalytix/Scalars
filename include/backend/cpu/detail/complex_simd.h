@@ -135,16 +135,81 @@ private:
         }
         return r::loadu(result.data());
     }
+    static SCALARS_FORCE_INLINE simd_t divide_fast(simd_t a, simd_t b)
+    {
+        const auto denominator = r::fma(b.imag, b.imag, r::mul(b.real, b.real));
+        const auto inverse     = Ops::reciprocal(denominator);
+        return {r::mul(r::fma(a.imag, b.imag, r::mul(a.real, b.real)), inverse),
+            r::mul(r::fma(r::neg(a.real), b.imag, r::mul(a.imag, b.real)), inverse)};
+    }
+    static simd_t exp_fast(simd_t a)
+    {
+        const auto    scale = r::exp(a.real);
+        real_packet_t sine, cosine;
+        if constexpr (requires { r::sincos(a.imag, sine, cosine); })
+        {
+            r::sincos(a.imag, sine, cosine);
+        }
+        else
+        {
+            sine   = r::sin(a.imag);
+            cosine = r::cos(a.imag);
+        }
+        return {r::mul(scale, cosine), r::mul(scale, sine)};
+    }
+    static SCALARS_NOINLINE simd_t exp_fallback(simd_t a, mask_t safe)
+    {
+        const auto result = exp_fast(if_else(safe, a, setzero()));
+        return repair_unary(a, result, safe, [](value_t x) { return scalars::exp(x); });
+    }
+    static simd_t log_fast(simd_t a)
+    {
+        const auto squared = r::fma(a.real, a.real, r::mul(a.imag, a.imag));
+        return {r::mul(r::set(T(.5)), r::log(squared)), arg(a)};
+    }
+    static SCALARS_NOINLINE simd_t log_fallback(simd_t a, mask_t safe)
+    {
+        const auto result = log_fast(if_else(safe, a, set(value_t(T(1), T(0)))));
+        return repair_unary(a, result, safe, [](value_t x) { return scalars::log(x); });
+    }
     static SCALARS_NOINLINE simd_t divide_fallback(simd_t a, simd_t b)
     {
-        std::array<value_t, size> x, y;
+        const auto safe = division_mask(a, b);
+        // Substitute benign operands before evaluating the vector formula, so
+        // zero divisors/nonfinite lanes do not execute invalid fast arithmetic.
+        const auto benign = set(value_t(T(1), T(0)));
+        const auto fast   = divide_fast(if_else(safe, a, benign), if_else(safe, b, benign));
+        std::array<value_t, size> x, y, result;
+        std::array<int_t, size>   flags;
         storeu(a, x.data());
         storeu(b, y.data());
+        storeu(fast, result.data());
+        storeu(safe, flags.data());
         for (int i = 0; i < size; ++i)
         {
-            x[i] /= y[i];
+            if (flags[i] == 0)
+            {
+                result[i] = x[i] / y[i];
+            }
         }
-        return loadu(x.data());
+        return loadu(result.data());
+    }
+    template <class F>
+    static SCALARS_NOINLINE simd_t repair_unary(simd_t a, simd_t result, mask_t safe, F function)
+    {
+        std::array<value_t, size> input, output;
+        std::array<int_t, size>   flags;
+        storeu(a, input.data());
+        storeu(result, output.data());
+        storeu(safe, flags.data());
+        for (int i = 0; i < size; ++i)
+        {
+            if (flags[i] == 0)
+            {
+                output[i] = function(input[i]);
+            }
+        }
+        return loadu(output.data());
     }
 
 public:
@@ -419,13 +484,11 @@ public:
     }
     static simd_t add(simd_t a, simd_t b)
     {
-        const auto x = Ops::interleave(a), y = Ops::interleave(b);
-        return Ops::deinterleave({r::add(x[0], y[0]), r::add(x[1], y[1])});
+        return {r::add(a.real, b.real), r::add(a.imag, b.imag)};
     }
     static simd_t sub(simd_t a, simd_t b)
     {
-        const auto x = Ops::interleave(a), y = Ops::interleave(b);
-        return Ops::deinterleave({r::sub(x[0], y[0]), r::sub(x[1], y[1])});
+        return {r::sub(a.real, b.real), r::sub(a.imag, b.imag)};
     }
     static simd_t neg(simd_t a)
     {
@@ -448,45 +511,28 @@ public:
     static real_packet_t norm(simd_t a) { return abs2(a); }
     static real_packet_t abs(simd_t a)
     {
-        return map_real(a,
-            [](value_t x)
-            {
-                // Robust magnitude computation that properly handles overflow to infinity.
-                // This avoids issues with std::hypot on some platforms (e.g., NEON).
-                const T re = std::fabs(x.real());
-                const T im = std::fabs(x.imag());
-                // std::fmin/std::fmax drop a NaN when the other argument is numeric,
-                // so classify before scaling. hypot(inf, nan) is inf.
-                if (std::isinf(re) || std::isinf(im))
-                {
-                    return std::numeric_limits<T>::infinity();
-                }
-                if (std::isnan(re) || std::isnan(im))
-                {
-                    return std::numeric_limits<T>::quiet_NaN();
-                }
-                const T max_component = std::fmax(re, im);
-                const T min_component = std::fmin(re, im);
-
-                if (!std::isfinite(max_component))
-                {
-                    return max_component;  // infinity or NaN
-                }
-                if (max_component == 0)
-                {
-                    return T(0);
-                }
-
-                // Scale to avoid overflow: divide by max, compute, multiply back.
-                const T ratio = min_component / max_component;
-                return max_component * std::sqrt(T(1) + ratio * ratio);
-            });
+        const auto re = r::fabs(a.real), im = r::fabs(a.imag);
+        const auto hi = r::max(re, im), lo = r::min(re, im);
+        const auto active = r::and_mask(isfinite(a), r::neq(hi, r::setzero()));
+        const auto ratio =
+            r::div(r::if_else(active, lo, r::setzero()), r::if_else(active, hi, r::set(T(1))));
+        auto magnitude = r::mul(hi, r::sqrt(r::add(r::set(T(1)), r::mul(ratio, ratio))));
+        magnitude = r::if_else(isnan(a), r::set(std::numeric_limits<T>::quiet_NaN()), magnitude);
+        // hypot(inf, nan) is inf, and every zero magnitude is positive zero.
+        return r::if_else(isinf(a), r::set(std::numeric_limits<T>::infinity()), magnitude);
     }
     // fabs is the magnitude alias, returning one real result per complex lane.
     static real_packet_t fabs(simd_t a) { return abs(a); }
     static real_packet_t arg(simd_t a)
     {
-        return map_real(a, [](value_t x) { return std::atan2(x.imag(), x.real()); });
+        if constexpr (requires { r::atan2(a.imag, a.real); })
+        {
+            return r::atan2(a.imag, a.real);
+        }
+        else
+        {
+            return map_real(a, [](value_t x) { return std::atan2(x.imag(), x.real()); });
+        }
     }
     static mask_t isnan(simd_t a)
     {
@@ -527,7 +573,20 @@ public:
     }
     static simd_t exp(simd_t a)
     {
+#if SCALARS_HAS_SVML || SCALARS_HAS_MKL || SCALARS_HAS_SLEEF || SCALARS_HAS_ACCELERATE
+        // Keep exp(real) normal and finite. Overflow/underflow and nonfinite
+        // complex inputs retain the scalar library's special-value behavior.
+        constexpr T limit = std::is_same_v<T, float> ? T(80) : T(700);
+        const auto  safe  = r::and_mask(r::lt(r::fabs(a.real), r::set(limit)),
+            r::lt(r::fabs(a.imag), r::set(std::numeric_limits<T>::infinity())));
+        if (Ops::all(safe))
+        {
+            return exp_fast(a);
+        }
+        return exp_fallback(a, safe);
+#else
         return map(a, [](value_t x) { return scalars::exp(x); });
+#endif
     }
     static simd_t expm1(simd_t a)
     {
@@ -548,15 +607,31 @@ public:
     }
     static simd_t exp2(simd_t a)
     {
-        return map(a, [](value_t x) { return scalars::exp(x * std::numbers::ln2_v<T>); });
+        const auto factor = r::set(std::numbers::ln2_v<T>);
+        return exp({r::mul(a.real, factor), r::mul(a.imag, factor)});
     }
     static simd_t exp10(simd_t a)
     {
-        return map(a, [](value_t x) { return scalars::exp(x * std::numbers::ln10_v<T>); });
+        const auto factor = r::set(std::numbers::ln10_v<T>);
+        return exp({r::mul(a.real, factor), r::mul(a.imag, factor)});
     }
     static simd_t log(simd_t a)
     {
+#if (SCALARS_HAS_SVML || SCALARS_HAS_SLEEF) && !SCALARS_HAS_ACCELERATE
+        // The larger component bounds the squared magnitude. Components below
+        // the lower bound are harmless when the other component dominates.
+        const auto re = r::fabs(a.real), im = r::fabs(a.imag);
+        const auto upper = r::set(division_upper<T>());
+        const auto safe  = r::and_mask(r::and_mask(r::lt(re, upper), r::lt(im, upper)),
+            r::ge(r::max(re, im), r::set(division_lower<T>())));
+        if (Ops::all(safe))
+        {
+            return log_fast(a);
+        }
+        return log_fallback(a, safe);
+#else
         return map(a, [](value_t x) { return scalars::log(x); });
+#endif
     }
     static simd_t log1p(simd_t a)
     {
@@ -634,8 +709,7 @@ public:
     {
         return map(a, [](value_t x) { return scalars::atanh(x); });
     }
-    // These componentwise operations work directly on interleaved registers,
-    // allowing the compiler to cancel the surrounding load/store shuffles.
+    // For standalone rounding, surrounding memory shuffles can cancel.
     static simd_t ceil(simd_t a)
     {
         const auto x = Ops::interleave(a);
@@ -660,10 +734,7 @@ public:
     {
         if (Ops::division_is_safe(a, b))
         {
-            const auto denominator = r::fma(b.imag, b.imag, r::mul(b.real, b.real));
-            const auto inverse     = Ops::reciprocal(denominator);
-            return {r::mul(r::fma(a.imag, b.imag, r::mul(a.real, b.real)), inverse),
-                r::mul(r::fma(r::neg(a.real), b.imag, r::mul(a.imag, b.real)), inverse)};
+            return divide_fast(a, b);
         }
         return divide_fallback(a, b);
     }

@@ -33,6 +33,7 @@ template <> struct ops<float>
     {
         return detail_complex_simd::division_mask(a, b) == __mmask16(0xffff);
     }
+    static bool   all(__mmask16 mask) { return mask == __mmask16(0xffff); }
     static __m512 reciprocal(__m512 a) { return _mm512_div_ps(_mm512_set1_ps(1), a); }
 };
 
@@ -58,6 +59,7 @@ template <> struct ops<double>
     {
         return detail_complex_simd::division_mask(a, b) == __mmask8(0xff);
     }
+    static bool    all(__mmask8 mask) { return mask == __mmask8(0xff); }
     static __m512d reciprocal(__m512d a) { return _mm512_div_pd(_mm512_set1_pd(1), a); }
 };
 }  // namespace scalars::detail_avx512_complex

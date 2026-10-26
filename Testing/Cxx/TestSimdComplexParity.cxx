@@ -9,6 +9,7 @@
 #include <limits>
 #include <memory>
 #include <numbers>
+#include <random>
 #include <string>
 #include <type_traits>
 
@@ -686,6 +687,71 @@ template <class T> void check_magnitude_and_edges()
         EXPECT_EQ(sum.imag(), -1.0);
     }
 }
+
+template <class T> void check_mixed_math_edges()
+{
+    using c                         = scalars::complex<T>;
+    using s                         = simd<c>;
+    const T                 inf     = std::numeric_limits<T>::infinity();
+    const T                 nan     = std::numeric_limits<T>::quiet_NaN();
+    const T                 tiny    = std::numeric_limits<T>::denorm_min();
+    const T                 maximum = std::numeric_limits<T>::max();
+    const T                 limit   = std::is_same_v<T, float> ? T(80) : T(700);
+    const std::array<c, 19> edges{c(0, -0.0),
+        c(-4, -0.0),
+        c(-4, 0),
+        c(tiny, -tiny),
+        c(maximum, maximum),
+        c(-maximum, T(-0.0)),
+        c(inf, 0),
+        c(-inf, -0.0),
+        c(nan, 1),
+        c(inf, nan),
+        c(1, inf),
+        c(T(.5), tiny),
+        c(limit, T(.25)),
+        c(-limit, T(-.25)),
+        c(std::nextafter(limit, T(0)), T(-.5)),
+        c(T(-0.0), T(-0.0)),
+        c(T(1), T(0)),
+        c(T(0), T(1)),
+        c(T(-1), tiny)};
+    std::array<c, s::size>  input, output;
+    std::array<T, s::size>  magnitude;
+    for (const auto edge : edges)
+    {
+        for (int lane = 0; lane < s::size; ++lane)
+        {
+            input.fill(c(T(.25), T(-.5)));
+            input[lane]       = edge;
+            const auto packet = s::loadu(input.data());
+            s::storeu(s::abs(packet), magnitude.data());
+            for (int i = 0; i < s::size; ++i)
+            {
+                const T expected = std::hypot(input[i].real(), input[i].imag());
+                expect_component(magnitude[i], expected, true);
+                if (std::isfinite(expected) && expected != T(0))
+                {
+                    EXPECT_NEAR(magnitude[i],
+                        expected,
+                        T(8) * std::numeric_limits<T>::epsilon() * expected + T(2) * tiny);
+                }
+            }
+            s::storeu(s::exp(packet), output.data());
+            for (int i = 0; i < s::size; ++i)
+            {
+                expect_value(
+                    output[i], std::exp(std::complex<T>(input[i].real(), input[i].imag())), true);
+            }
+            s::storeu(s::log(packet), output.data());
+            for (int i = 0; i < s::size; ++i)
+            {
+                expect_value(
+                    output[i], std::log(std::complex<T>(input[i].real(), input[i].imag())), true);
+            }
+        }
+    }
+}
 }  // namespace
 
 TEST(SimdComplexParity, MasksAndSelection)
@@ -712,5 +778,69 @@ TEST(SimdComplexParity, MagnitudeSpecialValuesAndAccumulation)
 {
     check_magnitude_and_edges<float>();
     check_magnitude_and_edges<double>();
+}
+TEST(SimdComplexParity, MixedMathEdgesAndBranchCuts)
+{
+    check_mixed_math_edges<float>();
+    check_mixed_math_edges<double>();
+}
+
+namespace
+{
+template <class T> void check_vector_math_ranges()
+{
+    using c = scalars::complex<T>;
+    using s = simd<c>;
+    // NOLINTNEXTLINE(bugprone-random-generator-seed): reproducible range coverage.
+    std::mt19937                       random(12345);
+    const T                            limit = std::is_same_v<T, float> ? T(85) : T(710);
+    std::uniform_real_distribution<T>  exponent(-limit, limit), angle(T(-512), T(512));
+    std::uniform_real_distribution<T>  mantissa(T(-1), T(1));
+    std::uniform_int_distribution<int> power(
+        std::numeric_limits<T>::min_exponent - 24, std::numeric_limits<T>::max_exponent - 2);
+    std::array<c, s::size> input, output;
+    std::array<T, s::size> magnitude;
+    for (int trial = 0; trial < 512; ++trial)
+    {
+        for (auto& value : input)
+        {
+            value = c(exponent(random), angle(random));
+        }
+        s::storeu(s::exp(s::loadu(input.data())), output.data());
+        for (int i = 0; i < s::size; ++i)
+        {
+            expect_value(output[i], std::exp(std::complex<T>(input[i].real(), input[i].imag())));
+        }
+        for (auto& value : input)
+        {
+            value = c(std::ldexp(mantissa(random), power(random)),
+                std::ldexp(mantissa(random), power(random)));
+        }
+        if (trial % 4 == 0)
+        {
+            // Near-unit magnitudes expose cancellation in logarithm's real part.
+            input[0] =
+                c(std::nextafter(T(1), T(2)), std::ldexp(T(1), -std::numeric_limits<T>::digits));
+        }
+        s::storeu(s::abs(s::loadu(input.data())), magnitude.data());
+        s::storeu(s::log(s::loadu(input.data())), output.data());
+        for (int i = 0; i < s::size; ++i)
+        {
+            const auto reference = std::complex<T>(input[i].real(), input[i].imag());
+            const T    expected  = std::abs(reference);
+            EXPECT_NEAR(magnitude[i],
+                expected,
+                T(8) * std::numeric_limits<T>::epsilon() * expected +
+                    T(2) * std::numeric_limits<T>::denorm_min());
+            expect_value(output[i], std::log(reference));
+        }
+    }
+}
+}  // namespace
+
+TEST(SimdComplexParity, MathExponentRanges)
+{
+    check_vector_math_ranges<float>();
+    check_vector_math_ranges<double>();
 }
 #endif

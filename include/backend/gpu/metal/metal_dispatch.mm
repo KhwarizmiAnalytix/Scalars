@@ -14,6 +14,7 @@
 #include <string_view>
 #include <unordered_map>
 #include <utility>
+#include <vector>
 
 #include "backend/gpu/metal/metal_kernels_source.h"
 #include "scalars_macros.h"
@@ -40,7 +41,7 @@ const char* dtype_suffix(dtype type)
 
 // Minimal reduce-kind tag + identity element, local to this translation unit
 // (Scalars has no expressions/ layer to import these from).
-enum class reduce_kind
+enum class reduce_kind : std::uint8_t
 {
     sum,
     min,
@@ -191,30 +192,36 @@ std::size_t next_pow2(std::size_t n)
 {
     std::size_t p = 1;
     while (p < n)
+    {
         p <<= 1;
+    }
     return p;
 }
 
-// No-op: Scalars has no Profiler package. Kept as a named call site so `run()`
-// and `reduce_buffer()` below read the same as the upstream Metal backend design.
+// No-op: Scalars has no Profiler package. Retain a named completion hook for
+// dispatches, explicit batches, and reductions.
 void record_completed_command_buffer(
     SCALARS_UNUSED std::string_view name, SCALARS_UNUSED id<MTLCommandBuffer> cb)
 {
 }
 
-// Dispatches `pso` with `n` threads, `threadsPerThreadgroup` capped at the pipeline's
-// max — synchronous (waits for completion before returning; no stream/async support
-// in the starter backend, see the Metal backend design notes).
-void run(
-    id<MTLComputePipelineState> pso,
+// Encoders share a command buffer so dependent operations need no host waits.
+void encode_run(id<MTLCommandBuffer> cb,
+    id<MTLComputePipelineState>      pso,
     void (^encode_args)(id<MTLComputeCommandEncoder>),
-    std::size_t      n,
-    std::string_view event_name)
+    std::size_t n)
 {
-    id<MTLCommandBuffer>         cb  = [command_queue() commandBuffer];
     id<MTLComputeCommandEncoder> enc = [cb computeCommandEncoder];
     [enc setComputePipelineState:pso];
-    encode_args(enc);
+    try
+    {
+        encode_args(enc);
+    }
+    catch (...)
+    {
+        [enc endEncoding];
+        throw;
+    }
 
     NSUInteger tg_size = pso.maxTotalThreadsPerThreadgroup;
     if (tg_size > n)
@@ -227,16 +234,6 @@ void run(
     }
     [enc dispatchThreads:MTLSizeMake(n, 1, 1) threadsPerThreadgroup:MTLSizeMake(tg_size, 1, 1)];
     [enc endEncoding];
-    [cb commit];
-    [cb waitUntilCompleted];
-
-    if (cb.status == MTLCommandBufferStatusError)
-    {
-        throw std::runtime_error(
-            "Metal kernel dispatch failed: " +
-            std::string([[cb.error localizedDescription] UTF8String]));
-    }
-    record_completed_command_buffer(event_name, cb);
 }
 
 id<MTLComputePipelineState> pipeline_for_fused_source(
@@ -301,6 +298,25 @@ std::size_t reduce_threadgroup_size(id<MTLComputePipelineState> pso, std::size_t
     return tg_size;
 }
 
+struct reduction_workspace
+{
+    id<MTLBuffer> buffers[2] = {nil, nil};
+
+    id<MTLBuffer> get(int index, std::size_t bytes)
+    {
+        if (buffers[index] == nil || buffers[index].length < bytes)
+        {
+            buffers[index] =
+                [device() newBufferWithLength:bytes options:MTLResourceStorageModeShared];
+            if (buffers[index] == nil)
+            {
+                throw std::bad_alloc();
+            }
+        }
+        return buffers[index];
+    }
+};
+
 float reduce_buffer(
     const char* kernel_name, const void* buffer, std::size_t n_elems, float identity, dtype type)
 {
@@ -313,66 +329,58 @@ float reduce_buffer(
         throw std::invalid_argument("Metal reduce: n_elems exceeds uint32 grid limit");
     }
 
-    std::string function_name = std::string(kernel_name) + "_" + dtype_suffix(type);
-    const void* in    = buffer;
-    void*       owned = nullptr;
-
-    while (true)
+    @autoreleasepool
     {
-        id<MTLComputePipelineState> pso      = pipeline_for(function_name);
-        std::size_t const           tg_size  = reduce_threadgroup_size(pso, n_elems);
-        std::size_t const           n_groups = (n_elems + tg_size - 1) / tg_size;
-        if (n_groups == 0)
+        std::string          function_name = std::string(kernel_name) + "_" + dtype_suffix(type);
+        id<MTLBuffer>        in            = buffer_for(buffer);
+        id<MTLCommandBuffer> cb            = [command_queue() commandBuffer];
+        // Each calling thread owns its scratch buffers. Every pass is encoded in
+        // order, with Metal's tracked resource hazards between the encoders.
+        thread_local reduction_workspace workspace;
+        int                              pass = 0;
+
+        while (true)
         {
-            throw std::runtime_error("Metal reduce: empty grid");
-        }
-
-        void*    out = allocate(n_groups * sizeof(float));
-        uint32_t n32 = static_cast<uint32_t>(n_elems);
-
-        id<MTLCommandBuffer>         cb  = [command_queue() commandBuffer];
-        id<MTLComputeCommandEncoder> enc = [cb computeCommandEncoder];
-        [enc setComputePipelineState:pso];
-        [enc setBuffer:buffer_for(in) offset:buffer_offset_for(in) atIndex:0];
-        [enc setBuffer:buffer_for(out) offset:buffer_offset_for(out) atIndex:1];
-        [enc setBytes:&n32 length:sizeof(n32) atIndex:2];
-        [enc setThreadgroupMemoryLength:(tg_size * sizeof(float)) atIndex:0];
-        [enc dispatchThreadgroups:MTLSizeMake(static_cast<NSUInteger>(n_groups), 1, 1)
-            threadsPerThreadgroup:MTLSizeMake(static_cast<NSUInteger>(tg_size), 1, 1)];
-        [enc endEncoding];
-        [cb commit];
-        [cb waitUntilCompleted];
-
-        if (cb.status == MTLCommandBufferStatusError)
-        {
-            if (owned != nullptr)
+            id<MTLComputePipelineState> pso      = pipeline_for(function_name);
+            std::size_t const           tg_size  = reduce_threadgroup_size(pso, n_elems);
+            std::size_t const           n_groups = (n_elems + tg_size - 1) / tg_size;
+            if (n_groups == 0)
             {
-                deallocate(owned);
+                throw std::runtime_error("Metal reduce: empty grid");
             }
-            deallocate(out);
-            throw std::runtime_error(
-                std::string("Metal ") + kernel_name +
-                " dispatch failed: " + std::string([[cb.error localizedDescription] UTF8String]));
-        }
-        record_completed_command_buffer(kernel_name, cb);
 
-        if (owned != nullptr)
-        {
-            deallocate(owned);
-        }
+            id<MTLBuffer> out = workspace.get(pass % 2, n_groups * sizeof(float));
+            uint32_t      n32 = static_cast<uint32_t>(n_elems);
 
-        if (n_groups == 1)
-        {
-            float const result = *static_cast<float*>(out);
-            deallocate(out);
-            return result;
-        }
+            id<MTLComputeCommandEncoder> enc = [cb computeCommandEncoder];
+            [enc setComputePipelineState:pso];
+            [enc setBuffer:in offset:0 atIndex:0];
+            [enc setBuffer:out offset:0 atIndex:1];
+            [enc setBytes:&n32 length:sizeof(n32) atIndex:2];
+            [enc setThreadgroupMemoryLength:(tg_size * sizeof(float)) atIndex:0];
+            [enc dispatchThreadgroups:MTLSizeMake(static_cast<NSUInteger>(n_groups), 1, 1)
+                threadsPerThreadgroup:MTLSizeMake(static_cast<NSUInteger>(tg_size), 1, 1)];
+            [enc endEncoding];
+            if (n_groups == 1)
+            {
+                [cb commit];
+                [cb waitUntilCompleted];
+                if (cb.status == MTLCommandBufferStatusError)
+                {
+                    throw std::runtime_error(
+                        std::string("Metal ") + kernel_name + " dispatch failed: " +
+                        std::string([[cb.error localizedDescription] UTF8String]));
+                }
+                record_completed_command_buffer(kernel_name, cb);
+                return *static_cast<const float*>(out.contents);
+            }
 
-        owned   = out;
-        in      = out;
-        n_elems = n_groups;
-        // Every subsequent pass reads the FP32 partials, never reduced storage.
-        function_name = std::string(kernel_name) + "_float";
+            in      = out;
+            n_elems = n_groups;
+            ++pass;
+            // Every subsequent pass reads the FP32 partials, never reduced storage.
+            function_name = std::string(kernel_name) + "_float";
+        }
     }
 }
 
@@ -412,12 +420,15 @@ void deallocate(void* ptr)
     buffer_registry().erase(ptr);
 }
 
-void dispatch(const char* kernel_name,
-    const void* const*    in_buffers,
-    int                   n_in,
-    void*                 out_buffer,
-    std::size_t           n_elems,
-    dtype                 type)
+namespace
+{
+void encode_dispatch(id<MTLCommandBuffer> cb,
+    const char*                           kernel_name,
+    const void* const*                    in_buffers,
+    int                                   n_in,
+    void*                                 out_buffer,
+    std::size_t                           n_elems,
+    dtype                                 type)
 {
     if (n_elems == 0)
     {
@@ -433,7 +444,8 @@ void dispatch(const char* kernel_name,
 
     uint32_t n32 = static_cast<uint32_t>(n_elems);
 
-    run(
+    encode_run(
+        cb,
         pso,
         ^(id<MTLComputeCommandEncoder> enc) {
           for (int i = 0; i < n_in; ++i)
@@ -445,11 +457,11 @@ void dispatch(const char* kernel_name,
           [enc setBuffer:buffer_for(out_buffer) offset:buffer_offset_for(out_buffer) atIndex:n_in];
           [enc setBytes:&n32 length:sizeof(n32) atIndex:n_in + 1];
         },
-        n_elems,
-        function_name);
+        n_elems);
 }
 
-void dispatch_fill(void* out_buffer, float value, std::size_t n_elems, dtype type)
+void encode_fill(
+    id<MTLCommandBuffer> cb, void* out_buffer, float value, std::size_t n_elems, dtype type)
 {
     if (n_elems == 0)
     {
@@ -464,18 +476,19 @@ void dispatch_fill(void* out_buffer, float value, std::size_t n_elems, dtype typ
     id<MTLComputePipelineState> pso           = pipeline_for(function_name);
     uint32_t                    n32 = static_cast<uint32_t>(n_elems);
 
-    run(
+    encode_run(
+        cb,
         pso,
         ^(id<MTLComputeCommandEncoder> enc) {
           [enc setBuffer:buffer_for(out_buffer) offset:buffer_offset_for(out_buffer) atIndex:0];
           [enc setBytes:&value length:sizeof(value) atIndex:1];
           [enc setBytes:&n32 length:sizeof(n32) atIndex:2];
         },
-        n_elems,
-        function_name);
+        n_elems);
 }
 
-void dispatch_fused(std::string const& kernel_source,
+void encode_fused(id<MTLCommandBuffer> cb,
+    std::string const&                 kernel_source,
     const void* const*                 in_buffers,
     int                                n_in,
     float const*                       scalars,
@@ -497,7 +510,8 @@ void dispatch_fused(std::string const& kernel_source,
     id<MTLComputePipelineState> pso = pipeline_for_fused_source(kernel_source, function_name);
     uint32_t                    n32 = static_cast<uint32_t>(n_elems);
 
-    run(
+    encode_run(
+        cb,
         pso,
         ^(id<MTLComputeCommandEncoder> enc) {
           int idx = 0;
@@ -514,8 +528,168 @@ void dispatch_fused(std::string const& kernel_source,
           [enc setBuffer:buffer_for(out_buffer) offset:buffer_offset_for(out_buffer) atIndex:idx++];
           [enc setBytes:&n32 length:sizeof(n32) atIndex:idx];
         },
-        n_elems,
-        function_name);
+        n_elems);
+}
+
+template <class Encode> void synchronous_dispatch(Encode encode)
+{
+    @autoreleasepool
+    {
+        id<MTLCommandBuffer> cb = [command_queue() commandBuffer];
+        encode(cb);
+        [cb commit];
+        [cb waitUntilCompleted];
+        if (cb.status == MTLCommandBufferStatusError)
+        {
+            throw std::runtime_error("Metal kernel dispatch failed: " +
+                                     std::string([[cb.error localizedDescription] UTF8String]));
+        }
+        record_completed_command_buffer("dispatch", cb);
+    }
+}
+}  // namespace
+
+struct execution_context::impl
+{
+    id<MTLCommandBuffer>              current = nil;
+    std::vector<id<MTLCommandBuffer>> pending;
+
+    id<MTLCommandBuffer> buffer()
+    {
+        if (current == nil)
+        {
+            current = [command_queue() commandBuffer];
+            if (current == nil)
+            {
+                throw std::runtime_error("Metal command buffer creation failed");
+            }
+        }
+        return current;
+    }
+};
+
+execution_context::execution_context() : impl_(std::make_unique<impl>()) {}
+
+execution_context::~execution_context()
+{
+    // Avoid allocating or throwing in destruction, including after an encode
+    // error. Retained command buffers keep bound resources alive until drained.
+    if (impl_->current != nil)
+    {
+        [impl_->current commit];
+        [impl_->current waitUntilCompleted];
+    }
+    for (id<MTLCommandBuffer> cb : impl_->pending)
+    {
+        [cb waitUntilCompleted];
+    }
+}
+
+void execution_context::dispatch(
+    const char* name, const void* const* inputs, int n_in, void* out, std::size_t n, dtype type)
+{
+    if (n != 0)
+    {
+        @autoreleasepool
+        {
+            encode_dispatch(impl_->buffer(), name, inputs, n_in, out, n, type);
+        }
+    }
+}
+
+void execution_context::dispatch_fill(void* out, float value, std::size_t n, dtype type)
+{
+    if (n != 0)
+    {
+        @autoreleasepool
+        {
+            encode_fill(impl_->buffer(), out, value, n, type);
+        }
+    }
+}
+
+void execution_context::dispatch_fused(const std::string& source,
+    const void* const*                                    inputs,
+    int                                                   n_in,
+    const float*                                          scalars,
+    int                                                   n_scalars,
+    void*                                                 out,
+    std::size_t                                           n,
+    dtype                                                 type)
+{
+    if (n != 0)
+    {
+        @autoreleasepool
+        {
+            encode_fused(impl_->buffer(), source, inputs, n_in, scalars, n_scalars, out, n, type);
+        }
+    }
+}
+
+void execution_context::submit()
+{
+    if (impl_->current != nil)
+    {
+        // Allocate before commit, leaving the current batch intact on failure.
+        impl_->pending.push_back(impl_->current);
+        [impl_->current commit];
+        impl_->current = nil;
+    }
+}
+
+void execution_context::wait()
+{
+    submit();
+    std::string error;
+    for (id<MTLCommandBuffer> cb : impl_->pending)
+    {
+        [cb waitUntilCompleted];
+        if (cb.status == MTLCommandBufferStatusError && error.empty())
+        {
+            error = [[cb.error localizedDescription] UTF8String];
+        }
+        record_completed_command_buffer("batch", cb);
+    }
+    impl_->pending.clear();
+    if (!error.empty())
+    {
+        throw std::runtime_error("Metal kernel dispatch failed: " + error);
+    }
+}
+
+void dispatch(
+    const char* name, const void* const* inputs, int n_in, void* out, std::size_t n, dtype type)
+{
+    if (n != 0)
+    {
+        synchronous_dispatch([&](id<MTLCommandBuffer> cb)
+            { encode_dispatch(cb, name, inputs, n_in, out, n, type); });
+    }
+}
+
+void dispatch_fill(void* out, float value, std::size_t n, dtype type)
+{
+    if (n != 0)
+    {
+        synchronous_dispatch(
+            [&](id<MTLCommandBuffer> cb) { encode_fill(cb, out, value, n, type); });
+    }
+}
+
+void dispatch_fused(const std::string& source,
+    const void* const*                 inputs,
+    int                                n_in,
+    const float*                       scalars,
+    int                                n_scalars,
+    void*                              out,
+    std::size_t                        n,
+    dtype                              type)
+{
+    if (n != 0)
+    {
+        synchronous_dispatch([&](id<MTLCommandBuffer> cb)
+            { encode_fused(cb, source, inputs, n_in, scalars, n_scalars, out, n, type); });
+    }
 }
 
 float reduce_sum(const void* buffer, std::size_t n_elems, dtype type)

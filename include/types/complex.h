@@ -24,6 +24,16 @@ namespace scalars
 
 namespace detail_complex
 {
+// Conservative bounds keep the direct division's products, denominator, and
+// quotient in range. Extreme components retain the scaled implementation below.
+template <class T> inline bool division_component_is_bounded(T value)
+{
+    constexpr T lower     = std::is_same_v<T, float> ? T(0x1p-30) : T(0x1p-250);
+    constexpr T upper     = std::is_same_v<T, float> ? T(0x1p31) : T(0x1p251);
+    const T     magnitude = std::fabs(value);
+    return value == T(0) || (magnitude >= lower && magnitude < upper);
+}
+
 // Evaluate (x*u + y*v) / denominator * 2^exponent without overflowing
 // products or losing a subnormal product before the final rescaling.
 template <class T> inline T scaled_sum_products(T x, T u, T y, T v, T denominator, int exponent)
@@ -278,13 +288,8 @@ template <typename T> struct alignas(sizeof(T) * 2) complex
         return *this;
     }
 
-#ifdef __APPLE__
-#define FORCE_INLINE_APPLE __attribute__((always_inline))
-#else
-#define FORCE_INLINE_APPLE
-#endif
     template <typename U>
-    constexpr FORCE_INLINE_APPLE complex<T>& operator/=(
+    SCALARS_FORCE_INLINE constexpr complex<T>& operator/=(
         const complex<U>& rhs) SCALARS_UBSAN_IGNORE_FLOAT_DIVIDE_BY_ZERO
     {
         // (a + bi) / (c + di) = (ac + bd)/(c^2 + d^2) + (bc - ad)/(c^2 + d^2) i
@@ -300,6 +305,16 @@ template <typename T> struct alignas(sizeof(T) * 2) complex
             if (!std::is_constant_evaluated() && std::isfinite(a) && std::isfinite(b) &&
                 std::isfinite(c) && std::isfinite(d) && (c != T(0) || d != T(0)))
             {
+                if (detail_complex::division_component_is_bounded(a) &&
+                    detail_complex::division_component_is_bounded(b) &&
+                    detail_complex::division_component_is_bounded(c) &&
+                    detail_complex::division_component_is_bounded(d))
+                {
+                    const T denominator = c * c + d * d;
+                    real_               = (a * c + b * d) / denominator;
+                    imag_               = (b * c - a * d) / denominator;
+                    return *this;
+                }
                 // Normalize the divisor, then scale each numerator product
                 // independently: components may differ by thousands of powers
                 // of two while one quotient component remains finite.
@@ -351,8 +366,6 @@ template <typename T> struct alignas(sizeof(T) * 2) complex
         }
         return *this;
     }
-#undef FORCE_INLINE_APPLE
-
     template <typename U> constexpr complex<T>& operator=(const std::complex<U>& rhs)
     {
         real_ = rhs.real();

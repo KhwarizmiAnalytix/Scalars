@@ -111,6 +111,11 @@ template <> struct simd<float>
     SCALARS_SIMD_METHOD simd_t log10(simd_t x) { return vlog10q_f32(x); }
     SCALARS_SIMD_METHOD simd_t sin(simd_t x) { return vsinq_f32(x); }
     SCALARS_SIMD_METHOD simd_t cos(simd_t x) { return vcosq_f32(x); }
+    SCALARS_SIMD_METHOD simd_t atan2(simd_t y, simd_t x) { return vatan2q_f32(y, x); }
+    SCALARS_SIMD_RETURN_TYPE   sincos(simd_t x, simd_t& sine, simd_t& cosine)
+    {
+        vsincosq_f32(x, sine, cosine);
+    }
     SCALARS_SIMD_METHOD simd_t tan(simd_t x) { return vtanq_f32(x); }
     SCALARS_SIMD_METHOD simd_t asin(simd_t x) { return vasinq_f32(x); }
     SCALARS_SIMD_METHOD simd_t acos(simd_t x) { return vacosq_f32(x); }

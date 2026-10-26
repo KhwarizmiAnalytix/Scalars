@@ -41,12 +41,16 @@ rather than a silent componentwise real-function application. An analytic
 complex extension of these would be a distinct, separately-reviewed API
 decision, not a parity gap.
 
-`pow`/`exp`/the log family/trig/hyperbolic generally map the
-existing scalar complex implementation
+`pow`, the non-vector log variants, trig, and hyperbolic functions generally map
+the existing scalar complex implementation
 ([`types/complex.h`](../include/types/complex.h),
 [`complex_math.h`](../include/math/complex_math.h)) lane-by-lane rather than
-claiming native vector transcendentals; this is a packet API completeness
-decision. `sqrt` now uses real SIMD square roots, arithmetic, division,
+claiming native vector transcendentals. Magnitude uses a scaled SIMD formula;
+`exp`/`exp2`/`exp10` use guarded real-provider vector math with scalar repair of
+exceptional lanes. SLEEF/SVML `log` has a bounded squared-magnitude vector path;
+Accelerate retains the scalar complex log path. NEON/SVE `arg` uses provider
+`atan2`, and complex exponential shares sine/cosine range reduction there.
+`sqrt` uses real SIMD square roots, arithmetic, division,
 and branch selection within the conservative division bounds, retaining
 the scaled scalar fallback for extreme/exceptional inputs and packets
 containing a zero complex lane. `acos` uses two such packet roots in
@@ -54,7 +58,8 @@ Kahan's formula, followed by scalar `atan2`/`asinh`, with a scalar fallback
 outside those bounds. Rounding reuses the real backend's componentwise
 operations, including native NEON truncation and negation. Componentwise
 rounding and negation use interleaved registers so surrounding packing
-shuffles can cancel. Arithmetic, FMA, and bounded division also use native vectors (see
+shuffles can cancel. Add/subtract preserve split registers for composed kernels,
+and division repairs only exceptional lanes. Arithmetic, FMA, and bounded division also use native vectors (see
 [`complex_simd_performance.md`](complex_simd_performance.md)).
 
 `Testing/Cxx/TestSimdComplexParity.cxx` now checks the applicable API and

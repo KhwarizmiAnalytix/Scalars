@@ -2,6 +2,7 @@
 #include "types/complex.h"
 #include "types/half.h"
 
+#include <array>
 #include <cmath>
 #include <complex>
 #include <cstdint>
@@ -202,4 +203,52 @@ TEST(Complex, HalfAndBFloat16)
     brain *= complex<bfloat16>(bfloat16(2.0f), bfloat16(0.0f));
     EXPECT_NEAR(static_cast<float>(brain.real()), 6.0f, 0.05f);
     EXPECT_NEAR(static_cast<float>(brain.imag()), 10.0f, 0.05f);
+}
+
+namespace
+{
+template <class T> void check_scalar_division_bounds()
+{
+    using c                       = scalars::complex<T>;
+    const T                 lower = std::is_same_v<T, float> ? T(0x1p-30) : T(0x1p-250);
+    const T                 upper = std::is_same_v<T, float> ? T(0x1p31) : T(0x1p251);
+    const T                 tiny  = std::numeric_limits<T>::denorm_min();
+    const std::array<c, 12> values{c(1, -2),
+        c(-3, 4),
+        c(0, -0.0),
+        c(lower, -lower),
+        c(std::nextafter(lower, T(0)), T(1)),
+        c(lower, upper),
+        c(std::nextafter(upper, T(0)), -lower),
+        c(upper, -upper),
+        c(tiny, T(1)),
+        c(T(1), tiny),
+        c(-1, -0.0),
+        c(0, 1)};
+    for (const auto numerator : values)
+    {
+        for (const auto denominator : values)
+        {
+            if (denominator == c{})
+            {
+                continue;
+            }
+            const auto result = numerator / denominator;
+            const auto reference =
+                std::complex<long double>(numerator.real(), numerator.imag()) /
+                std::complex<long double>(denominator.real(), denominator.imag());
+            const long double scale = std::abs(reference);
+            const long double error =
+                std::hypot(static_cast<long double>(result.real()) - reference.real(),
+                    static_cast<long double>(result.imag()) - reference.imag());
+            EXPECT_LE(error, 16 * std::numeric_limits<T>::epsilon() * scale + 4 * tiny);
+        }
+    }
+}
+}  // namespace
+
+TEST(Complex, ScalarDivisionFastPathBoundaries)
+{
+    check_scalar_division_bounds<float>();
+    check_scalar_division_bounds<double>();
 }

@@ -33,7 +33,9 @@ template <class T> void check_vectors()
 #else
     constexpr int width = 1;
 #endif
-    for (int count = 0; count <= 2 * width + 3; ++count)
+    // Exercise all four accumulators, the packet remainder, and the scalar
+    // tail for every combination of positive/negative strides and conjugation.
+    for (int count = 0; count <= 6 * width + 3; ++count)
     {
         for (const int sx : {1, 2, -3})
         {

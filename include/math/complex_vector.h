@@ -24,18 +24,31 @@ complex<T> complex_dot(const complex<T>* x,
     std::ptrdiff_t k = 0;
     complex<T>     result{};
 #if SCALARS_VECTORIZED && !SCALARS_ON_GPU_DEVICE
-    using p  = ::simd<complex<T>>;
-    auto sum = p::setzero();
-    for (; count - k >= p::size; k += p::size)
+    using p         = ::simd<complex<T>>;
+    auto       sum0 = p::setzero(), sum1 = sum0, sum2 = sum0, sum3 = sum0;
+    const auto product_add = [&](std::ptrdiff_t index, typename p::simd_t sum)
     {
-        auto a = p::gather(x + k * sx, sx);
+        auto a = p::gather(x + index * sx, sx);
         if (conjugate_x)
         {
             a = p::conj(a);
         }
-        sum = p::fma(a, p::gather(y + k * sy, sy), sum);
+        return p::fma(a, p::gather(y + index * sy, sy), sum);
+    };
+    // Independent chains hide FMA latency without reassociating each packet's
+    // arithmetic. Reduce to the wider accumulation type before combining them.
+    for (; count - k >= 4 * p::size; k += 4 * p::size)
+    {
+        sum0 = product_add(k, sum0);
+        sum1 = product_add(k + p::size, sum1);
+        sum2 = product_add(k + 2 * p::size, sum2);
+        sum3 = product_add(k + 3 * p::size, sum3);
     }
-    result = p::accumulate(sum);
+    for (; count - k >= p::size; k += p::size)
+    {
+        sum0 = product_add(k, sum0);
+    }
+    result = p::accumulate(sum0) + p::accumulate(sum1) + p::accumulate(sum2) + p::accumulate(sum3);
 #endif
     for (; k < count; ++k)
     {

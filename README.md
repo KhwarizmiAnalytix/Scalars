@@ -86,6 +86,11 @@ Tests follow LinearAlgebra's structure, with CamelCase source filenames:
   `Scalars::Scalars` target.
 
 `ctest --test-dir build --output-on-failure` runs the C++ and Python suites.
+For performance measurements, use a Release build without coverage or sanitizers.
+The native benchmarks use bounded input arrays, report element throughput, and
+cover SIMD arithmetic chains, dot products, tails, strides, and mixed exceptional
+division packets at several working-set sizes. Metal benchmarks compare eight
+synchronous launches with an explicit batch and exercise repeated reductions.
 GoogleTest and Google Benchmark are the `ThirdParty/googletest` and
 `ThirdParty/benchmark` submodules, pinned to the same commits as LinearAlgebra.
 Initialize them with `git submodule update --init`. A missing checkout falls
@@ -232,8 +237,10 @@ Metal has a `complex64` kernel set at parity with its `float32` kernels
 
 All CPU backends use contiguous interleaved memory operations and bounded vector
 division. SSE, AVX/AVX2, and AVX-512 use hardware vector division for the reciprocal;
-NEON uses Newton-refined reciprocal estimates. Packets containing extreme or
-nonfinite components, or a zero divisor, use scaled scalar division. Each complex
+NEON uses Newton-refined reciprocal estimates. Extreme or nonfinite lanes, or
+lanes with a zero divisor, use scalar repair while ordinary lanes stay vectorized.
+Scalar division also has a bounded fast path and retains power-of-two scaling
+outside its safe range. Each complex
 SIMD value holds separate real and imaginary registers, with `size` complex elements.
 No packet adapter or additional public abstraction is needed.
 
@@ -258,7 +265,9 @@ optionally conjugate x. Rotation computes `x' = c*x + s*y` and
 output ranges must be disjoint except for AXPY's exact in-place x/y case.
 Empty ranges accept null pointers. Complex counted loads zero-fill inactive
 lanes; counted stores write only active lanes (`0 <= count <= size`).
-SIMD accumulation order and FMA semantics follow the selected real backend.
+Dot uses four independent packet accumulators, reduces each to the accumulation
+type, then combines them. SIMD accumulation order and FMA semantics follow the
+selected backend and can differ from scalar accumulation.
 The division fast path follows the real backend's FMA behavior and has ordinary
 floating-point rounding differences from scalar division. See the
 [complex SIMD performance notes](docs/complex_simd_performance.md) for measured
@@ -317,6 +326,24 @@ mb::dispatch("add", inputs, 2, out, n, mb::dtype::half);
 float sum = mb::reduce_sum(out, n, mb::dtype::half);
 ```
 
+The free dispatch functions remain synchronous. To batch dependent operations,
+use a thread-confined `execution_context`:
+
+```cpp
+mb::execution_context batch;
+batch.dispatch_fill(a, 2.f, n, mb::dtype::half);
+batch.dispatch_fill(b, 3.f, n, mb::dtype::half);
+batch.dispatch("add", inputs, 2, out, n, mb::dtype::half);
+batch.submit();  // Submit asynchronously; further launches start another batch.
+batch.wait();    // Also submits pending work and reports GPU errors.
+```
+
+Wait before reading or modifying shared buffers from the CPU. Encoded resources
+are retained through completion. Context destruction submits and drains remaining
+work without throwing; call `wait()` to observe errors. Reductions remain
+synchronous, encode all passes in one submission, and reuse per-thread FP32
+scratch buffers.
+
 Metal supplies reduced fill, add/sub/mul/div, min/max, FMA, sqrt/exp/log,
 sin/cos/tanh, fabs/neg, and sum/min/max reductions. All reduction passes use
 FP32 partials; empty reductions return zero, positive infinity, or negative
@@ -330,7 +357,7 @@ selected type and are responsible for their own storage conversions.
 - CUDA/HIP device tests require the corresponding compiler and GPU. Metal tests run on a Mac with a Metal device. This release does not claim full host/device parity with PyTorch.
 - Arithmetic for half/bfloat16 uses float intermediates and rounds the result to the stored format.
 - Scalar casts from complex to real discard the imaginary component by explicit request; review this policy for strict applications.
-- Complex division uses scaled host arithmetic for finite float/double operands;
+- Complex division uses bounded direct arithmetic and scaled host fallbacks for float/double operands;
   transcendental functions use standard-library math and the existing custom
   square-root/arc-cosine implementation where required by the standard library.
 - Type promotion supports the four defined real component types; broader integral promotion and checked casts remain future work.

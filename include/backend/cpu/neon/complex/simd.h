@@ -106,6 +106,17 @@ template <class T> struct ops
         }
         return all_safe;
     }
+    static bool all(typename r::mask_t mask)
+    {
+        if constexpr (std::is_same_v<T, float>)
+        {
+            return vminvq_u32(mask) != 0;
+        }
+        else
+        {
+            return vminvq_u32(vreinterpretq_u32_u64(mask)) != 0;
+        }
+    }
     static typename r::simd_t reciprocal(typename r::simd_t denominator)
     {
         // Eight-bit estimates need two float / three double Newton steps.

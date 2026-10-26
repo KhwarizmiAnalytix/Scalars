@@ -1,12 +1,10 @@
-Complex SIMD measurements on macOS ARM64, 2026-10-25, using PyTorch 2.13.0
+Historical complex SIMD measurements on macOS ARM64, 2026-10-25, using PyTorch 2.13.0
 (`cf30153c4c131c8164ee7798e5022d810682e2cb`) and Clang 22.1.2.
 
-The CPU implementations follow the interleaved memory/arithmetic approach of
-[PyTorch's complex packets](https://github.com/pytorch/pytorch/blob/cf30153c4c131c8164ee7798e5022d810682e2cb/aten/src/ATen/cpu/vec/vec256/vec256_complex_float.h).
-Loads/stores use `memcpy` and vector shuffles, preserving object aliasing rules.
-Add/subtract operate on interleaved registers so the compiler can eliminate
-surrounding shuffles. The public packet still exposes separate real/imaginary
-registers for multiply, multiply-add, reductions, and existing callers.
+The table below records the implementation measured on that date. Current
+loads/stores still use `memcpy` and vector shuffles, preserving object aliasing
+rules. Add/subtract now operate directly on the packet's separate real/imaginary
+registers, avoiding internal packing shuffles in arithmetic chains.
 
 Division checks that each nonzero component is in `[2^-30, 2^31)` for
 float or `[2^-250, 2^251)` for double, and that every divisor is nonzero. Products,
@@ -15,7 +13,10 @@ with two float or three double Newton refinements. SSE, AVX/AVX2, and AVX-512 us
 their hardware vector division for the reciprocal. Intermediates follow the real
 backend's FMA support. This has rounding differences from scalar
 division and does not promise correctly rounded results. If any lane fails the
-check, the whole packet uses the existing scaled scalar implementation.
+check, only the affected lanes use scalar repair. Benign operands replace unsafe
+lanes before the vector formula runs, so exceptional lanes do not execute invalid
+fast arithmetic. The scalar implementation now also uses bounded direct division
+for ordinary components and retains scaling for extreme magnitudes.
 Zero-valued components are allowed through a separate check, including signed
 zero; a zero complex divisor always takes the fallback. The NEON double high-word
 shortcut is restricted to little-endian targets.
@@ -37,6 +38,21 @@ bounds. Componentwise rounding and negation operate on interleaved registers so
 surrounding load/store shuffles can cancel. NEON's real backend now uses native
 truncation and negation instructions. SSE2 rounding preserves large values,
 infinities, NaNs, and signed zeros instead of overflowing its integer conversion.
+
+Magnitude uses a scaled SIMD ratio rather than scalar lane mapping. With a math
+provider, exponential uses real vector math for finite inputs with real component
+in `(-80, 80)` for float or `(-700, 700)` for double; other lanes retain scalar
+semantics. NEON/SVE share sine/cosine range reduction and use provider `atan2`
+for argument. SLEEF/SVML logarithms have a bounded squared-magnitude vector path;
+Accelerate retains scalar complex logarithms because its small-array composition
+was slower in local measurements. Other complex transcendentals still use scalar
+lane mappings. These paths inherit the real provider's accuracy limits.
+
+Dot products use four packet accumulators and combine their widened reductions.
+Their accumulation order differs from both scalar loops and the former single
+packet accumulator. Native CMake benchmarks now cover bounded input arrays,
+arithmetic chains, reductions, tails, strides, exceptional lanes, and several
+working-set sizes. Use a Release build with instrumentation disabled.
 
 To reproduce with an installed PyTorch wheel and C++ compiler:
 
@@ -144,7 +160,7 @@ imply native vector transcendentals or universally faster execution; see
 [`complex_simd_operation_audit.md`](complex_simd_operation_audit.md) for the
 operation contracts.
 
-Validation after these changes: all 71 native NEON unit tests and the CMake setup
+Validation for the historical measurements: all 71 native NEON unit tests and the CMake setup
 tests passed. The focused complex test executables passed 11 cases each for SSE2,
 AVX without AVX2/FMA, and AVX2/FMA under Rosetta. AVX-512 test executables and
 fixed-width SVE test objects compiled successfully; those targets were not run

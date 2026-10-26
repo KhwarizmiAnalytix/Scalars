@@ -1,28 +1,28 @@
-#include <benchmark/benchmark.h>
+#include "BenchmarkReduced.h"
 
 #include "types/bfloat16.h"
 
 void BM_BFloat16Addition(benchmark::State& state)
 {
-    scalars::bfloat16 left(1.25f);
-    scalars::bfloat16 right(2.5f);
-    for (auto _ : state)
-    {
-        left += right;
-        benchmark::DoNotOptimize(left.x);
-    }
+    benchmark_reduced_arithmetic<scalars::bfloat16, false, false>(state);
 }
-BENCHMARK(BM_BFloat16Addition);  // NOLINT(bugprone-throwing-static-initialization)
+// NOLINTBEGIN(bugprone-throwing-static-initialization): Google Benchmark registration.
+BENCHMARK(BM_BFloat16Addition)->Arg(257)->Arg(4096)->Arg(262144);
 
 void BM_BFloat16Multiply(benchmark::State& state)
 {
-    scalars::bfloat16 left(1.25f);
-    scalars::bfloat16 right(0.5f);
-    for (auto _ : state)
-    {
-        left *= right;
-        left += scalars::bfloat16(1.f);
-        benchmark::DoNotOptimize(left.x);
-    }
+    benchmark_reduced_arithmetic<scalars::bfloat16, true, false>(state);
 }
-BENCHMARK(BM_BFloat16Multiply);  // NOLINT(bugprone-throwing-static-initialization)
+BENCHMARK(BM_BFloat16Multiply)->Arg(257)->Arg(4096)->Arg(262144);
+
+#if SCALARS_VECTORIZED
+BENCHMARK_TEMPLATE(benchmark_reduced_arithmetic, scalars::bfloat16, false, true)
+    ->Arg(257)
+    ->Arg(4096)
+    ->Arg(262144);
+BENCHMARK_TEMPLATE(benchmark_reduced_arithmetic, scalars::bfloat16, true, true)
+    ->Arg(257)
+    ->Arg(4096)
+    ->Arg(262144);
+#endif
+// NOLINTEND(bugprone-throwing-static-initialization)
