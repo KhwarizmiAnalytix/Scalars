@@ -270,4 +270,13 @@ TEST_F(metal_complex, ReductionWorkspaceReuseAndConcurrentCalls)
     EXPECT_EQ(second, float(n - 1));
 }
 
+TEST(metal_storage, PageRoundRejectsSizeThatWouldOverflow)
+{
+    // SIZE_MAX is not a multiple of any page size greater than one, so rounding
+    // up would wrap. The helper must fail before vm_allocate.
+    const auto bytes = std::numeric_limits<std::size_t>::max();
+    EXPECT_THROW(scalars::metal_storage::page_multiple(bytes), std::invalid_argument);
+    EXPECT_THROW(scalars::metal_storage::allocate(bytes), std::invalid_argument);
+}
+
 #endif  // SCALARS_HAS_METAL
