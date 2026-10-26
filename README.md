@@ -316,8 +316,9 @@ dispatcher. Pass `metal_backend::dtype::half` or `dtype::bfloat16` as the final
 argument to `dispatch`, `dispatch_fill`, `dispatch_fused`, and reductions;
 existing calls continue to use float. All buffers in an element-wise launch
 use the selected storage type. Fill values and fused scalar arguments remain
-float. Allocate buffers with `allocate(n * sizeof(T))` and release them with
-`deallocate`. For example, after allocating half buffers `a`, `b`, and `out`:
+float. Each pointer must address page-aligned shared storage. The allocation
+length must be a multiple of the system page size and cover `n * sizeof(T)`.
+For example, with half buffers `a`, `b`, and `out`:
 
 ```cpp
 namespace mb = scalars::metal_backend;
@@ -338,11 +339,11 @@ batch.submit();  // Submit asynchronously; further launches start another batch.
 batch.wait();    // Also submits pending work and reports GPU errors.
 ```
 
-Wait before reading or modifying shared buffers from the CPU. Encoded resources
-are retained through completion. Context destruction submits and drains remaining
-work without throwing; call `wait()` to observe errors. Reductions remain
-synchronous, encode all passes in one submission, and reuse per-thread FP32
-scratch buffers.
+Wait before reading, modifying, or releasing shared buffers from the CPU.
+Encoded command buffers retain the Metal buffer objects they bind. Context
+destruction submits and drains remaining work without throwing; call `wait()`
+to observe errors. Reductions remain synchronous, encode all passes in one
+submission, and reuse per-thread FP32 scratch buffers.
 
 Metal supplies reduced fill, add/sub/mul/div, min/max, FMA, sqrt/exp/log,
 sin/cos/tanh, fabs/neg, and sum/min/max reductions. All reduction passes use

@@ -6,6 +6,8 @@
 #pragma clang diagnostic pop
 #import <Metal/Metal.h>
 
+#include <unistd.h>
+
 #include <cstdint>
 #include <limits>
 #include <mutex>
@@ -167,13 +169,60 @@ std::size_t bytes_per_elem(dtype type)
     throw std::invalid_argument("Metal dispatch: unsupported dtype");
 }
 
+// newBufferWithBytesNoCopy accepts only a page-aligned address and a length
+// that is a multiple of the page size. Callers allocate that span; kernels
+// still observe the unrounded element count.
+std::size_t page_multiple(std::size_t bytes)
+{
+    const long page = sysconf(_SC_PAGESIZE);
+    if (page <= 0)
+    {
+        throw std::runtime_error("Metal dispatch: page size unavailable");
+    }
+    const auto page_size = static_cast<std::size_t>(page);
+    if (bytes == 0)
+    {
+        return page_size;
+    }
+    const std::size_t remainder = bytes % page_size;
+    if (remainder == 0)
+    {
+        return bytes;
+    }
+    if (bytes > std::numeric_limits<std::size_t>::max() - (page_size - remainder))
+    {
+        throw std::invalid_argument("Metal dispatch: buffer length exceeds page alignment limit");
+    }
+    return bytes + (page_size - remainder);
+}
+
+// One MTLBuffer object per host address. Metal tracks hazards by object
+// identity, so a later kernel in the same batch must bind the same buffer.
+using buffer_cache = std::unordered_map<const void*, id<MTLBuffer>>;
+
 // Wraps a page-aligned Metal shared-storage pointer without copying.
 // Throws if ptr is not page-aligned (requirement of newBufferWithBytesNoCopy).
-id<MTLBuffer> make_buffer(const void* ptr, std::size_t bytes)
+id<MTLBuffer> make_buffer(buffer_cache& cache, const void* ptr, std::size_t bytes)
 {
+    if (ptr == nullptr)
+    {
+        throw std::invalid_argument(
+            "Metal dispatch: pointer is not page-aligned Metal shared storage");
+    }
+    const std::size_t length = page_multiple(bytes);
+    const auto        found  = cache.find(ptr);
+    if (found != cache.end())
+    {
+        if (found->second.length < length)
+        {
+            throw std::invalid_argument(
+                "Metal dispatch: shared storage is smaller than the requested span");
+        }
+        return found->second;
+    }
     id<MTLBuffer> buf =
         [device() newBufferWithBytesNoCopy:const_cast<void*>(ptr)
-                                    length:bytes
+                                    length:length
                                    options:MTLResourceStorageModeShared
                                deallocator:nil];
     if (buf == nil)
@@ -181,6 +230,7 @@ id<MTLBuffer> make_buffer(const void* ptr, std::size_t bytes)
         throw std::invalid_argument(
             "Metal dispatch: pointer is not page-aligned Metal shared storage");
     }
+    cache.emplace(ptr, buf);
     return buf;
 }
 
@@ -330,7 +380,8 @@ float reduce_buffer(
     @autoreleasepool
     {
         std::string          function_name = std::string(kernel_name) + "_" + dtype_suffix(type);
-        id<MTLBuffer>        in            = make_buffer(buffer, n_elems * bytes_per_elem(type));
+        buffer_cache         inputs;
+        id<MTLBuffer>        in = make_buffer(inputs, buffer, n_elems * bytes_per_elem(type));
         id<MTLCommandBuffer> cb            = [command_queue() commandBuffer];
         // Each calling thread owns its scratch buffers. Every pass is encoded in
         // order, with Metal's tracked resource hazards between the encoders.
@@ -397,7 +448,8 @@ void encode_dispatch(id<MTLCommandBuffer> cb,
     int                                   n_in,
     void*                                 out_buffer,
     std::size_t                           n_elems,
-    dtype                                 type)
+    dtype                                 type,
+    buffer_cache&                         cache)
 {
     if (n_elems == 0)
     {
@@ -413,6 +465,9 @@ void encode_dispatch(id<MTLCommandBuffer> cb,
 
     uint32_t          n32       = static_cast<uint32_t>(n_elems);
     std::size_t const buf_bytes = n_elems * bytes_per_elem(type);
+    // The block must capture a pointer. Capturing the cache reference would
+    // copy the map and give later kernels a different MTLBuffer.
+    buffer_cache* const buffers = &cache;
 
     encode_run(
         cb,
@@ -420,16 +475,20 @@ void encode_dispatch(id<MTLCommandBuffer> cb,
         ^(id<MTLComputeCommandEncoder> enc) {
           for (int i = 0; i < n_in; ++i)
           {
-              [enc setBuffer:make_buffer(in_buffers[i], buf_bytes) offset:0 atIndex:i];
+              [enc setBuffer:make_buffer(*buffers, in_buffers[i], buf_bytes) offset:0 atIndex:i];
           }
-          [enc setBuffer:make_buffer(out_buffer, buf_bytes) offset:0 atIndex:n_in];
+          [enc setBuffer:make_buffer(*buffers, out_buffer, buf_bytes) offset:0 atIndex:n_in];
           [enc setBytes:&n32 length:sizeof(n32) atIndex:n_in + 1];
         },
         n_elems);
 }
 
-void encode_fill(
-    id<MTLCommandBuffer> cb, void* out_buffer, float value, std::size_t n_elems, dtype type)
+void encode_fill(id<MTLCommandBuffer> cb,
+    void*                              out_buffer,
+    float                              value,
+    std::size_t                        n_elems,
+    dtype                              type,
+    buffer_cache&                      cache)
 {
     if (n_elems == 0)
     {
@@ -442,14 +501,15 @@ void encode_fill(
 
     std::string                 function_name = std::string("fill_") + dtype_suffix(type);
     id<MTLComputePipelineState> pso           = pipeline_for(function_name);
-    uint32_t                    n32           = static_cast<uint32_t>(n_elems);
-    std::size_t const           buf_bytes     = n_elems * bytes_per_elem(type);
+    uint32_t                    n32       = static_cast<uint32_t>(n_elems);
+    std::size_t const           buf_bytes = n_elems * bytes_per_elem(type);
+    buffer_cache* const         buffers   = &cache;
 
     encode_run(
         cb,
         pso,
         ^(id<MTLComputeCommandEncoder> enc) {
-          [enc setBuffer:make_buffer(out_buffer, buf_bytes) offset:0 atIndex:0];
+          [enc setBuffer:make_buffer(*buffers, out_buffer, buf_bytes) offset:0 atIndex:0];
           [enc setBytes:&value length:sizeof(value) atIndex:1];
           [enc setBytes:&n32 length:sizeof(n32) atIndex:2];
         },
@@ -464,7 +524,8 @@ void encode_fused(id<MTLCommandBuffer> cb,
     int                                n_scalars,
     void*                              out_buffer,
     std::size_t                        n_elems,
-    dtype                              type)
+    dtype                              type,
+    buffer_cache&                      cache)
 {
     if (n_elems == 0)
     {
@@ -477,8 +538,9 @@ void encode_fused(id<MTLCommandBuffer> cb,
 
     std::string                 function_name = std::string("fused_") + dtype_suffix(type);
     id<MTLComputePipelineState> pso           = pipeline_for_fused_source(kernel_source, function_name);
-    uint32_t                    n32           = static_cast<uint32_t>(n_elems);
-    std::size_t const           buf_bytes     = n_elems * bytes_per_elem(type);
+    uint32_t                    n32       = static_cast<uint32_t>(n_elems);
+    std::size_t const           buf_bytes = n_elems * bytes_per_elem(type);
+    buffer_cache* const         buffers   = &cache;
 
     encode_run(
         cb,
@@ -487,13 +549,13 @@ void encode_fused(id<MTLCommandBuffer> cb,
           int idx = 0;
           for (int i = 0; i < n_in; ++i)
           {
-              [enc setBuffer:make_buffer(in_buffers[i], buf_bytes) offset:0 atIndex:idx++];
+              [enc setBuffer:make_buffer(*buffers, in_buffers[i], buf_bytes) offset:0 atIndex:idx++];
           }
           for (int j = 0; j < n_scalars; ++j)
           {
               [enc setBytes:&scalars[j] length:sizeof(float) atIndex:idx++];
           }
-          [enc setBuffer:make_buffer(out_buffer, buf_bytes) offset:0 atIndex:idx++];
+          [enc setBuffer:make_buffer(*buffers, out_buffer, buf_bytes) offset:0 atIndex:idx++];
           [enc setBytes:&n32 length:sizeof(n32) atIndex:idx];
         },
         n_elems);
@@ -503,8 +565,9 @@ template <class Encode> void synchronous_dispatch(Encode encode)
 {
     @autoreleasepool
     {
+        buffer_cache         cache;
         id<MTLCommandBuffer> cb = [command_queue() commandBuffer];
-        encode(cb);
+        encode(cb, cache);
         [cb commit];
         [cb waitUntilCompleted];
         if (cb.status == MTLCommandBufferStatusError)
@@ -520,7 +583,23 @@ template <class Encode> void synchronous_dispatch(Encode encode)
 struct execution_context::impl
 {
     id<MTLCommandBuffer>              current = nil;
+    buffer_cache                      buffers;
+    id<MTLSharedEvent>                event          = nil;
+    uint64_t                          last_submitted = 0;
     std::vector<id<MTLCommandBuffer>> pending;
+
+    id<MTLSharedEvent> batch_event()
+    {
+        if (event == nil)
+        {
+            event = [device() newSharedEvent];
+            if (event == nil)
+            {
+                throw std::runtime_error("Metal shared event creation failed");
+            }
+        }
+        return event;
+    }
 
     id<MTLCommandBuffer> buffer()
     {
@@ -530,6 +609,12 @@ struct execution_context::impl
             if (current == nil)
             {
                 throw std::runtime_error("Metal command buffer creation failed");
+            }
+            // Later batches wait for the preceding submit. Metal does not track
+            // hazards across command buffers.
+            if (last_submitted != 0)
+            {
+                [current encodeWaitForEvent:batch_event() value:last_submitted];
             }
         }
         return current;
@@ -560,7 +645,7 @@ void execution_context::dispatch(
     {
         @autoreleasepool
         {
-            encode_dispatch(impl_->buffer(), name, inputs, n_in, out, n, type);
+            encode_dispatch(impl_->buffer(), name, inputs, n_in, out, n, type, impl_->buffers);
         }
     }
 }
@@ -571,7 +656,7 @@ void execution_context::dispatch_fill(void* out, float value, std::size_t n, dty
     {
         @autoreleasepool
         {
-            encode_fill(impl_->buffer(), out, value, n, type);
+            encode_fill(impl_->buffer(), out, value, n, type, impl_->buffers);
         }
     }
 }
@@ -589,7 +674,8 @@ void execution_context::dispatch_fused(std::string_view source,
     {
         @autoreleasepool
         {
-            encode_fused(impl_->buffer(), source, inputs, n_in, scalars, n_scalars, out, n, type);
+            encode_fused(
+                impl_->buffer(), source, inputs, n_in, scalars, n_scalars, out, n, type, impl_->buffers);
         }
     }
 }
@@ -599,9 +685,13 @@ void execution_context::submit()
     if (impl_->current != nil)
     {
         // Allocate before commit, leaving the current batch intact on failure.
+        id<MTLSharedEvent> event = impl_->batch_event();
         impl_->pending.push_back(impl_->current);
+        const uint64_t value = impl_->last_submitted + 1;
+        [impl_->current encodeSignalEvent:event value:value];
         [impl_->current commit];
-        impl_->current = nil;
+        impl_->last_submitted = value;
+        impl_->current        = nil;
     }
 }
 
@@ -619,6 +709,7 @@ void execution_context::wait()
         record_completed_command_buffer("batch", cb);
     }
     impl_->pending.clear();
+    impl_->buffers.clear();
     if (!error.empty())
     {
         throw std::runtime_error("Metal kernel dispatch failed: " + error);
@@ -630,8 +721,8 @@ void dispatch(
 {
     if (n != 0)
     {
-        synchronous_dispatch([&](id<MTLCommandBuffer> cb)
-            { encode_dispatch(cb, name, inputs, n_in, out, n, type); });
+        synchronous_dispatch([&](id<MTLCommandBuffer> cb, buffer_cache& buffers)
+            { encode_dispatch(cb, name, inputs, n_in, out, n, type, buffers); });
     }
 }
 
@@ -639,8 +730,8 @@ void dispatch_fill(void* out, float value, std::size_t n, dtype type)
 {
     if (n != 0)
     {
-        synchronous_dispatch(
-            [&](id<MTLCommandBuffer> cb) { encode_fill(cb, out, value, n, type); });
+        synchronous_dispatch([&](id<MTLCommandBuffer> cb, buffer_cache& buffers)
+            { encode_fill(cb, out, value, n, type, buffers); });
     }
 }
 
@@ -655,8 +746,9 @@ void dispatch_fused(std::string_view    source,
 {
     if (n != 0)
     {
-        synchronous_dispatch([&](id<MTLCommandBuffer> cb)
-            { encode_fused(cb, source, inputs, n_in, scalars, n_scalars, out, n, type); });
+        synchronous_dispatch([&](id<MTLCommandBuffer> cb, buffer_cache& buffers) {
+            encode_fused(cb, source, inputs, n_in, scalars, n_scalars, out, n, type, buffers);
+        });
     }
 }
 

@@ -5,7 +5,9 @@
 // clang++ can call into it without becoming Objective-C++ itself.
 //
 // in_buffers/out_buffer must be host-visible pointers into page-aligned Metal
-// shared-storage (MTLResourceStorageModeShared). dispatch() wraps them with
+// shared storage (MTLResourceStorageModeShared). The allocation length must be
+// a multiple of the system page size and at least the byte size of n_elems.
+// dispatch() rounds that byte size up to a page multiple and wraps it with
 // newBufferWithBytesNoCopy before binding with setBuffer:offset:.
 
 #include <cstddef>
@@ -35,8 +37,9 @@ bool device_available();
 // Thread-confined batch of dependent launches. dispatch* only encodes work;
 // submit() sends the current batch to the GPU without waiting, and wait()
 // submits any remaining work, waits for all submissions, and reports errors.
-// Do not read/write host-visible buffers until wait() completes. Encoded Metal
-// resources are retained even if their allocation is subsequently deallocated.
+// Do not read, write, or release host-visible buffers until wait() completes.
+// Encoded command buffers retain the Metal buffer objects they bind. The
+// caller keeps the backing storage alive for that wait.
 // Destruction submits and drains outstanding work without throwing; use wait()
 // to observe GPU errors. Separate contexts may be used by separate threads.
 class execution_context

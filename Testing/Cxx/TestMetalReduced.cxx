@@ -3,6 +3,7 @@
 #if SCALARS_HAS_METAL
 
 #include "backend/gpu/metal/metal_dispatch.h"
+#include "metal_storage.h"
 #include "types/bfloat16.h"
 #include "types/half.h"
 
@@ -19,6 +20,7 @@
 namespace
 {
 namespace mb = scalars::metal_backend;
+namespace ms = scalars::metal_storage;
 
 template <class T>
 constexpr mb::dtype metal_type =
@@ -27,8 +29,8 @@ constexpr mb::dtype metal_type =
 template <class T> struct metal_buffer
 {
     T* data;
-    explicit metal_buffer(std::size_t n) : data(static_cast<T*>(mb::allocate(n * sizeof(T)))) {}
-    ~metal_buffer() { mb::deallocate(data); }
+    explicit metal_buffer(std::size_t n) : data(static_cast<T*>(ms::allocate(n * sizeof(T)))) {}
+    ~metal_buffer() { ms::deallocate(data); }
     metal_buffer(const metal_buffer&)            = delete;
     metal_buffer& operator=(const metal_buffer&) = delete;
 };

@@ -3,6 +3,7 @@
 #if SCALARS_HAS_METAL
 
 #include "backend/gpu/metal/metal_dispatch.h"
+#include "metal_storage.h"
 #include "types/complex.h"
 
 #include <cmath>
@@ -19,13 +20,14 @@
 namespace
 {
 namespace mb = scalars::metal_backend;
+namespace ms = scalars::metal_storage;
 using cfloat = scalars::complex<float>;
 
 template <class T> struct metal_buffer
 {
     T* data;
-    explicit metal_buffer(std::size_t n) : data(static_cast<T*>(mb::allocate(n * sizeof(T)))) {}
-    ~metal_buffer() { mb::deallocate(data); }
+    explicit metal_buffer(std::size_t n) : data(static_cast<T*>(ms::allocate(n * sizeof(T)))) {}
+    ~metal_buffer() { ms::deallocate(data); }
     metal_buffer(const metal_buffer&)            = delete;
     metal_buffer& operator=(const metal_buffer&) = delete;
 };
@@ -186,12 +188,11 @@ TEST_F(metal_complex, BatchedDependentLaunchesAndReuse)
         EXPECT_EQ(out.data[i], 15.f);
     }
 
-    // Buffers bound to encoded commands survive registry deallocation.
-    float* temporary = static_cast<float*>(mb::allocate(n * sizeof(float)));
-    context.dispatch_fill(temporary, 4.f, n);
-    const void* retained[] = {temporary, b.data};
-    context.dispatch("add", retained, 2, out.data, n);
-    mb::deallocate(temporary);
+    // Backing storage stays alive until the encoded batch completes.
+    metal_buffer<float> temporary(n);
+    context.dispatch_fill(temporary.data, 4.f, n);
+    const void* added[] = {temporary.data, b.data};
+    context.dispatch("add", added, 2, out.data, n);
     context.wait();
     for (std::size_t i = 0; i < n; ++i)
     {

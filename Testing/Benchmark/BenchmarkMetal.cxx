@@ -4,6 +4,7 @@
 
 #if SCALARS_HAS_METAL
 #include "backend/gpu/metal/metal_dispatch.h"
+#include "metal_storage.h"
 
 #include <cstddef>
 #include <cstdint>
@@ -12,7 +13,8 @@
 namespace
 {
 namespace mb       = scalars::metal_backend;
-using metal_buffer = std::unique_ptr<void, decltype(&mb::deallocate)>;
+namespace ms       = scalars::metal_storage;
+using metal_buffer = std::unique_ptr<void, decltype(&ms::deallocate)>;
 
 void benchmark_metal_launches(benchmark::State& state)
 {
@@ -22,8 +24,8 @@ void benchmark_metal_launches(benchmark::State& state)
         return;
     }
     const auto   count = static_cast<std::size_t>(state.range(0));
-    metal_buffer a(mb::allocate(count * sizeof(float)), mb::deallocate);
-    metal_buffer b(mb::allocate(count * sizeof(float)), mb::deallocate);
+    metal_buffer a(ms::allocate(count * sizeof(float)), ms::deallocate);
+    metal_buffer b(ms::allocate(count * sizeof(float)), ms::deallocate);
     mb::dispatch_fill(a.get(), 1.f, count);
     const void* warmup[] = {a.get()};
     mb::dispatch("neg", warmup, 1, b.get(), count);
@@ -57,7 +59,7 @@ void benchmark_metal_reduction(benchmark::State& state)
         return;
     }
     const auto   count = static_cast<std::size_t>(state.range(0));
-    metal_buffer input(mb::allocate(count * sizeof(float)), mb::deallocate);
+    metal_buffer input(ms::allocate(count * sizeof(float)), ms::deallocate);
     mb::dispatch_fill(input.get(), 1.f, count);
     auto sum = mb::reduce_sum(input.get(), count);
     benchmark::DoNotOptimize(sum);
