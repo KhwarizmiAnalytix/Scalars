@@ -154,38 +154,34 @@ id<MTLComputePipelineState> pipeline_for(const std::string& function_name)
     return pso;
 }
 
-// Pointer registry backing allocate()/deallocate()/buffer_for(): Scalars has no
-// Memory package to resolve an arbitrary host pointer back to its MTLBuffer, so
-// this backend owns that mapping itself. Every pointer handed to dispatch()/
-// dispatch_fill()/dispatch_fused()/reduce_sum/min/max() must have come from
-// allocate() below -- offsets are always 0 (one buffer per allocation, no
-// sub-buffer packing).
-std::mutex& buffer_registry_mutex()
+// Returns the element size in bytes for each dtype.
+std::size_t bytes_per_elem(dtype type)
 {
-    static std::mutex m;
-    return m;
-}
-std::unordered_map<const void*, id<MTLBuffer>>& buffer_registry()
-{
-    static std::unordered_map<const void*, id<MTLBuffer>> registry;
-    return registry;
+    switch (type)
+    {
+    case dtype::float32:  return 4;
+    case dtype::half:     return 2;
+    case dtype::bfloat16: return 2;
+    case dtype::complex64: return 8;
+    }
+    throw std::invalid_argument("Metal dispatch: unsupported dtype");
 }
 
-id<MTLBuffer> buffer_for(const void* host_ptr)
+// Wraps a page-aligned Metal shared-storage pointer without copying.
+// Throws if ptr is not page-aligned (requirement of newBufferWithBytesNoCopy).
+id<MTLBuffer> make_buffer(const void* ptr, std::size_t bytes)
 {
-    std::lock_guard<std::mutex> lock(buffer_registry_mutex());
-    auto                        it = buffer_registry().find(host_ptr);
-    if (it == buffer_registry().end())
+    id<MTLBuffer> buf =
+        [device() newBufferWithBytesNoCopy:const_cast<void*>(ptr)
+                                    length:bytes
+                                   options:MTLResourceStorageModeShared
+                               deallocator:nil];
+    if (buf == nil)
     {
         throw std::invalid_argument(
-            "Metal dispatch: pointer was not returned by scalars::metal_backend::allocate()");
+            "Metal dispatch: pointer is not page-aligned Metal shared storage");
     }
-    return it->second;
-}
-
-NSUInteger buffer_offset_for(const void* /*host_ptr*/)
-{
-    return 0;
+    return buf;
 }
 
 std::size_t next_pow2(std::size_t n)
@@ -237,18 +233,20 @@ void encode_run(id<MTLCommandBuffer> cb,
 }
 
 id<MTLComputePipelineState> pipeline_for_fused_source(
-    std::string const& source, std::string const& function_name)
+    std::string_view source, std::string const& function_name)
 {
     std::lock_guard<std::mutex> lock(pipeline_cache_mutex());
     auto&                       cache = pipeline_cache();
-    const std::string           key   = function_name + "\n" + source;
+    const std::string           key   = function_name + "\n" + std::string(source);
     auto                        it    = cache.find(key);
     if (it != cache.end())
     {
         return it->second;
     }
 
-    NSString*      src = [NSString stringWithUTF8String:source.c_str()];
+    NSString* src = [[NSString alloc] initWithBytes:source.data()
+                                             length:source.size()
+                                           encoding:NSUTF8StringEncoding];
     NSError*       err = nil;
     id<MTLLibrary> lib = [device() newLibraryWithSource:src options:compile_options() error:&err];
     if (lib == nil)
@@ -332,7 +330,7 @@ float reduce_buffer(
     @autoreleasepool
     {
         std::string          function_name = std::string(kernel_name) + "_" + dtype_suffix(type);
-        id<MTLBuffer>        in            = buffer_for(buffer);
+        id<MTLBuffer>        in            = make_buffer(buffer, n_elems * bytes_per_elem(type));
         id<MTLCommandBuffer> cb            = [command_queue() commandBuffer];
         // Each calling thread owns its scratch buffers. Every pass is encoded in
         // order, with Metal's tracked resource hazards between the encoders.
@@ -391,35 +389,6 @@ bool device_available()
     return device() != nil;
 }
 
-void* allocate(std::size_t n_bytes)
-{
-    if (n_bytes == 0 || device() == nil)
-    {
-        return nullptr;
-    }
-    id<MTLBuffer> buf = [device() newBufferWithLength:n_bytes options:MTLResourceStorageModeShared];
-    if (buf == nil)
-    {
-        throw std::bad_alloc();
-    }
-    void* ptr = [buf contents];
-    {
-        std::lock_guard<std::mutex> lock(buffer_registry_mutex());
-        buffer_registry().emplace(ptr, buf);
-    }
-    return ptr;
-}
-
-void deallocate(void* ptr)
-{
-    if (ptr == nullptr)
-    {
-        return;
-    }
-    std::lock_guard<std::mutex> lock(buffer_registry_mutex());
-    buffer_registry().erase(ptr);
-}
-
 namespace
 {
 void encode_dispatch(id<MTLCommandBuffer> cb,
@@ -442,7 +411,8 @@ void encode_dispatch(id<MTLCommandBuffer> cb,
     std::string                 function_name = std::string(kernel_name) + "_" + dtype_suffix(type);
     id<MTLComputePipelineState> pso           = pipeline_for(function_name);
 
-    uint32_t n32 = static_cast<uint32_t>(n_elems);
+    uint32_t          n32       = static_cast<uint32_t>(n_elems);
+    std::size_t const buf_bytes = n_elems * bytes_per_elem(type);
 
     encode_run(
         cb,
@@ -450,11 +420,9 @@ void encode_dispatch(id<MTLCommandBuffer> cb,
         ^(id<MTLComputeCommandEncoder> enc) {
           for (int i = 0; i < n_in; ++i)
           {
-              [enc setBuffer:buffer_for(in_buffers[i])
-                      offset:buffer_offset_for(in_buffers[i])
-                     atIndex:i];
+              [enc setBuffer:make_buffer(in_buffers[i], buf_bytes) offset:0 atIndex:i];
           }
-          [enc setBuffer:buffer_for(out_buffer) offset:buffer_offset_for(out_buffer) atIndex:n_in];
+          [enc setBuffer:make_buffer(out_buffer, buf_bytes) offset:0 atIndex:n_in];
           [enc setBytes:&n32 length:sizeof(n32) atIndex:n_in + 1];
         },
         n_elems);
@@ -474,13 +442,14 @@ void encode_fill(
 
     std::string                 function_name = std::string("fill_") + dtype_suffix(type);
     id<MTLComputePipelineState> pso           = pipeline_for(function_name);
-    uint32_t                    n32 = static_cast<uint32_t>(n_elems);
+    uint32_t                    n32           = static_cast<uint32_t>(n_elems);
+    std::size_t const           buf_bytes     = n_elems * bytes_per_elem(type);
 
     encode_run(
         cb,
         pso,
         ^(id<MTLComputeCommandEncoder> enc) {
-          [enc setBuffer:buffer_for(out_buffer) offset:buffer_offset_for(out_buffer) atIndex:0];
+          [enc setBuffer:make_buffer(out_buffer, buf_bytes) offset:0 atIndex:0];
           [enc setBytes:&value length:sizeof(value) atIndex:1];
           [enc setBytes:&n32 length:sizeof(n32) atIndex:2];
         },
@@ -488,7 +457,7 @@ void encode_fill(
 }
 
 void encode_fused(id<MTLCommandBuffer> cb,
-    std::string const&                 kernel_source,
+    std::string_view                   kernel_source,
     const void* const*                 in_buffers,
     int                                n_in,
     float const*                       scalars,
@@ -507,8 +476,9 @@ void encode_fused(id<MTLCommandBuffer> cb,
     }
 
     std::string                 function_name = std::string("fused_") + dtype_suffix(type);
-    id<MTLComputePipelineState> pso = pipeline_for_fused_source(kernel_source, function_name);
-    uint32_t                    n32 = static_cast<uint32_t>(n_elems);
+    id<MTLComputePipelineState> pso           = pipeline_for_fused_source(kernel_source, function_name);
+    uint32_t                    n32           = static_cast<uint32_t>(n_elems);
+    std::size_t const           buf_bytes     = n_elems * bytes_per_elem(type);
 
     encode_run(
         cb,
@@ -517,15 +487,13 @@ void encode_fused(id<MTLCommandBuffer> cb,
           int idx = 0;
           for (int i = 0; i < n_in; ++i)
           {
-              [enc setBuffer:buffer_for(in_buffers[i])
-                      offset:buffer_offset_for(in_buffers[i])
-                     atIndex:idx++];
+              [enc setBuffer:make_buffer(in_buffers[i], buf_bytes) offset:0 atIndex:idx++];
           }
           for (int j = 0; j < n_scalars; ++j)
           {
               [enc setBytes:&scalars[j] length:sizeof(float) atIndex:idx++];
           }
-          [enc setBuffer:buffer_for(out_buffer) offset:buffer_offset_for(out_buffer) atIndex:idx++];
+          [enc setBuffer:make_buffer(out_buffer, buf_bytes) offset:0 atIndex:idx++];
           [enc setBytes:&n32 length:sizeof(n32) atIndex:idx];
         },
         n_elems);
@@ -608,8 +576,8 @@ void execution_context::dispatch_fill(void* out, float value, std::size_t n, dty
     }
 }
 
-void execution_context::dispatch_fused(const std::string& source,
-    const void* const*                                    inputs,
+void execution_context::dispatch_fused(std::string_view source,
+    const void* const*                                   inputs,
     int                                                   n_in,
     const float*                                          scalars,
     int                                                   n_scalars,
@@ -676,14 +644,14 @@ void dispatch_fill(void* out, float value, std::size_t n, dtype type)
     }
 }
 
-void dispatch_fused(const std::string& source,
-    const void* const*                 inputs,
-    int                                n_in,
-    const float*                       scalars,
-    int                                n_scalars,
-    void*                              out,
-    std::size_t                        n,
-    dtype                              type)
+void dispatch_fused(std::string_view    source,
+    const void* const*                  inputs,
+    int                                 n_in,
+    const float*                        scalars,
+    int                                 n_scalars,
+    void*                               out,
+    std::size_t                         n,
+    dtype                               type)
 {
     if (n != 0)
     {
@@ -715,13 +683,13 @@ void dispatch_fill(void* out, float value, std::size_t n)
 {
     dispatch_fill(out, value, n, dtype::float32);
 }
-void dispatch_fused(std::string const& source,
-    const void* const*                 inputs,
-    int                                n_in,
-    float const*                       scalars,
-    int                                n_scalars,
-    void*                              out,
-    std::size_t                        n)
+void dispatch_fused(std::string_view    source,
+    const void* const*                  inputs,
+    int                                 n_in,
+    float const*                        scalars,
+    int                                 n_scalars,
+    void*                               out,
+    std::size_t                         n)
 {
     dispatch_fused(source, inputs, n_in, scalars, n_scalars, out, n, dtype::float32);
 }
