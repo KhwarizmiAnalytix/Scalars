@@ -26,15 +26,15 @@ from typing import Optional
 
 try:
     import colorama
-    from colorama import Fore as fore, Style as style
+    from colorama import Fore, Style
 
     colorama.init()
 except ImportError:  # Windows CLI smoke and some CI jobs skip pip install
 
-    class fore:
+    class Fore:  # pylint: disable=too-few-public-methods
         BLUE = CYAN = GREEN = YELLOW = RED = WHITE = ""
 
-    class style:
+    class Style:  # pylint: disable=too-few-public-methods
         RESET_ALL = ""
 
 
@@ -51,7 +51,7 @@ _CPU_BACKENDS = {"no", "sse", "avx", "avx2", "avx512", "neon", "sve"}
 _GPU_BACKENDS = {"none", "cuda", "hip", "metal"}
 
 
-class error_logger:
+class ErrorLogger:
     """Centralized error logging system for comprehensive error tracking."""
 
     def __init__(self, log_dir: str = "logs"):
@@ -100,7 +100,7 @@ class error_logger:
         return len(self.errors) > 0
 
 
-class summary_reporter:
+class SummaryReporter:
     """Generate and display summary reports for various analysis tools."""
 
     def __init__(self):
@@ -405,13 +405,13 @@ def check_xcode_availability() -> bool:
 
 def print_status(message: str, status: str = "INFO", end: str = "\n") -> None:
     status_colors = {
-        "INFO": fore.BLUE,
-        "SUCCESS": fore.GREEN,
-        "ERROR": fore.RED,
-        "WARNING": fore.YELLOW,
+        "INFO": Fore.BLUE,
+        "SUCCESS": Fore.GREEN,
+        "ERROR": Fore.RED,
+        "WARNING": Fore.YELLOW,
     }
-    color = status_colors.get(status, fore.WHITE)
-    print(f"{color}[{status}]{style.RESET_ALL} {message}", end=end)
+    color = status_colors.get(status, Fore.WHITE)
+    print(f"{color}[{status}]{Style.RESET_ALL} {message}", end=end)
 
 
 def debug_print(message):
@@ -419,7 +419,7 @@ def debug_print(message):
         print(message)
 
 
-class scalars_flags:
+class ScalarsFlags:
     """Map dotted CLI tokens to Scalars CMake cache variables."""
 
     OFF = "OFF"
@@ -729,12 +729,12 @@ class scalars_flags:
         return None
 
 
-class scalars_configuration:
+class ScalarsConfiguration:
     """Drive config, build, test, and coverage from dotted-token CLI args."""
 
     def __init__(self, args_list):
         self.source_path = Path(__file__).resolve().parent.parent
-        self.__scalars_flags = scalars_flags(args_list)
+        self.__scalars_flags = ScalarsFlags(args_list)
         missing_deps = check_dependencies()
         if missing_deps:
             print_status("Missing required dependencies:", "ERROR")
@@ -743,8 +743,8 @@ class scalars_configuration:
             print_status("Please install missing dependencies and try again.", "ERROR")
             sys.exit(1)
 
-        self.error_logger = error_logger(str(self.source_path / "logs"))
-        self.summary_reporter = summary_reporter()
+        self.error_logger = ErrorLogger(str(self.source_path / "logs"))
+        self.summary_reporter = SummaryReporter()
 
         self.__initialize_values()
         self.__set_ninja_flags()
@@ -1152,7 +1152,7 @@ def main():
         print("\nSanitizer flags:")
         print("  --sanitizer.address | .undefined | .thread | .memory | .leak")
         print("\nAvailable options:")
-        scalars_flags([]).helper()
+        ScalarsFlags([]).helper()
         return
 
     try:
@@ -1165,7 +1165,7 @@ def main():
             sys.exit(1)
 
         print_status(f"Starting build configuration for {platform.system()}", "INFO")
-        compilation_calc = scalars_configuration(arg_list)
+        compilation_calc = ScalarsConfiguration(arg_list)
 
         source_path = str(compilation_calc.source_path)
         build_path = compilation_calc.move_to_build_folder()
