@@ -603,9 +603,8 @@ jobs:
   # ---------------------------------------------------------------------------
   # Compiler cache / Icecream: exercises SCALARS_ENABLE_CACHE +
   # SCALARS_CACHE_BACKEND (ccache, sccache) and SCALARS_ENABLE_ICECC across
-  # every hosted OS. buildcache is a valid SCALARS_CACHE_BACKEND value too but
-  # is intentionally not exercised here -- it needs a pinned installer, out of
-  # scope for this lightweight matrix. Icecream has no Windows port, so there
+  # every hosted OS. BuildCache runs in buildcache.yml. Icecream has no
+  # Windows port, so there
   # is no windows-icecc entry.
   # ---------------------------------------------------------------------------
   cache-icecc:
