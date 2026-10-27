@@ -599,3 +599,104 @@ jobs:
           name: coverage-${{ matrix.os }}
           fail_ci_if_error: false
           token: ${{ secrets.CODECOV_TOKEN }}
+
+  # ---------------------------------------------------------------------------
+  # Compiler cache / Icecream: exercises SCALARS_ENABLE_CACHE +
+  # SCALARS_CACHE_BACKEND (ccache, sccache) and SCALARS_ENABLE_ICECC across
+  # every hosted OS. buildcache is a valid SCALARS_CACHE_BACKEND value too but
+  # is intentionally not exercised here -- it needs a pinned installer, out of
+  # scope for this lightweight matrix. Icecream has no Windows port, so there
+  # is no windows-icecc entry.
+  # ---------------------------------------------------------------------------
+  cache-icecc:
+    name: Cache/Icecc (${{ matrix.name }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: linux-ccache
+            os: ubuntu-latest
+            backend: ccache
+          - name: linux-sccache
+            os: ubuntu-latest
+            backend: sccache
+          - name: linux-icecc
+            os: ubuntu-latest
+            icecc: true
+          - name: macos-ccache
+            os: macos-15
+            backend: ccache
+          - name: macos-sccache
+            os: macos-15
+            backend: sccache
+          - name: macos-icecc
+            os: macos-15
+            icecc: true
+          - name: windows-ccache
+            os: windows-2022
+            backend: ccache
+          - name: windows-sccache
+            os: windows-2022
+            backend: sccache
+    env:
+      CACHE_BACKEND: ${{ matrix.backend }}
+      USE_ICECC: ${{ matrix.icecc }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+
+      - uses: ilammy/msvc-dev-cmd@v1
+        if: runner.os == 'Windows'
+        with:
+          arch: x64
+
+      - name: Install CMake and Ninja
+        run: python -m pip install cmake==4.1.2 ninja
+
+      - name: Install ccache (Linux)
+        if: runner.os == 'Linux' && matrix.backend == 'ccache'
+        run: sudo apt-get update && sudo apt-get install -y ccache
+
+      - name: Install icecc (Linux)
+        if: runner.os == 'Linux' && matrix.icecc == true
+        run: sudo apt-get update && sudo apt-get install -y icecc
+
+      - name: Install ccache (macOS)
+        if: runner.os == 'macOS' && matrix.backend == 'ccache'
+        run: brew install ccache
+
+      - name: Install icecream (macOS)
+        if: runner.os == 'macOS' && matrix.icecc == true
+        run: brew install icecream
+
+      - name: Install ccache (Windows)
+        if: runner.os == 'Windows' && matrix.backend == 'ccache'
+        run: choco install -y ccache
+
+      - uses: mozilla-actions/sccache-action@v0.0.9
+        if: matrix.backend == 'sccache'
+        with:
+          version: v0.12.0
+
+      - name: Configure
+        shell: bash
+        run: |
+          args=(-DCMAKE_BUILD_TYPE=Release)
+          if [ -n "$CACHE_BACKEND" ]; then
+            args+=(-DSCALARS_ENABLE_CACHE=ON -DSCALARS_CACHE_BACKEND="$CACHE_BACKEND")
+          fi
+          if [ "$USE_ICECC" = "true" ]; then
+            args+=(-DSCALARS_ENABLE_ICECC=ON)
+          fi
+          cmake -S . -B build -G Ninja "${args[@]}"
+
+      - name: Build
+        run: cmake --build build --parallel 4
+
+      - name: Test
+        run: ctest --test-dir build --output-on-failure --no-tests=error
