@@ -18,7 +18,7 @@ with patch.object(sys, "path", [str(SCRIPTS), *sys.path]):
 
 class setup_tests(unittest.TestCase):
     def flags(self, *args):
-        flags = setup.scalars_flags(setup.parse_args(list(args)))
+        flags = setup.ScalarsFlags(setup.parse_args(list(args)))
         command = []
         build_type = flags.create_cmake_flags(command, "Release", "Darwin")
         values = dict(arg[2:].split("=", 1) for arg in command)
@@ -104,8 +104,8 @@ class setup_tests(unittest.TestCase):
         compiler = "/tmp/compiler tools/clang++"
         self.assertEqual(setup.parse_args([compiler]), [compiler])
         with patch.object(setup, "check_dependencies", return_value=[]):
-            config = setup.scalars_configuration(["config", compiler])
-        values = config._scalars_configuration__value
+            config = setup.ScalarsConfiguration(["config", compiler])
+        values = config._ScalarsConfiguration__value
         self.assertEqual(
             values["cmake_cxx_compiler"], f"-DCMAKE_CXX_COMPILER={compiler}"
         )
@@ -122,7 +122,7 @@ class setup_tests(unittest.TestCase):
                 patch.object(setup, "__file__", str(root / "Scripts/setup.py")),
                 patch.object(setup, "check_dependencies", return_value=[]),
             ):
-                config = setup.scalars_configuration(["config", "static"])
+                config = setup.ScalarsConfiguration(["config", "static"])
                 build = root / "build_ninja_static"
                 build.mkdir()
                 sentinel = build / "keep.txt"
@@ -174,7 +174,7 @@ class setup_tests(unittest.TestCase):
                 config.test.return_value = 0
                 getattr(config, stage).return_value = 1
                 with (
-                    patch.object(setup, "scalars_configuration", return_value=config),
+                    patch.object(setup, "ScalarsConfiguration", return_value=config),
                     patch.object(sys, "argv", ["setup.py", "config.build.test"]),
                     self.assertRaises(SystemExit) as error,
                 ):
