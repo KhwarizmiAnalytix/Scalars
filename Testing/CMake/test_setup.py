@@ -33,6 +33,7 @@ class setup_tests(unittest.TestCase):
         self.assertEqual(values["SCALARS_CACHE_BACKEND"], "none")
         self.assertEqual(build_type, "Release")
         cmake = (SCRIPTS.parent / "CMakeLists.txt").read_text()
+        cmake += (SCRIPTS.parent / "cmake/simd.cmake").read_text()
         for name in values:
             self.assertIn(name, cmake)
 

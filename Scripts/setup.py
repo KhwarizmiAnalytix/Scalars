@@ -38,6 +38,7 @@ except ImportError:  # Windows CLI smoke and some CI jobs skip pip install
         RESET_ALL = ""
 
 
+from helpers import cli as cli_helper
 from helpers import (
     build as build_helper,
     config as config_helper,
@@ -426,6 +427,14 @@ class ScalarsFlags:
     ON = "ON"
 
     def __init__(self, arg_list):
+        self.requested_build_type = next(
+            (
+                cli_helper.canonical_build_type(arg)
+                for arg in reversed(arg_list)
+                if arg in ("debug", "release", "relwithdebinfo", "minsizerel")
+            ),
+            None,
+        )
         self.__initialize_flags()
         if arg_list:
             self.__build_cmake_flag()
@@ -456,6 +465,7 @@ class ScalarsFlags:
             "cpu_backend",
             "gpu_backend",
             "sleef",
+            "svml",
         ]
         self.__description = [
             "build shared (default) or static libraries",
@@ -472,17 +482,15 @@ class ScalarsFlags:
             "sanitizer type: address, undefined, thread, memory, leak",
             "enable check-only spell checking",
             "execute the test suite under Valgrind",
-            "linker: --linker.default, --linker.mold, --linker.lld, "
-            "--linker.gold, --linker.lld-link",
+            "linker: --linker.default, --linker.mold, --linker.lld, --linker.gold, --linker.lld-link",
             "enable code coverage instrumentation",
             "C++ standard: cxx20, cxx23",
             "LTO mode: off | thin | full | ipo | auto (bare 'lto' = auto)",
             "enable cppcheck static analysis",
-            "CPU SIMD backend: no | sse | avx | avx2 | avx512 | neon | sve "
-            "(bare token, or --cpu_backend=<value>)",
-            "GPU backend: none | cuda | hip | metal "
-            "(bare token, or --gpu_backend=<value>)",
+            "CPU SIMD backend: no | sse | avx | avx2 | avx512 | neon | sve (bare token, or --cpu_backend=<value>)",
+            "GPU backend: none | cuda | hip | metal (bare token, or --gpu_backend=<value>)",
             "enable SLEEF SIMD math library (SCALARS_ENABLE_SLEEF)",
+            "enable the bundled Intel SVML library",
         ]
 
     def __build_cmake_flag(self):
@@ -509,6 +517,7 @@ class ScalarsFlags:
             "gpu_backend": "SCALARS_GPU_BACKEND",
             "sleef": "SCALARS_ENABLE_SLEEF",
         }
+        self.__name.update({"svml": "SCALARS_ENABLE_SVML"})
 
     def __fill_option_flags(self, arg_list):
         debug_print("Fill option flags")
@@ -535,6 +544,7 @@ class ScalarsFlags:
                 "sleef": "",  # empty = let CMake's platform-aware auto-enable apply
             }
         )
+        self.__value.update({"svml": "OFF"})
 
     def __process_arg_list(self, arg_list):
         sanitizer_list = ["address", "undefined", "thread", "memory", "leak"]
@@ -549,7 +559,15 @@ class ScalarsFlags:
                 self.builder_suffix += "_static"
             elif arg in sanitizer_list:
                 self.__value["sanitizer"] = self.ON
-                self.__value["sanitizer_enum"] = arg
+                selected = (
+                    self.__value["sanitizer_enum"].split(",")
+                    if getattr(self, "_sanitizer_selected", False)
+                    else []
+                )
+                if arg not in selected:
+                    selected.append(arg)
+                self.__value["sanitizer_enum"] = ",".join(selected)
+                self._sanitizer_selected = True
                 self.builder_suffix += f"_{arg}"
             elif arg.startswith("lto."):
                 lto_modes = ["off", "thin", "full", "ipo", "auto"]
@@ -687,7 +705,7 @@ class ScalarsFlags:
         debug_print("Create cmake flags")
         # Keep the reference helper's call signature; CMake handles the platform.
         del system
-        if (
+        if not self.requested_build_type and (
             self.__value.get("valgrind") == self.ON
             or self.__value.get("sanitizer") == self.ON
             or self.__value.get("coverage") == self.ON
@@ -749,7 +767,7 @@ class ScalarsConfiguration:
         self.__initialize_values()
         self.__set_ninja_flags()
         self.__fill_compilation_flags(args_list)
-        if (
+        if not self.__scalars_flags.requested_build_type and (
             self.__scalars_flags.get_sanitizer_type()
             or self.__scalars_flags.is_coverage()
             or self.__scalars_flags.is_valgrind()
@@ -794,14 +812,8 @@ class ScalarsConfiguration:
         elif self.__is_clang_compiler(arg):
             self.__set_clang_compiler(arg)
         elif arg == "clang-cl":
-            # CMAKE_GENERATOR_TOOLSET=ClangCL only works with VS generators.
-            # With Ninja (the default), pass the compiler directly.
-            if self.__value.get("cmake_generator", "Ninja") == "Ninja":
-                self.__value["cmake_cxx_compiler"] = "-DCMAKE_CXX_COMPILER=clang-cl"
-                self.__value["cmake_c_compiler"] = "-DCMAKE_C_COMPILER=clang-cl"
-            else:
-                self.__value["cmake_cxx_compiler"] = "-DCMAKE_GENERATOR_TOOLSET=ClangCL"
-                self.__value["cmake_c_compiler"] = ""
+            self.__value["cmake_cxx_compiler"] = "-DCMAKE_CXX_COMPILER=clang-cl"
+            self.__value["cmake_c_compiler"] = "-DCMAKE_C_COMPILER=clang-cl"
             self.__compiler_user_specified = True
         elif self.__is_gcc_compiler(arg):
             self.__set_gcc_compiler(arg)
@@ -809,7 +821,7 @@ class ScalarsConfiguration:
             self.__set_visual_studio(arg)
         elif arg in ["config", "build", "test"]:
             self.__value[arg] = arg
-        elif arg in ["release", "debug", "relwithdebinfo"]:
+        elif arg in ["release", "debug", "relwithdebinfo", "minsizerel"]:
             self.__value["build_enum"] = {
                 "release": "Release",
                 "debug": "Debug",
@@ -1125,7 +1137,14 @@ def parse_args(args):
 
 def main():
     """Parse CLI args and drive config/build/test/coverage, or print --help."""
+    forwarded = cli_helper.dispatch(
+        sys.argv[1:], Path(__file__).resolve().parents[1], ScalarsFlags, ScalarsConfiguration, parse_args
+    )
+    if forwarded is not None:
+        sys.exit(forwarded)
+
     if len(sys.argv) == 2 and sys.argv[1] == "--help":
+        cli_helper.print_help()
         print_status("Scalars Build Configuration Helper", "INFO")
         print("\n" + "=" * 80)
         print("DEFAULT CONFIGURATION:")
@@ -1180,12 +1199,18 @@ def main():
             build_end = time.perf_counter()
 
             cppcheck_exit = compilation_calc.cppcheck(source_path, build_path)
+            if cppcheck_exit:
+                sys.exit(cppcheck_exit)
             cppcheck_end = time.perf_counter()
 
             test_exit = compilation_calc.test(source_path, build_path)
+            if test_exit:
+                sys.exit(test_exit)
             test_end = time.perf_counter()
 
             coverage_exit = compilation_calc.coverage(source_path, build_path)
+            if coverage_exit:
+                sys.exit(coverage_exit)
             end = time.perf_counter()
 
             print_status(f"Config time: {config_end - start:.4f} seconds", "INFO")

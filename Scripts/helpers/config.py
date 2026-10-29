@@ -49,6 +49,14 @@ def configure_build(
             arg_cmake_verbose,
         ]
 
+        if (
+            cmake_generator.startswith("Visual Studio")
+            and "=clang-cl" in cmake_cxx_compiler
+        ):
+            generator_toolset = "ClangCL"
+            cmake_cxx_compiler = ""
+            cmake_c_compiler = ""
+
         if generator_toolset:
             cmake_cmd.extend(["-T", generator_toolset])
 
@@ -59,7 +67,7 @@ def configure_build(
 
         cmake_cmd.extend(cmake_flags)
 
-        subprocess.check_call(cmake_cmd, stderr=subprocess.STDOUT, shell=shell_flag)
+        subprocess.check_call(cmake_cmd, stderr=subprocess.STDOUT, shell=False)
         return 0
 
     except subprocess.CalledProcessError:

@@ -55,13 +55,13 @@ jobs:
 
       - name: Configure
         shell: bash
-        run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
+        run: python3 "${{ github.workspace }}/Scripts/setup.py" config --compiler=default --source-dir . --build-dir build --generator Ninja --build-type=Release
 
       - name: Build
-        run: cmake --build build --parallel 4
+        run: python3 "${{ github.workspace }}/Scripts/setup.py" build --build-dir build --parallel 4
 
       - name: Test
-        run: ctest --test-dir build --output-on-failure --no-tests=error
+        run: python3 "${{ github.workspace }}/Scripts/setup.py" test --build-dir . --build-dir build
 
   # ---------------------------------------------------------------------------
   # CPU SIMD backend matrix: include/backend/cpu/{sse,avx,avx2,avx512,neon,sve}.
@@ -105,11 +105,11 @@ jobs:
 
       - name: Configure
         run: >
-          cmake -S . -B build-simd -G Ninja -DCMAKE_BUILD_TYPE=Release
-          -DSCALARS_CPU_BACKEND=${{ matrix.backend }}
+          python3 "${{ github.workspace }}/Scripts/setup.py" config --compiler=default --source-dir . --build-dir build-simd --generator Ninja --build-type=Release
+          --cpu-backend=${{ matrix.backend }}
 
       - name: Build
-        run: cmake --build build-simd --parallel 4
+        run: python3 "${{ github.workspace }}/Scripts/setup.py" build --build-dir build-simd --parallel 4
 
       - name: Test when the runner supports the ISA
         env:
@@ -133,7 +133,7 @@ jobs:
               exit 0
             fi
           done
-          ctest --test-dir build-simd --output-on-failure --no-tests=error
+          python3 "${{ github.workspace }}/Scripts/setup.py" test --build-dir . --build-dir build-simd
 
   # ---------------------------------------------------------------------------
   # Intel SVML: ThirdParty/svml ships prebuilt Unix (.so) and Windows (.dll)
@@ -167,12 +167,12 @@ jobs:
       - name: Configure
         shell: bash
         run: >
-          cmake -S . -B build-svml -G Ninja -DCMAKE_BUILD_TYPE=Release
-          -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
-          -DSCALARS_ENABLE_SVML=ON -DSCALARS_CPU_BACKEND=avx2
+          python3 "${{ github.workspace }}/Scripts/setup.py" config --compiler=default --source-dir . --build-dir build-svml --generator Ninja --build-type=Release
+          --compile-commands=ON
+          --svml=ON --cpu-backend=avx2
 
       - name: Build
-        run: cmake --build build-svml --parallel 4
+        run: python3 "${{ github.workspace }}/Scripts/setup.py" build --build-dir build-svml --parallel 4
 
       - name: Verify SVML was actually picked up
         # SCALARS_HAS_SVML is a plain configure-time variable, not a CACHE
@@ -192,7 +192,7 @@ jobs:
           PYCODE
 
       - name: Test
-        run: ctest --test-dir build-svml --output-on-failure --no-tests=error
+        run: python3 "${{ github.workspace }}/Scripts/setup.py" test --build-dir . --build-dir build-svml
 
   sanitizer:
     name: Sanitizer (${{ matrix.os }}, ASan+UBSan)
@@ -214,15 +214,15 @@ jobs:
 
       - name: Configure
         run: >
-          cmake -S . -B build-san -G Ninja -DCMAKE_BUILD_TYPE=Debug
-          -DSCALARS_ENABLE_SANITIZER=ON
-          -DSCALARS_SANITIZER_TYPE=address,undefined
+          python3 "${{ github.workspace }}/Scripts/setup.py" config --compiler=default --source-dir . --build-dir build-san --generator Ninja --build-type=Debug
+          --sanitizer=ON
+          --sanitizer-types=address,undefined
 
       - name: Build
-        run: cmake --build build-san --parallel 4
+        run: python3 "${{ github.workspace }}/Scripts/setup.py" build --build-dir build-san --parallel 4
 
       - name: Test
-        run: ctest --test-dir build-san --output-on-failure --no-tests=error
+        run: python3 "${{ github.workspace }}/Scripts/setup.py" test --build-dir . --build-dir build-san
 
   valgrind:
     name: CTest Valgrind dashboard
@@ -235,9 +235,9 @@ jobs:
           python-version: '3.12'
       - run: sudo apt-get update && sudo apt-get install -y valgrind
       - run: python -m pip install cmake==4.1.2 ninja
-      - run: cmake -S . -B build-memcheck -G Ninja -DSCALARS_ENABLE_VALGRIND=ON
-      - run: cmake --build build-memcheck --parallel 4
-      - run: ctest --test-dir build-memcheck -T memcheck --output-on-failure --no-tests=error
+      - run: python3 "${{ github.workspace }}/Scripts/setup.py" config --compiler=default --source-dir . --build-dir build-memcheck --generator Ninja --valgrind=ON
+      - run: python3 "${{ github.workspace }}/Scripts/setup.py" build --build-dir build-memcheck --parallel 4
+      - run: python3 "${{ github.workspace }}/Scripts/setup.py" test --build-dir . --build-dir build-memcheck --memcheck
 
   # ---------------------------------------------------------------------------
   # GPU backends: hosted runners have no NVIDIA/AMD GPU, so these containers
@@ -270,15 +270,15 @@ jobs:
         # actual GPU at configure time -- unavailable in this GPU-less
         # container, so a fixed architecture is pinned here.
         run: >
-          cmake -S . -B build-cuda -G Ninja -DCMAKE_BUILD_TYPE=Release
-          -DSCALARS_GPU_BACKEND=cuda -DSCALARS_LTO_MODE=off
-          -DCMAKE_CUDA_ARCHITECTURES=75
+          python3 "${{ github.workspace }}/Scripts/setup.py" config --compiler=default --source-dir . --build-dir build-cuda --generator Ninja --build-type=Release
+          --gpu-backend=cuda --lto-mode=off
+          --cuda-architectures=75
 
       - name: Build
-        run: cmake --build build-cuda --parallel 4
+        run: python3 "${{ github.workspace }}/Scripts/setup.py" build --build-dir build-cuda --parallel 4
 
       - name: Test (GPU cases self-skip without a device)
-        run: ctest --test-dir build-cuda --output-on-failure --no-tests=error
+        run: python3 "${{ github.workspace }}/Scripts/setup.py" test --build-dir . --build-dir build-cuda
 
   cuda-windows:
     name: CUDA (Windows compile-only)
@@ -306,11 +306,11 @@ jobs:
       - name: Configure and compile GPU targets without executing GPU workloads
         shell: pwsh
         run: |
-          cmake -S . -B build-cuda -G Ninja -DCMAKE_BUILD_TYPE=Release `
-            -DSCALARS_GPU_BACKEND=cuda -DSCALARS_LTO_MODE=off `
-            -DCMAKE_CUDA_ARCHITECTURES=75
+          python3 "${{ github.workspace }}/Scripts/setup.py" config --compiler=default --source-dir . --build-dir build-cuda --generator Ninja --build-type=Release `
+            --gpu-backend=cuda --lto-mode=off `
+            --cuda-architectures=75
           if ($LASTEXITCODE -ne 0) { throw 'CUDA configure failed' }
-          cmake --build build-cuda --parallel 4
+          python3 "${{ github.workspace }}/Scripts/setup.py" build --build-dir build-cuda --parallel 4
           if ($LASTEXITCODE -ne 0) { throw 'CUDA build failed' }
 
   hip-compile:
@@ -332,15 +332,15 @@ jobs:
         # actual GPU at configure time -- unavailable in this GPU-less
         # container, so a fixed architecture is pinned here.
         run: >
-          cmake -S . -B build-hip -G Ninja -DCMAKE_BUILD_TYPE=Release
-          -DSCALARS_GPU_BACKEND=hip -DSCALARS_LTO_MODE=off
-          -DCMAKE_PREFIX_PATH=/opt/rocm -DCMAKE_HIP_ARCHITECTURES=gfx1100
+          python3 "${{ github.workspace }}/Scripts/setup.py" config --compiler=default --source-dir . --build-dir build-hip --generator Ninja --build-type=Release
+          --gpu-backend=hip --lto-mode=off
+          --prefix-path=/opt/rocm --hip-architectures=gfx1100
 
       - name: Build
-        run: cmake --build build-hip --parallel 4
+        run: python3 "${{ github.workspace }}/Scripts/setup.py" build --build-dir build-hip --parallel 4
 
       - name: Test (GPU cases self-skip without a device)
-        run: ctest --test-dir build-hip --output-on-failure --no-tests=error
+        run: python3 "${{ github.workspace }}/Scripts/setup.py" test --build-dir . --build-dir build-hip
 
   # ---------------------------------------------------------------------------
   # Metal: unlike the CUDA/HIP containers above, macOS hosted runners are
@@ -363,12 +363,12 @@ jobs:
       - run: python -m pip install cmake==4.1.2 ninja
       - name: Configure
         run: >
-          cmake -S . -B build-metal -G Ninja -DCMAKE_BUILD_TYPE=Release
-          -DSCALARS_GPU_BACKEND=metal -DSCALARS_LTO_MODE=off
+          python3 "${{ github.workspace }}/Scripts/setup.py" config --compiler=default --source-dir . --build-dir build-metal --generator Ninja --build-type=Release
+          --gpu-backend=metal --lto-mode=off
       - name: Build
-        run: cmake --build build-metal --parallel 4
+        run: python3 "${{ github.workspace }}/Scripts/setup.py" build --build-dir build-metal --parallel 4
       - name: Test
-        run: ctest --test-dir build-metal --output-on-failure --no-tests=error
+        run: python3 "${{ github.workspace }}/Scripts/setup.py" test --build-dir . --build-dir build-metal
 
   # ---------------------------------------------------------------------------
   # Gated real-hardware runtime jobs. Enable only after registering a
@@ -396,14 +396,14 @@ jobs:
 
       - name: Configure
         run: >
-          cmake -S . -B build-gpu -G Ninja -DCMAKE_BUILD_TYPE=Release
-          -DSCALARS_GPU_BACKEND=cuda -DCMAKE_CUDA_ARCHITECTURES=native
+          python3 "${{ github.workspace }}/Scripts/setup.py" config --compiler=default --source-dir . --build-dir build-gpu --generator Ninja --build-type=Release
+          --gpu-backend=cuda --cuda-architectures=native
 
       - name: Build
-        run: cmake --build build-gpu --parallel 4
+        run: python3 "${{ github.workspace }}/Scripts/setup.py" build --build-dir build-gpu --parallel 4
 
       - name: Test
-        run: ctest --test-dir build-gpu --output-on-failure --no-tests=error
+        run: python3 "${{ github.workspace }}/Scripts/setup.py" test --build-dir . --build-dir build-gpu
 
   hip-runtime:
     name: HIP (GPU runtime)
@@ -426,15 +426,15 @@ jobs:
 
       - name: Configure
         run: >
-          cmake -S . -B build-gpu -G Ninja -DCMAKE_BUILD_TYPE=Release
-          -DSCALARS_GPU_BACKEND=hip -DCMAKE_HIP_ARCHITECTURES=native
-          -DCMAKE_PREFIX_PATH=/opt/rocm
+          python3 "${{ github.workspace }}/Scripts/setup.py" config --compiler=default --source-dir . --build-dir build-gpu --generator Ninja --build-type=Release
+          --gpu-backend=hip --hip-architectures=native
+          --prefix-path=/opt/rocm
 
       - name: Build
-        run: cmake --build build-gpu --parallel 4
+        run: python3 "${{ github.workspace }}/Scripts/setup.py" build --build-dir build-gpu --parallel 4
 
       - name: Test
-        run: ctest --test-dir build-gpu --output-on-failure --no-tests=error
+        run: python3 "${{ github.workspace }}/Scripts/setup.py" test --build-dir . --build-dir build-gpu
 
   install-consumer:
     name: Installed package (${{ matrix.os }}, shared=${{ matrix.shared }})
@@ -466,35 +466,35 @@ jobs:
           # via PATH instead, set further down before running the consumer.
           rpath_args=()
           if [[ "$RUNNER_OS" == macOS ]]; then
-            rpath_args=(-DCMAKE_INSTALL_RPATH='@loader_path/../lib')
+            rpath_args=(--install-rpath='@loader_path/../lib')
           elif [[ "$RUNNER_OS" == Linux ]]; then
             # shellcheck disable=SC2016 # Keep the loader's literal origin token.
-            rpath_args=(-DCMAKE_INSTALL_RPATH='$ORIGIN/../lib')
+            rpath_args=(--install-rpath='$ORIGIN/../lib')
           fi
           # Force a fixed "lib" layout: GNUInstallDirs picks a Debian
           # multiarch lib dir (e.g. lib/x86_64-linux-gnu) by default on
           # Ubuntu runners, which would otherwise make the cmake/Scalars
           # config path below unpredictable across OSes.
-          cmake -S . -B build-install -G Ninja -DCMAKE_BUILD_TYPE=Release \
-            -DBUILD_SHARED_LIBS="$BUILD_SHARED" -DSCALARS_ENABLE_TESTING=OFF \
-            -DCMAKE_INSTALL_LIBDIR=lib -DCMAKE_INSTALL_PREFIX="$package_prefix" \
+          python3 "${{ github.workspace }}/Scripts/setup.py" config --compiler=default --source-dir . --build-dir build-install --generator Ninja --build-type=Release \
+            --shared="$BUILD_SHARED" --testing=OFF \
+            --install-libdir=lib --install-prefix="$package_prefix" \
             "${rpath_args[@]}"
-          cmake --build build-install --parallel 4
-          cmake --install build-install
+          python3 "${{ github.workspace }}/Scripts/setup.py" build --build-dir build-install --parallel 4
+          python3 "${{ github.workspace }}/Scripts/setup.py" install --build-dir build-install
           mv "$package_prefix" "$RUNNER_TEMP/scalars-package-moved"
           package_prefix="$RUNNER_TEMP/scalars-package-moved"
           # Copy the consumer outside the checkout; it must use installed headers/libraries.
-          cp -R Testing/InstallConsumer "$RUNNER_TEMP/scalars-consumer"
-          cmake -S "$RUNNER_TEMP/scalars-consumer" -B "$RUNNER_TEMP/scalars-consumer-build" \
-            -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_PREFIX_PATH="$package_prefix" \
-            -DScalars_DIR="$package_prefix/lib/cmake/Scalars"
-          cmake --build "$RUNNER_TEMP/scalars-consumer-build" --parallel 4
+          cp --test-filter Testing/InstallConsumer "$RUNNER_TEMP/scalars-consumer"
+          python3 "${{ github.workspace }}/Scripts/setup.py" config --compiler=default --generator=default --source-dir "$RUNNER_TEMP/scalars-consumer" --build-dir "$RUNNER_TEMP/scalars-consumer-build" \
+            --generator Ninja --build-type=Release --prefix-path="$package_prefix" \
+            --package-dir="$package_prefix/lib/cmake/Scalars"
+          python3 "${{ github.workspace }}/Scripts/setup.py" build --build-dir "$RUNNER_TEMP/scalars-consumer-build" --parallel 4
           if [[ "$RUNNER_OS" == Windows ]]; then
             # Scalars.dll lives in bin/, next to the import lib in lib/; put
             # it on PATH so the consumer executables can load it at test time.
             export PATH="$package_prefix/bin:$PATH"
           fi
-          ctest --test-dir "$RUNNER_TEMP/scalars-consumer-build" --output-on-failure --no-tests=error
+          python3 "${{ github.workspace }}/Scripts/setup.py" test --build-dir . --build-dir "$RUNNER_TEMP/scalars-consumer-build"
 
   # ---------------------------------------------------------------------------
   # Coverage: gcc/gcov+lcov (Linux), Homebrew LLVM/clang (macOS), MSVC/
@@ -523,7 +523,7 @@ jobs:
         if: matrix.os == 'macos-latest'
         run: |
           brew install ninja llvm
-          LLVM_PREFIX="$(brew --prefix llvm)"
+          LLVM_PREFIX="$(brew --install-prefix llvm)"
           echo "${LLVM_PREFIX}/bin" >> "$GITHUB_PATH"
           echo "CC=${LLVM_PREFIX}/bin/clang" >> "$GITHUB_ENV"
           echo "CXX=${LLVM_PREFIX}/bin/clang++" >> "$GITHUB_ENV"
@@ -549,36 +549,36 @@ jobs:
       - name: Configure (Linux/macOS)
         if: matrix.os != 'windows-latest'
         run: >
-          cmake -S . -B build -G Ninja
-          -DCMAKE_BUILD_TYPE=Debug
-          -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
-          -DSCALARS_ENABLE_TESTING=ON
-          -DSCALARS_ENABLE_COVERAGE=ON
+          python3 "${{ github.workspace }}/Scripts/setup.py" config --compiler=default --source-dir . --build-dir build --generator Ninja
+          --build-type=Debug
+          --compile-commands=ON
+          --testing=ON
+          --coverage=ON
 
       - name: Configure (Windows)
         if: matrix.os == 'windows-latest'
         run: >
-          cmake -S . -B build -G Ninja
-          -DCMAKE_BUILD_TYPE=Release
-          -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
-          -DSCALARS_ENABLE_TESTING=ON
-          -DSCALARS_ENABLE_COVERAGE=ON
+          python3 "${{ github.workspace }}/Scripts/setup.py" config --compiler=default --source-dir . --build-dir build --generator Ninja
+          --build-type=Release
+          --compile-commands=ON
+          --testing=ON
+          --coverage=ON
 
       - name: Build (Linux/macOS)
         if: matrix.os != 'windows-latest'
-        run: cmake --build build
+        run: python3 "${{ github.workspace }}/Scripts/setup.py" build --build-dir build
 
       - name: Build (Windows)
         if: matrix.os == 'windows-latest'
-        run: cmake --build build --config Release
+        run: python3 "${{ github.workspace }}/Scripts/setup.py" build --build-dir build --build-type Release
 
       - name: Test (Linux/macOS)
         if: matrix.os != 'windows-latest'
-        run: ctest --test-dir build --output-on-failure --no-tests=error
+        run: python3 "${{ github.workspace }}/Scripts/setup.py" test --build-dir . --build-dir build
 
       - name: Test (Windows)
         if: matrix.os == 'windows-latest'
-        run: ctest --test-dir build --build-config Release --output-on-failure
+        run: python3 "${{ github.workspace }}/Scripts/setup.py" test --build-dir . --build-dir build --build-type Release
 
       - name: Collect coverage
         run: >
@@ -685,17 +685,17 @@ jobs:
       - name: Configure
         shell: bash
         run: |
-          args=(-DCMAKE_BUILD_TYPE=Release)
+          args=(--build-type=Release)
           if [ -n "$CACHE_BACKEND" ]; then
-            args+=(-DSCALARS_ENABLE_CACHE=ON -DSCALARS_CACHE_BACKEND="$CACHE_BACKEND")
+            args+=(--cache=ON --cache-backend="$CACHE_BACKEND")
           fi
           if [ "$USE_ICECC" = "true" ]; then
-            args+=(-DSCALARS_ENABLE_ICECC=ON)
+            args+=(--icecc=ON)
           fi
-          cmake -S . -B build -G Ninja "${args[@]}"
+          python3 "${{ github.workspace }}/Scripts/setup.py" config --compiler=default --source-dir . --build-dir build --generator Ninja "${args[@]}"
 
       - name: Build
-        run: cmake --build build --parallel 4
+        run: python3 "${{ github.workspace }}/Scripts/setup.py" build --build-dir build --parallel 4
 
       - name: Test
-        run: ctest --test-dir build --output-on-failure --no-tests=error
+        run: python3 "${{ github.workspace }}/Scripts/setup.py" test --build-dir . --build-dir build
