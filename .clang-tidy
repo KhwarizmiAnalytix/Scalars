@@ -15,6 +15,7 @@ Checks: >
   readability-identifier-naming,
   -bugprone-easily-swappable-parameters,
   -bugprone-narrowing-conversions,
+  -bugprone-unsafe-functions,
   -portability-avoid-pragma-once
 WarningsAsErrors: ''
 HeaderFilterRegex: ''

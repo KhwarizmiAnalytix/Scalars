@@ -53,6 +53,11 @@ function(scalars_setup_gtest)
         set(INSTALL_GTEST OFF CACHE BOOL "" FORCE)
         set(BUILD_GMOCK OFF CACHE BOOL "" FORCE)
         set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
+        if(WIN32 AND CMAKE_CXX_COMPILER_ID STREQUAL "Clang" AND CMAKE_CXX_COMPILER_FRONTEND_VARIANT
+                                                                STREQUAL "GNU"
+        )
+            set(MSVC FALSE)
+        endif()
         FetchContent_MakeAvailable(googletest)
     endif()
     if(TARGET gtest AND NOT TARGET GTest::gtest)

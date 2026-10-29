@@ -45,6 +45,21 @@ if(SCALARS_ENABLE_GTEST)
                     ScalarsCxxTests PRIVATE $<$<COMPILE_LANGUAGE:CUDA>:-Xcompiler=/Zc:preprocessor>
                 )
             endif()
+            # See cmake/gpu_backend.cmake: CMAKE_CUDA_RUNTIME_LIBRARY=None is set for
+            # WIN32+GNU to avoid MSVC-style link flags. Add the runtime explicitly here.
+            if(WIN32 AND CMAKE_CXX_COMPILER_FRONTEND_VARIANT STREQUAL "GNU"
+               AND CMAKE_CUDA_IMPLICIT_LINK_DIRECTORIES)
+                list(GET CMAKE_CUDA_IMPLICIT_LINK_DIRECTORIES 0 _scalars_cuda_lib_dir)
+                foreach(_scalars_cuda_lib IN ITEMS cudart cudadevrt)
+                    if(EXISTS "${_scalars_cuda_lib_dir}/${_scalars_cuda_lib}.lib")
+                        target_link_libraries(
+                            ScalarsCxxTests PRIVATE
+                            "${_scalars_cuda_lib_dir}/${_scalars_cuda_lib}.lib"
+                        )
+                    endif()
+                endforeach()
+                unset(_scalars_cuda_lib_dir)
+            endif()
         elseif(SCALARS_GPU_BACKEND STREQUAL "hip")
             set_source_files_properties(${_scalars_gpu_test_sources} PROPERTIES LANGUAGE HIP)
             set_target_properties(

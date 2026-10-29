@@ -150,6 +150,15 @@ endif()
 
 # ---- CUDA GPU backend --------------------------------------------------------
 if(SCALARS_GPU_BACKEND STREQUAL "cuda")
+    # clang++ GNU driver on Windows (CMAKE_CXX_SIMULATE_ID=MSVC) generates
+    # MSVC-style CUDA link flags: -LIBPATH: for the search path and bare .lib
+    # names for the runtime. The GNU driver does not forward -LIBPATH: to
+    # lld-link and treats bare .lib names as input files, producing "no such
+    # file" errors at link time. Disable automatic CUDA runtime linking here
+    # and wire it up with full paths in scalars_apply_gpu_backend instead.
+    if(WIN32 AND CMAKE_CXX_COMPILER_FRONTEND_VARIANT STREQUAL "GNU")
+        set(CMAKE_CUDA_RUNTIME_LIBRARY None CACHE STRING "CUDA runtime library type" FORCE)
+    endif()
     enable_language(CUDA)
     set(SCALARS_HAS_CUDA 1)
 
@@ -253,6 +262,22 @@ function(scalars_apply_gpu_backend target)
             target_compile_options(
                 ${target} PRIVATE $<$<COMPILE_LANGUAGE:CUDA>:--use_fast_math -Xcompiler=-fPIC>
             )
+        endif()
+        # CMAKE_CUDA_RUNTIME_LIBRARY was set to None above for this case to
+        # prevent MSVC-style -LIBPATH:/-bare-.lib link flags that the GNU driver
+        # does not forward to lld-link. Link the CUDA runtime explicitly here
+        # using full paths, which clang++ accepts alongside other .lib objects.
+        if(WIN32 AND CMAKE_CXX_COMPILER_FRONTEND_VARIANT STREQUAL "GNU"
+           AND CMAKE_CUDA_IMPLICIT_LINK_DIRECTORIES)
+            list(GET CMAKE_CUDA_IMPLICIT_LINK_DIRECTORIES 0 _scalars_cuda_lib_dir)
+            foreach(_scalars_cuda_lib IN ITEMS cudart cudadevrt)
+                if(EXISTS "${_scalars_cuda_lib_dir}/${_scalars_cuda_lib}.lib")
+                    target_link_libraries(
+                        ${target} PRIVATE "${_scalars_cuda_lib_dir}/${_scalars_cuda_lib}.lib"
+                    )
+                endif()
+            endforeach()
+            unset(_scalars_cuda_lib_dir)
         endif()
     elseif(SCALARS_GPU_BACKEND STREQUAL "metal")
         target_sources(
