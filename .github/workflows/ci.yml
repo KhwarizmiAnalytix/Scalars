@@ -602,10 +602,9 @@ jobs:
 
   # ---------------------------------------------------------------------------
   # Compiler cache / Icecream: exercises SCALARS_ENABLE_CACHE +
-  # SCALARS_CACHE_BACKEND (ccache, sccache) and SCALARS_ENABLE_ICECC across
-  # every hosted OS. BuildCache runs in buildcache.yml. Icecream has no
-  # Windows port, so there
-  # is no windows-icecc entry.
+  # SCALARS_CACHE_BACKEND (ccache, sccache, buildcache) and SCALARS_ENABLE_ICECC
+  # across every hosted OS. Icecream has no Windows port, so there is no
+  # windows-icecc entry.
   # ---------------------------------------------------------------------------
   cache-icecc:
     name: Cache/Icecc (${{ matrix.name }})
@@ -639,6 +638,15 @@ jobs:
           - name: windows-sccache
             os: windows-2022
             backend: sccache
+          - name: linux-buildcache
+            os: ubuntu-latest
+            backend: buildcache
+          - name: macos-buildcache
+            os: macos-15
+            backend: buildcache
+          - name: windows-buildcache
+            os: windows-2022
+            backend: buildcache
     env:
       CACHE_BACKEND: ${{ matrix.backend }}
       USE_ICECC: ${{ matrix.icecc }}
@@ -681,6 +689,16 @@ jobs:
         if: matrix.backend == 'sccache'
         with:
           version: v0.12.0
+
+      - name: Set BuildCache directory
+        if: matrix.backend == 'buildcache'
+        shell: bash
+        run: echo "BUILDCACHE_DIR=$RUNNER_TEMP/buildcache-data" >> "$GITHUB_ENV"
+
+      - name: Install BuildCache
+        if: matrix.backend == 'buildcache'
+        shell: bash
+        run: python3 .github/scripts/install_buildcache.py --install-prefix "$RUNNER_TEMP/buildcache-tool"
 
       - name: Configure
         shell: bash
