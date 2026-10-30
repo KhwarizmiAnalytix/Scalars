@@ -752,6 +752,7 @@ class ScalarsConfiguration:
 
     def __init__(self, args_list):
         self.source_path = Path(__file__).resolve().parent.parent
+        self.extra_cmake_args: list[str] = []
         self.__scalars_flags = ScalarsFlags(args_list)
         missing_deps = check_dependencies()
         if missing_deps:
@@ -929,6 +930,11 @@ class ScalarsConfiguration:
             )
             print(f"build enum: {self.__value['build_enum']}")
             cmake_flags.append(f"-DCMAKE_BUILD_TYPE={self.__value['build_enum']}")
+            self.__value["build_enum"] = cli_helper.apply_cmake_args(
+                cmake_flags,
+                self.extra_cmake_args,
+                self.__value["build_enum"],
+            )
 
             exit_code = config_helper.configure_build(
                 source_path,
@@ -1137,13 +1143,14 @@ def parse_args(args):
 
 def main():
     """Parse CLI args and drive config/build/test/coverage, or print --help."""
+    setup_arguments, cmake_overrides = cli_helper.split_cmake_args(sys.argv[1:])
     forwarded = cli_helper.dispatch(
         sys.argv[1:], Path(__file__).resolve().parents[1], ScalarsFlags, ScalarsConfiguration, parse_args
     )
     if forwarded is not None:
         sys.exit(forwarded)
 
-    if len(sys.argv) == 2 and sys.argv[1] == "--help":
+    if setup_arguments == ["--help"]:
         cli_helper.print_help()
         print_status("Scalars Build Configuration Helper", "INFO")
         print("\n" + "=" * 80)
@@ -1175,7 +1182,7 @@ def main():
         return
 
     try:
-        arg_list = parse_args(sys.argv[1:])
+        arg_list = parse_args(setup_arguments)
         if not arg_list:
             print_status(
                 "No build configuration specified. Use --help for usage information.",
@@ -1185,6 +1192,7 @@ def main():
 
         print_status(f"Starting build configuration for {platform.system()}", "INFO")
         compilation_calc = ScalarsConfiguration(arg_list)
+        compilation_calc.extra_cmake_args = cmake_overrides
 
         source_path = str(compilation_calc.source_path)
         build_path = compilation_calc.move_to_build_folder()

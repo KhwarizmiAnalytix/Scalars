@@ -84,8 +84,34 @@ def argument_parser(bazel: bool = False) -> argparse.ArgumentParser:
     return parser
 
 
+def split_cmake_args(arguments: list[str]) -> tuple[list[str], list[str]]:
+    """Separate setup tokens from raw CMake arguments after ``--``."""
+    if "--" not in arguments:
+        return list(arguments), []
+    index = arguments.index("--")
+    return list(arguments[:index]), list(arguments[index + 1 :])
+
+
+def apply_cmake_args(flags: list[str], overrides: list[str], build_type: str) -> str:
+    """Append raw CMake definitions and honor an explicit build type."""
+    flags.extend(overrides)
+    prefix = "-DCMAKE_BUILD_TYPE="
+    for override in overrides:
+        if override.startswith(prefix):
+            build_type = override[len(prefix) :]
+    return build_type
+
+
 def print_help() -> None:
     """Print the supported public actions and named options."""
+    print("\nExact CI commands:")
+    print("  python Scripts/setup.py cmake -S source -B build")
+    print("  python Scripts/setup.py ctest --test-dir build")
+    print("  python Scripts/setup.py config.build -- -DCMAKE_PREFIX_PATH=...")
+    print("  python Scripts/setup.py verify-cache --build-dir build --target Scalars")
+    print(
+        "  python Scripts/setup.py verify-toolchain --build-dir build --compiler clang"
+    )
     print("\nSupported setup actions (combine with dots):")
     print("  config.build.test, install, cleanbuild, verifycache, verifytoolchain")
     print("  python Scripts/setup.py config.build.test.release.ninja.clang --build-dir build")
@@ -133,6 +159,55 @@ def validate_legacy(tokens, flags_factory, parser):
 
 def _run(command: list[str], **kwargs) -> subprocess.CompletedProcess:
     return subprocess.run(command, check=True, **kwargs)
+
+
+def _run_status(command: list[str]) -> int:
+    """Run a command and return its status, including a non-zero exit."""
+    try:
+        result = subprocess.run(command, check=True)
+        return result.returncode
+    except subprocess.CalledProcessError as error:
+        return error.returncode
+
+
+def _option(arguments: list[str], name: str) -> Optional[str]:
+    if name not in arguments:
+        return None
+    index = arguments.index(name)
+    if index + 1 >= len(arguments):
+        return None
+    return arguments[index + 1]
+
+
+def _dispatch_exact(arguments: list[str]) -> Optional[int]:
+    """Run preserved cmake, ctest, and hyphenated verification commands."""
+    if not arguments:
+        return None
+    if arguments[0] in ("cmake", "ctest"):
+        return _run_status(arguments)
+    if arguments[0] == "verify-cache":
+        build = Path(_option(arguments, "--build-dir") or ".").resolve()
+        target = _option(arguments, "--target") or ""
+        parallel_text = _option(arguments, "--parallel") or "4"
+        try:
+            verify_cache(build, target, int(parallel_text))
+        except subprocess.CalledProcessError as error:
+            return error.returncode
+        except (OSError, RuntimeError, ValueError) as error:
+            print(error)
+            return 1
+        return 0
+    if arguments[0] == "verify-toolchain":
+        build = Path(_option(arguments, "--build-dir") or ".").resolve()
+        compiler = _option(arguments, "--compiler") or "clang"
+        generator = _option(arguments, "--generator") or "Ninja"
+        try:
+            verify_toolchain(build, compiler, generator)
+        except (OSError, RuntimeError, ValueError) as error:
+            print(error)
+            return 1
+        return 0
+    return None
 
 
 def _definitions(options) -> list[str]:
@@ -215,10 +290,23 @@ def verify_toolchain(build: Path, expected: str, generator: str = "Ninja") -> No
     print(f"Verified {expected} with {generator}")
 
 
-def dispatch(arguments, root, flags_factory, configuration_factory, parse_legacy) -> Optional[int]:
+def dispatch(
+    arguments,
+    root=None,
+    flags_factory=None,
+    configuration_factory=None,
+    parse_legacy=None,
+) -> Optional[int]:
     """Execute documented named options, leaving existing dotted usage compatible."""
+    exact = _dispatch_exact(arguments)
+    if exact is not None:
+        return exact
+    # Raw CMake arguments are only valid after `--`; keep them out of option parsing.
+    arguments, overrides = split_cmake_args(arguments)
     if arguments == ["--help"]:
         return None
+    if flags_factory is None or configuration_factory is None or parse_legacy is None:
+        argument_parser().error("specify an action such as config.build.test")
     options, remaining = parse_options(arguments)
     tokens = parse_legacy(remaining)
     parser = argument_parser()
@@ -236,6 +324,9 @@ def dispatch(arguments, root, flags_factory, configuration_factory, parse_legacy
     compiler = options.compiler or next((token for token in tokens if token in COMPILERS), "clang")
     generator = options.generator or ("Xcode" if "xcode" in tokens else "Ninja")
     definitions = _explicit_legacy_definitions(tokens, flags_factory) + _definitions(options)
+    resolved_type = apply_cmake_args(definitions, overrides, requested_type or "")
+    if resolved_type:
+        requested_type = resolved_type
     try:
         if "config" in phases:
             command = ["cmake", "-S", str(source), "-B", str(build)]
@@ -327,6 +418,12 @@ def dispatch_bazel(arguments, root=None, force=False) -> Optional[int]:
     if arguments == ["--help"]:
         print_bazel_help()
         return 0 if force else None
+    if arguments[:1] == ["--"]:
+        executable = shutil.which("bazelisk") or shutil.which("bazel")
+        if not executable:
+            print("Install bazelisk or bazel")
+            return 1
+        return _run_status([executable, *arguments[1:]])
     options, remaining = parse_options(arguments, bazel=True)
     if not force and len(arguments) == len(remaining):
         return None
