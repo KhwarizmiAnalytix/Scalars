@@ -269,16 +269,18 @@ jobs:
         # CMAKE_CUDA_ARCHITECTURES defaults to "native", which queries an
         # actual GPU at configure time -- unavailable in this GPU-less
         # container, so a fixed architecture is pinned here.
+        # github.workspace resolves to the host path, not this container's
+        # bind-mounted checkout, so the script is run via a relative path.
         run: >
-          python3 "${{ github.workspace }}/Scripts/setup.py" config --compiler=default --source-dir . --build-dir build-cuda --generator Ninja --build-type=Release
+          python3 Scripts/setup.py config --compiler=default --source-dir . --build-dir build-cuda --generator Ninja --build-type=Release
           --gpu-backend=cuda --lto-mode=off
           --cuda-architectures=75
 
       - name: Build
-        run: python3 "${{ github.workspace }}/Scripts/setup.py" build --build-dir build-cuda --parallel 4
+        run: python3 Scripts/setup.py build --build-dir build-cuda --parallel 4
 
       - name: Test (GPU cases self-skip without a device)
-        run: python3 "${{ github.workspace }}/Scripts/setup.py" test --build-dir . --build-dir build-cuda
+        run: python3 Scripts/setup.py test --build-dir . --build-dir build-cuda
 
   cuda-windows:
     name: CUDA (Windows compile-only)
@@ -331,16 +333,18 @@ jobs:
         # CMAKE_HIP_ARCHITECTURES defaults to "native", which queries an
         # actual GPU at configure time -- unavailable in this GPU-less
         # container, so a fixed architecture is pinned here.
+        # github.workspace resolves to the host path, not this container's
+        # bind-mounted checkout, so the script is run via a relative path.
         run: >
-          python3 "${{ github.workspace }}/Scripts/setup.py" config --compiler=default --source-dir . --build-dir build-hip --generator Ninja --build-type=Release
+          python3 Scripts/setup.py config --compiler=default --source-dir . --build-dir build-hip --generator Ninja --build-type=Release
           --gpu-backend=hip --lto-mode=off
           --prefix-path=/opt/rocm --hip-architectures=gfx1100
 
       - name: Build
-        run: python3 "${{ github.workspace }}/Scripts/setup.py" build --build-dir build-hip --parallel 4
+        run: python3 Scripts/setup.py build --build-dir build-hip --parallel 4
 
       - name: Test (GPU cases self-skip without a device)
-        run: python3 "${{ github.workspace }}/Scripts/setup.py" test --build-dir . --build-dir build-hip
+        run: python3 Scripts/setup.py test --build-dir . --build-dir build-hip
 
   # ---------------------------------------------------------------------------
   # Metal: unlike the CUDA/HIP containers above, macOS hosted runners are
@@ -395,15 +399,17 @@ jobs:
         run: nvidia-smi
 
       - name: Configure
+        # github.workspace resolves to the host path, not this container's
+        # bind-mounted checkout, so the script is run via a relative path.
         run: >
-          python3 "${{ github.workspace }}/Scripts/setup.py" config --compiler=default --source-dir . --build-dir build-gpu --generator Ninja --build-type=Release
+          python3 Scripts/setup.py config --compiler=default --source-dir . --build-dir build-gpu --generator Ninja --build-type=Release
           --gpu-backend=cuda --cuda-architectures=native
 
       - name: Build
-        run: python3 "${{ github.workspace }}/Scripts/setup.py" build --build-dir build-gpu --parallel 4
+        run: python3 Scripts/setup.py build --build-dir build-gpu --parallel 4
 
       - name: Test
-        run: python3 "${{ github.workspace }}/Scripts/setup.py" test --build-dir . --build-dir build-gpu
+        run: python3 Scripts/setup.py test --build-dir . --build-dir build-gpu
 
   hip-runtime:
     name: HIP (GPU runtime)
@@ -425,16 +431,18 @@ jobs:
         run: rocm-smi
 
       - name: Configure
+        # github.workspace resolves to the host path, not this container's
+        # bind-mounted checkout, so the script is run via a relative path.
         run: >
-          python3 "${{ github.workspace }}/Scripts/setup.py" config --compiler=default --source-dir . --build-dir build-gpu --generator Ninja --build-type=Release
+          python3 Scripts/setup.py config --compiler=default --source-dir . --build-dir build-gpu --generator Ninja --build-type=Release
           --gpu-backend=hip --hip-architectures=native
           --prefix-path=/opt/rocm
 
       - name: Build
-        run: python3 "${{ github.workspace }}/Scripts/setup.py" build --build-dir build-gpu --parallel 4
+        run: python3 Scripts/setup.py build --build-dir build-gpu --parallel 4
 
       - name: Test
-        run: python3 "${{ github.workspace }}/Scripts/setup.py" test --build-dir . --build-dir build-gpu
+        run: python3 Scripts/setup.py test --build-dir . --build-dir build-gpu
 
   install-consumer:
     name: Installed package (${{ matrix.os }}, shared=${{ matrix.shared }})
@@ -484,7 +492,7 @@ jobs:
           mv "$package_prefix" "$RUNNER_TEMP/scalars-package-moved"
           package_prefix="$RUNNER_TEMP/scalars-package-moved"
           # Copy the consumer outside the checkout; it must use installed headers/libraries.
-          cp --test-filter Testing/InstallConsumer "$RUNNER_TEMP/scalars-consumer"
+          cp -R Testing/InstallConsumer "$RUNNER_TEMP/scalars-consumer"
           python3 "${{ github.workspace }}/Scripts/setup.py" config --compiler=default --generator=default --source-dir "$RUNNER_TEMP/scalars-consumer" --build-dir "$RUNNER_TEMP/scalars-consumer-build" \
             --generator Ninja --build-type=Release --prefix-path="$package_prefix" \
             --package-dir="$package_prefix/lib/cmake/Scalars"
@@ -523,7 +531,7 @@ jobs:
         if: matrix.os == 'macos-latest'
         run: |
           brew install ninja llvm
-          LLVM_PREFIX="$(brew --install-prefix llvm)"
+          LLVM_PREFIX="$(brew --prefix llvm)"
           echo "${LLVM_PREFIX}/bin" >> "$GITHUB_PATH"
           echo "CC=${LLVM_PREFIX}/bin/clang" >> "$GITHUB_ENV"
           echo "CXX=${LLVM_PREFIX}/bin/clang++" >> "$GITHUB_ENV"
@@ -698,7 +706,7 @@ jobs:
       - name: Install BuildCache
         if: matrix.backend == 'buildcache'
         shell: bash
-        run: python3 .github/scripts/install_buildcache.py --install-prefix "$RUNNER_TEMP/buildcache-tool"
+        run: python3 .github/scripts/install_buildcache.py --prefix "$RUNNER_TEMP/buildcache-tool"
 
       - name: Configure
         shell: bash

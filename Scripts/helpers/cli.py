@@ -153,9 +153,15 @@ def _definitions(options) -> list[str]:
 
 def _explicit_legacy_definitions(tokens, flags_factory):
     """Translate explicit dotted feature choices without overriding project defaults."""
+    # The legacy flags processor only recognizes "config"/"build"/"test" among
+    # action tokens; the newer actions below (install, clean, ...) make it
+    # exit silently (its error output is captured by redirect_stdout below)
+    # when passed through, so strip them before invoking it.
+    legacy_only_actions = ACTIONS - {"config", "build", "test"}
+    legacy_tokens = [token for token in tokens if token not in legacy_only_actions]
     with contextlib.redirect_stdout(io.StringIO()):
         baseline = flags_factory(["config"])
-        selected = flags_factory(tokens or ["config"])
+        selected = flags_factory(legacy_tokens or ["config"])
         baseline_flags, selected_flags = [], []
         baseline.create_cmake_flags(baseline_flags, "Release", os.name)
         selected.create_cmake_flags(selected_flags, "Release", os.name)
