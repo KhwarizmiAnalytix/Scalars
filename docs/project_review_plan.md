@@ -4,10 +4,16 @@ Status: Phases 0 to 7 are implemented (Phases 0 to 6 and 7.1 to 7.5 in
 `fd796ab`). Verification on Windows x86 with an NVIDIA GPU on 2026-11-13
 closed the remaining open items (7.6 to 7.10, 6.1, 6.2) and found three more
 defects that the arm64-only work could not see; they are in
-[Phase 8](#10-phase-8-windows-x86-and-cuda-verification). The only open item
-is the long-term half of 2.3, a design decision.
+[Phase 8](#10-phase-8-windows-x86-and-cuda-verification). Two items remain
+open:
+
+- 2.3, long term: the ISA dispatch design decision.
+- 2.2, partly: the SLEEF and MKL install-consumer paths have not been built
+  end to end, and `SCALARS_ENABLE_SLEEF=ON` fails to link the vendored
+  `tlfloat`.
+
 Repository inspected: `main` at `647564c`, 2026-11-12; Phase 8 against
-`fd796ab`.
+`fd796ab`; Phase 8 fixes re-verified at `2dd7030` (see 8.5).
 
 ## 1. Goal and scope
 
@@ -23,7 +29,8 @@ Evidence labels:
 - **Unverified**: found by reading code; not reproduced end to end. The first
   step for these items is a reproducer.
 
-Baseline checks at the time of review:
+Baseline checks at the time of review (arm64 only; for later x86 and CUDA
+results, see 8.5):
 
 | Check | Result |
 | --- | --- |
@@ -185,7 +192,7 @@ GoogleTest suites.
 
 ## 4. Phase 2: packaging and install
 
-### 2.1 Installed SVML consumers may fail to link (unverified) -- Fixed (SVML paths unverified end-to-end: no x86 hardware here)
+### 2.1 Installed SVML consumers may fail to link (unverified) -- Fixed, verified on x86 Linux and Windows (see 8.5)
 
 - Files: [utils.cmake:223](../cmake/utils.cmake#L223) and
   [simd.cmake:266](../cmake/simd.cmake#L266).
@@ -261,7 +268,7 @@ GoogleTest suites.
         unconditionally but only runs tests when `/proc/cpuinfo` on the
         real runner advertises the matching flag; not a Scalars defect.
 
-### 2.2 The package config does not re-find SLEEF and MKL -- Fixed (verified for the no-extra-deps default; SLEEF/MKL paths reasoned from source, not built end-to-end here)
+### 2.2 The package config does not re-find SLEEF and MKL -- Partly open: default and SVML paths verified; SLEEF and MKL not built end to end
 
 - Files: [simd.cmake:325](../cmake/simd.cmake#L325) (MKL),
   [simd.cmake:334](../cmake/simd.cmake#L334) (SLEEF), and
@@ -295,6 +302,11 @@ GoogleTest suites.
   scope here, but it blocks fully verifying the SLEEF path end-to-end on
   this machine. An install-consumer CI job on Linux AArch64 with SLEEF (as
   the plan's own Test line asks for) is still the way to close that out.
+- Remaining work:
+  - [ ] Make `SCALARS_ENABLE_SLEEF=ON` link: add the `tlfloat` install
+        directory to the link search path, or build SLEEF without it.
+  - [ ] Install-consumer job with SLEEF on Linux AArch64.
+  - [ ] Install-consumer job with MKL on x86.
 
 ### 2.3 SIMD compile flags leak to consumers -- Short term done; long term is a design decision, left to the user
 
@@ -363,7 +375,7 @@ GoogleTest suites.
 These changes can break consumers, so batch them and note them in release
 notes.
 
-### 3.1 Remove global namespace pollution -- Fixed (NEON + reduced + detail built and tested; AVX/AVX2/AVX512/SSE syntax-verified by cross-compilation; CUDA/HIP edited by inspection only, unverified; SVE/Metal unaffected)
+### 3.1 Remove global namespace pollution -- Fixed (NEON, SSE, AVX2, and CUDA built and tested; AVX-512 builds but was not run; HIP edited by inspection only; SVE/Metal unaffected)
 
 - Files: [simd.h:16](../include/backend/simd.h#L16), every backend header that
   specializes `::simd<T>`, and
@@ -816,27 +828,10 @@ matching Phase 1 fix above, just never checked off here.
       `SimdComplexParity.LogRealPartRelativeAccuracyNearUnitCircle` checks
       `Re(log z)` componentwise (16 eps relative) for `|z| = 1 ± 2^-k`
       against a cancellation-free reference. It fails on both the original
-      formula (696 lanes) and the first 4.1 fix (628 lanes); see 8.4. The
-      earlier attempt, kept for the record: the old tolerance,
-      `64 * eps * (1 + |expected|)` at
-      [TestSimdComplexParity.cxx:135](../Testing/Cxx/TestSimdComplexParity.cxx#L135),
-      is effectively absolute near zero, which hides relative-accuracy
-      regressions such as 4.1. Attempted: replaced the `(1 + |expected|)`
-      floor with `max(|expected|, numeric_limits<T>::min())`, making the
-      bound purely relative with a floor only at the denormal boundary.
-      Reverted: this broke two real passing cases in
-      `SimdComplexParity.PrincipalMathAndRounding` and
-      `.MagnitudeSpecialValuesAndAccumulation` where the true value is a
-      ULP-scale cancellation residue (e.g. `1.2246467991473532e-16`, the
-      double rounding error in a value that is mathematically zero) and one
-      SIMD path legitimately rounds that residue to exactly `0` while
-      another keeps it -- both are valid results of the same computation,
-      not a bug, and the `+1` floor exists precisely to absorb this class of
-      case. A correct fix needs a floor sized from each call site's own
-      input scale (not a type-wide constant), which `expect_component`
-      cannot see from `actual`/`expected` alone -- left as unverified
-      end-to-end here; built and ran the full suite
-      (`ScalarsCxxTests`, 86/86) to confirm the revert is clean.
+      formula (696 lanes) and the first 4.1 fix (628 lanes); see 8.4. A
+      purely componentwise relative bound was tried first and reverted: it
+      fails valid results where one SIMD path rounds a ULP-scale
+      cancellation residue (such as `1.2246467991473532e-16`) to exactly 0.
 
 ## 9. Phase 7: review of the uncommitted changes
 
@@ -1102,6 +1097,12 @@ crashed at random (GCC internal errors, Clang segfaults) on files that
 compiled cleanly on retry; every result above comes from a complete,
 clean build.
 
+Re-verified at `2dd7030` on 2026-11-13 from empty build directories, Release,
+AVX2: MSVC 89/89, Clang + SVML DLL 90/90, and MSVC + CUDA 97/97 on Windows;
+GCC and Clang 90/90 each on Ubuntu 24.04. The Ubuntu Clang build crashed
+twice in `TestSimdReduced.cxx` under parallel load, then compiled cleanly
+five times in a row on its own; the serial build passed.
+
 ## 11. Verification for each phase
 
 For each pull request:
@@ -1110,8 +1111,9 @@ For each pull request:
 2. A sanitizer build with `SCALARS_SANITIZER_TYPE=address,undefined`.
 3. clang-tidy on the touched first-party files
    ([clang-tidy skill](../.agents/skills/clang-tidy/SKILL.md)).
-4. The CI matrix for the x86, CUDA, HIP, and Metal backends, which cannot be
-   tested locally on arm64.
+4. The CI matrix for the backends the local machine cannot run. On the arm64
+   host, that is x86, CUDA, and HIP. On the Windows x86 host, it is HIP,
+   Metal, SVE, NEON, and AVX-512 at run time.
 5. The [session checklist](../.agents/skills/session-checklist/SKILL.md)
    before handoff.
 
