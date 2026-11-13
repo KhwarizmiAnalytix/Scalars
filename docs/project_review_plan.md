@@ -1,12 +1,13 @@
 # Project review remediation plan
 
-Status: Phases 0 to 6 are implemented in the uncommitted working tree, except
-for the open items. A detailed review of that diff on 2026-11-13 found
-regressions in some of the fixes; they are tracked in
-[Phase 7](#9-phase-7-review-of-the-uncommitted-changes). Open items: 1.1
-(CUDA), 2.3 (long term), 3.2 (release note), 3.3, 4.1 (performance), 6.1
-(lint job), 6.2 (relative-error parity), and Phase 7.
-Repository inspected: `main` at `647564c`, 2026-11-12.
+Status: Phases 0 to 7 are implemented (Phases 0 to 6 and 7.1 to 7.5 in
+`fd796ab`). Verification on Windows x86 with an NVIDIA GPU on 2026-11-13
+closed the remaining open items (7.6 to 7.10, 6.1, 6.2) and found three more
+defects that the arm64-only work could not see; they are in
+[Phase 8](#10-phase-8-windows-x86-and-cuda-verification). The only open item
+is the long-term half of 2.3, a design decision.
+Repository inspected: `main` at `647564c`, 2026-11-12; Phase 8 against
+`fd796ab`.
 
 ## 1. Goal and scope
 
@@ -73,7 +74,7 @@ Each fix lands with a regression test in `Testing/Cxx/`. Use the
 [new-test](../.agents/skills/new-test/SKILL.md) skill and match adjacent
 GoogleTest suites.
 
-### 1.1 `half` mixed comparisons do not compile (confirmed) -- Fixed on host; CUDA/HIP open (see 7.6)
+### 1.1 `half` mixed comparisons do not compile (confirmed) -- Fixed (CUDA verified; see 7.6)
 
 - File: [half.h:739-762](../include/types/half.h#L739-L762).
 - Problem: `(half, half)` comparison operators make `h == 1.0f` and `h < 1.0`
@@ -429,7 +430,7 @@ notes.
         such generic caller outside this repository with no equivalent
         replacement available.
 
-### 3.2 Unify the accumulation-type systems -- Fixed; release note open (see 7.7)
+### 3.2 Unify the accumulation-type systems -- Fixed; release note added (see 7.7)
 
 - Files: [scalar_traits.h:17](../include/common/scalar_traits.h#L17) and
   [accumulate_type.h](../include/common/accumulate_type.h).
@@ -463,7 +464,7 @@ notes.
         (checked), so this only affects their own test, extended with
         `long double` cases.
 
-### 3.3 Make `complex_simd::set` unambiguous -- Fixed; `set_mask` literal ambiguity open (see 7.8)
+### 3.3 Make `complex_simd::set` unambiguous -- Fixed (see 7.8)
 
 - File: [complex_simd.h:330](../include/backend/cpu/detail/complex_simd.h#L330).
 - Problem: `set(1)` returns a packet but `set(1u)` returns a mask. For
@@ -516,7 +517,7 @@ notes.
 
 ## 6. Phase 4: numerical consistency and performance
 
-### 4.1 Complex `log` fast path near |z| = 1 -- Fixed; performance follow-up open (see 7.9)
+### 4.1 Complex `log` fast path near |z| = 1 -- Fixed (see 7.9 and 8.4)
 
 - File: [complex_simd.h:165](../include/backend/cpu/detail/complex_simd.h#L165).
 - Problem: `0.5 * log(re² + im²)` loses all relative precision near `|z| = 1`.
@@ -754,18 +755,18 @@ message("  Icecc               : ${SCALARS_ENABLE_ICECC}")
 ### 6.1 CI hygiene
 
 - File: [ci.yml](../.github/workflows/ci.yml).
-- [ ] Add a lint job that runs lintrunner, clang-format, and clang-tidy. The
-      configs exist (`.lintrunner.toml`, `.clang-tidy`) but no job uses them.
-      Not done: `.lintrunner.toml`'s adapters come from a shared `lint-tool`
-      package that `README.md`'s own Lint section installs as
-      `pip install lintrunner -e ../lint-tool` -- a local sibling checkout,
-      not a published package and not vendored anywhere in this repository
-      (no `ThirdParty/lint-tool`, no public URL on record here). A CI job
-      cannot `pip install -e ../lint-tool` from a bare `actions/checkout` of
-      this repo alone. Wiring this up needs to know where that package
-      actually lives (a separate repo to add as a second checkout/submodule,
-      an internal package index, etc.) -- that is a decision for whoever
-      maintains `lint-tool`, not something inferable from this repository.
+- [x] Add a lint job that runs lintrunner, clang-format, and clang-tidy.
+      `lint-tool` is public at `KhwarizmiAnalytix/lint-tool`; the new `lint`
+      job checks it out at a pinned commit next to this repository and pins
+      `lintrunner` and `pyyaml`. `lintrunner --all-files` reports 254
+      findings on `main`, so it cannot gate changes yet. Instead
+      [lint_changes.py](../.github/scripts/lint_changes.py) fails only on
+      what a change introduces: `git clang-format --diff` against the merge
+      base (changed lines, with the linter's own clang-format binary), and
+      every other linter, clang-tidy included, on the changed files at the
+      merge base and at HEAD, reporting findings HEAD has and the base does
+      not. Verified in Ubuntu 24.04 (WSL): this change set reports 0 new;
+      an added reserved identifier and an unformatted line both fail it.
 - [x] Pin actions by commit SHA, especially third-party ones
       (`Jimver/cuda-toolkit`, `ilammy/msvc-dev-cmd`). Also pinned
       `mozilla-actions/sccache-action` and `codecov/codecov-action` (both
@@ -805,7 +806,18 @@ matching Phase 1 fix above, just never checked off here.
       (1.7).
 - [x] `normalcdf` tails and the `inv_normalcdf` domain. Covered by
       `TestNormalCdf.cxx` (1.8, 1.9).
-- [ ] Relative-error parity checks. The current tolerance,
+- [x] Relative-error parity checks. Done in two parts on 2026-11-13.
+      `expect_value` now uses a normwise relative bound,
+      `64 * eps * max(|Re|, |Im|) + numeric_limits<T>::min()`, scaled by the
+      whole expected complex value: it absorbs the residue case below (a
+      ~1e-16 component next to one near 1) but no longer lets small results
+      pass with an absolute error of 64 eps. A normwise bound still cannot
+      see 4.1, because `Im(log z) = arg z` dominates the scale there, so
+      `SimdComplexParity.LogRealPartRelativeAccuracyNearUnitCircle` checks
+      `Re(log z)` componentwise (16 eps relative) for `|z| = 1 ± 2^-k`
+      against a cancellation-free reference. It fails on both the original
+      formula (696 lanes) and the first 4.1 fix (628 lanes); see 8.4. The
+      earlier attempt, kept for the record: the old tolerance,
       `64 * eps * (1 + |expected|)` at
       [TestSimdComplexParity.cxx:135](../Testing/Cxx/TestSimdComplexParity.cxx#L135),
       is effectively absolute near zero, which hides relative-accuracy
@@ -830,7 +842,8 @@ matching Phase 1 fix above, just never checked off here.
 
 A detailed review of the working-tree diff against `647564c` (72 files) on
 2026-11-13 found ten issues, some of them regressions introduced by the fixes
-above. Items 7.1 to 7.5 are fixed; 7.6 to 7.10 are open.
+above. All ten are resolved; 7.6 to 7.10 were closed on 2026-11-13 together
+with Phase 8.
 
 Verification of the fixed items: `python3 Scripts/setup.py config.build.test`
 (Release, Ninja, Clang, NEON + Accelerate) builds cleanly, and
@@ -873,7 +886,7 @@ build, clang-tidy, and any x86, CUDA, HIP, or SVML build.
   scalar operators. That is not a regression (it was always like this), but
   the two types now differ. 7.10 would fix both.
 
-### 7.3 ISA guard fails GPU device compiles (unverified) -- Fixed
+### 7.3 ISA guard fails GPU device compiles (unverified) -- Fixed, verified on CUDA
 
 - File: [scalars_macros.h:35](../include/scalars_macros.h#L35).
 - Problem: the 2.3 guard `#error`s when `SCALARS_HAS_AVX2` is set but
@@ -885,10 +898,11 @@ build, clang-tidy, and any x86, CUDA, HIP, or SVML build.
   defined. The host pass still gets the ISA flags through
   `-Xcompiler=${flag}` ([simd.cmake:380](../cmake/simd.cmake#L380)) and is
   still checked.
-- Open: confirm with a CUDA or HIP CI job; neither toolchain is available
-  locally.
+- Verified 2026-11-13: a CUDA 13.2 build (MSVC host, `cpu_backend=avx2`,
+  sm_89) compiles every device pass without the `#error`, and the GPU tests
+  run on an RTX 4060 Ti. HIP is still unverified.
 
-### 7.4 SVML linker flags exported to consumers (unverified) -- Fixed
+### 7.4 SVML linker flags exported to consumers (unverified) -- Fixed, verified on Linux
 
 - File: [simd.cmake:286](../cmake/simd.cmake#L286).
 - Problem: when 2.1 exported the SVML targets, it also removed the
@@ -899,9 +913,12 @@ build, clang-tidy, and any x86, CUDA, HIP, or SVML build.
   links after Scalars.
 - Fix: only the two flags go back into `BUILD_INTERFACE`. `SVML::SVML`,
   `SVML::IRC`, and `SVML::INTLC` stay exported, as 2.1 requires.
-- Open: rerun the `install-consumer-svml` CI job, or the
-  `linux/amd64` container from 2.1, to confirm the consumer still finds
-  `libintlc` at run time.
+- Verified 2026-11-13 on Ubuntu 24.04 (WSL, x86_64), mirroring the
+  `install-consumer-svml` job: the exported targets carry only `SVML::SVML;
+  SVML::IRC;SVML::INTLC`, no installed CMake file or consumer link line has
+  `--as-needed`, `libScalars.so` has RUNPATH `$ORIGIN/../lib:$ORIGIN`, and
+  after moving the install prefix the consumer resolves `libintlc.so.5`
+  and its tests pass.
 
 ### 7.5 Dynamic summary labels not aligned (CLAUDE.md rule) -- Fixed
 
@@ -914,7 +931,7 @@ build, clang-tidy, and any x86, CUDA, HIP, or SVML build.
 - Check: the configure output aligns for short names (`CMAKE_LINKER`,
   `MEMORYCHECK_COMMAND`); `ScalarsSetupTests` passes.
 
-### 7.6 `half` comparisons are ambiguous on CUDA/HIP (unverified) -- Open
+### 7.6 `half` comparisons are ambiguous on CUDA/HIP (confirmed) -- Fixed
 
 - File: [half.h:748](../include/types/half.h#L748).
 - Problem: 1.1 removed every `(half, half)` comparison operator. The deleted
@@ -922,26 +939,33 @@ build, clang-tidy, and any x86, CUDA, HIP, or SVML build.
   converts to `__half`". Without them, `h1 < h2` in device code is ambiguous
   between the built-in float comparison and `cuda_fp16.h`'s global
   `operator<(const __half&, const __half&)`.
-- Proposed fix: PyTorch, which 1.1 follows, avoids this by compiling CUDA
-  with `-D__CUDA_NO_HALF_OPERATORS__` (and the matching `__HIP_NO_HALF_*`
-  macros on HIP). This repository defines none of them. Add them to the
-  CUDA/HIP compile definitions, or bring the `(half, half)` operators back
-  for device compiles only.
-- Test: a `Test*.cu` case comparing two `half` values with each operator.
-  Needs a CUDA or HIP CI job, because defining these macros changes what all
-  device code sees.
+- Confirmed: with CUDA 13.2, `TestGpuSimd.cu` failed to compile with "more
+  than one operator `<` matches" for `half < half`.
+- Fix: constrained comparison templates in [half.h](../include/types/half.h)
+  for `half` against `half` or any arithmetic type. Both operands match
+  exactly, so they beat the built-in float comparison and the `__half`
+  operators, and `h == 1.0f` stays unambiguous (the reason 1.1 removed the
+  non-template overloads). Operands compare in the usual arithmetic common
+  type with `half` as `float`, so results are unchanged. This needs no
+  `__CUDA_NO_HALF_OPERATORS__`, which would have changed what all device
+  code sees. `__hneg` now gets an explicit `__half`.
+- Test: `GpuSimd.HalfComparisonsOnDevice` runs all six operators for
+  `(half, half)`, `(half, float)`, `(float, half)`, `double` and `int` in a
+  kernel over 81 input pairs including signed zeros, 65504 and NaN.
 
-### 7.7 `accumulation_type_t<float>` is now `double` (API change) -- Open
+### 7.7 `accumulation_type_t<float>` is now `double` (API change) -- Release note added
 
 - File: [scalar_traits.h:19](../include/common/scalar_traits.h#L19).
 - Problem: 3.2 made this change deliberately. It is still a public API
   break: `complex<float>` now accumulates in `complex<double>`,
   `simd<accumulation_type_t<float>>` becomes `simd<double>`, and types with
   no `acc_type` entry (`long double`, `uint32_t`) no longer compile.
-- To do: add a release note, or keep the old alias under a deprecation and
-  put the new behavior under a new name. This is a maintainer decision.
+- Done: kept the new behaviour and added a README "Upgrade notes" section
+  describing it, with the other caller-visible changes from this plan.
+  Keeping the old alias under a deprecation remains possible if a
+  downstream project needs it.
 
-### 7.8 `set_mask` literal calls are ambiguous -- Open
+### 7.8 `set_mask` literal calls are ambiguous -- Fixed
 
 - Files: [complex_simd.h:361](../include/backend/cpu/detail/complex_simd.h#L361)
   and [reduced/complex_simd.h:207](../include/backend/cpu/reduced/complex_simd.h#L207).
@@ -949,33 +973,136 @@ build, clang-tidy, and any x86, CUDA, HIP, or SVML build.
   `set_mask(1)` does not compile, because `int` to `bool` and `int` to
   `uint32_t`/`uint64_t` are equally good conversions. That is the obvious way
   to migrate from the old `set(1)` mask call.
-- Proposed fix: add a `set_mask(int)` overload or a constrained template.
-- Test: `set_mask(0)` and `set_mask(1)` compile and return the expected
-  masks.
+- Fix: `set_mask(int_t)` became `set_mask(I)` constrained to integral,
+  non-`bool` `I`, in both complex packet templates. It is an exact match for
+  every integer type, and `set_mask(true)` still picks the `bool` overload.
+- Test: `SimdComplexParity.MasksAndSelection` stores
+  `set_mask(1)`, `set_mask(0)`, `set_mask(int64_t(7))`, `set_mask(0u)`;
+  `SimdComplexParity.ReducedSetMaskAcceptsIntegerLiterals` covers the
+  `complex<half>`/`complex<bfloat16>` packets through `if_else`.
 
-### 7.9 `log_fast` computes two transcendentals per packet -- Open
+### 7.9 `log_fast` computes two transcendentals per packet -- Fixed
 
 - File: [complex_simd.h:185](../include/backend/cpu/detail/complex_simd.h#L185).
 - Problem: the 4.1 fix computes both `log1p` and `log` on every lane and
   selects one with `if_else`. This doubles the cost of every complex `log`
   packet, and 4.2 also made this the fast path for Accelerate and MKL builds.
-- Proposed fix: compute `log1p` only when at least one lane is in the
-  `[0.5, 2]` band, and `log` only when at least one lane is outside it.
-- Test: benchmark with `SCALARS_ENABLE_BENCHMARK=ON` before and after; the
-  4.1 accuracy tests must still pass.
+- Fix: `log_fast` evaluates the refined formula only if some lane is in
+  the band and the plain one only if some lane is outside it, using the
+  backends' existing `Ops::all`.
+- Benchmark (MSVC, AVX2, SVML, i9-14900K, median of 5): complex `log`
+  improved 1-4% for float and about 8% for double, e.g. double/262144 from
+  2.34 ms to 2.15 ms. The benchmark's inputs straddle the band edge, so
+  most packets still need both formulas; packets wholly inside or outside
+  the band now make one transcendental call instead of two.
 
-### 7.10 Duplicated reduced-precision complex code -- Open
+### 7.10 Duplicated reduced-precision complex code -- Fixed
 
 - File: [complex.h:634](../include/types/complex.h#L634) and
   [complex.h:706](../include/types/complex.h#L706).
 - Problem: `complex<half>` and `complex<bfloat16>` are near-copies, and they
   already differ after 7.2.
-- Proposed fix: one shared base template for reduced-precision types, as
-  Eigen keeps `half` and `bfloat16` on one code path. This also gives
-  `complex<half>` the 7.2 fixes.
-- Test: run the 7.2 interface test for both `half` and `bfloat16`.
+- Fix: `detail_complex::reduced_complex_base<T>` holds the whole
+  implementation (float intermediates, division in `complex<float>`, zero
+  default, implicit real constructor, scalar compound operators); the two
+  specializations only inherit its constructors. `complex<half>` gains the
+  7.2 interface.
+- Test: the 7.2 test is now a template run as
+  `Complex.BFloat16KeepsGenericComplexInterface` and
+  `Complex.HalfKeepsGenericComplexInterface`.
 
-## 10. Verification for each phase
+## 10. Phase 8: Windows x86 and CUDA verification
+
+Run on 2026-11-13 against `fd796ab` on Windows 11 (i9-14900K: AVX2, no
+AVX-512; RTX 4060 Ti, sm_89; CUDA 13.2; MSVC 14.44; LLVM/Clang 22) and in
+WSL Ubuntu 24.04 (Clang 22, GCC 13). Phases 0 to 7 had only been built on
+arm64, with x86 cross-compiled or emulated, and none of the CUDA work had
+been compiled. Three defects turned up, besides confirming 7.6.
+
+### 8.1 MSVC builds fail in `half.h` after 5.1 (confirmed) -- Fixed
+
+- File: [half.h](../include/types/half.h).
+- Problem: 5.1 enabled `SCALARS_X86_F16`, whose path calls `_cvtsh_ss` and
+  `_cvtss_sh`. Those scalar helpers exist in GCC and Clang only; MSVC has
+  just the packed `_mm_cvtph_ps`/`_mm_cvtps_ph`. Every MSVC AVX/AVX2/AVX-512
+  build stopped with C3861. 5.1 was verified with Clang cross-compiles only.
+- Fix: under MSVC (not clang-cl), convert lane 0 with the packed forms, as
+  PyTorch does.
+
+### 8.2 Complex arithmetic returned zeros in CUDA device code (confirmed) -- Fixed
+
+- Files: [complex.h](../include/types/complex.h),
+  [bit_cast.h](../include/common/bit_cast.h),
+  [Testing/Cxx/CMakeLists.txt](../Testing/Cxx/CMakeLists.txt).
+- Problem: the free `complex` operators, the member compound operators, and
+  `std::real`/`imag`/`norm`/`conj` were `constexpr` but not
+  `SCALARS_HOST_DEVICE`, and `bit_cast` was `std::bit_cast`. PyTorch, the
+  origin of this code, compiles CUDA with `--expt-relaxed-constexpr`; this
+  repository does not, so nvcc only warned (#20013) and the device calls
+  produced nothing: `GpuSimd.ArithmeticAndMathComplex{Float,Double}` read
+  back all zeros. Pre-existing, not a regression from this plan.
+- Fix: annotate those functions `SCALARS_HOST_DEVICE`; CUDA/HIP translation
+  units use the `SCALARS_HOST_DEVICE` `memcpy` form of `bit_cast`. The test
+  target now builds CUDA with `--diag-error=20011,20013,20014,20015`, so a
+  host-only call from device code fails the build instead of miscomputing.
+  `TestGpuSimd.cu` also checks `cudaGetLastError` after every launch.
+
+### 8.3 Clang on Windows called Intel SVML with the wrong convention (confirmed) -- Fixed
+
+- Files: [sse/svml.h](../include/backend/cpu/sse/svml.h),
+  [avx/svml.h](../include/backend/cpu/avx/svml.h),
+  [avx512/svml.h](../include/backend/cpu/avx512/svml.h).
+- Problem: SVML takes vectors in registers (`__vectorcall`). The shim cast
+  each entry point to a `SCALARS_VECTORCALL` pointer, but that macro is
+  empty under Clang, so Clang used the default x64 convention (vector by
+  pointer in `rcx`) and SVML computed on whatever was left in `ymm0`.
+  Single calls often passed by luck; `log_fast`, which makes two calls,
+  returned e.g. `log(0.3)` for `log|0.2+0.3i|` and `-inf` for `log|-4|`.
+  `SimdComplexParity` failed 4 tests with Clang + SVML on Windows, and an
+  older build from before this plan failed 2. An earlier workaround for
+  Debug `pow`/`hypot` hid the same cause.
+- Fix: under Clang on Windows, declare each entry point `__vectorcall` with
+  an asm label giving its undecorated DLL symbol (`"__svml_logf8"`), and
+  drop the default-convention prototypes there, which Clang would otherwise
+  merge with the new declarations. The Debug `pow`/`hypot` fallback now
+  applies to cl.exe only.
+
+### 8.4 `log_fast` real part still lost accuracy near |z| = 1 (confirmed) -- Fixed
+
+- File: [complex_simd.h](../include/backend/cpu/detail/complex_simd.h).
+- Problem: 4.1's `(hi+1)(hi-1) + lo^2` keeps the rounding errors of `hi+1`
+  and `lo^2`, which are as large as the result when `|z|^2 - 1` is tiny
+  (the 4.1 entry itself measured 3% relative error). `P - 1` alone is not
+  exact either: at `re ~ im ~ 0.707`, `P = hi^2 < 0.5`.
+- Fix: split both squares exactly with `fma` (`x^2 = P + E`), add
+  `P + p` with Fast2Sum, and subtract 1 from that sum, which is exact by
+  Sterbenz's lemma because it is close to `|z|^2`. Two extra `fma` per lane
+  in the band; without hardware `fma` the error terms are 0.
+- Test: `SimdComplexParity.LogRealPartRelativeAccuracyNearUnitCircle` (see
+  6.2); runs when SVML, MKL, SLEEF, or Accelerate enables `log_fast`.
+
+### 8.5 Verification
+
+| Configuration | Result |
+| --- | --- |
+| MSVC, AVX2 | 89/89 |
+| MSVC, AVX2, SVML (compiler intrinsics) | 90/90 |
+| Clang, AVX2, SVML DLL, Release and Debug | 90/90 each |
+| Clang, SSE, SVML DLL | 90/90 |
+| Clang, AVX-512, SVML DLL | Builds; this CPU cannot run AVX-512 |
+| MSVC + CUDA 13.2, AVX2, RTX 4060 Ti | 97/97, including 8 GPU tests |
+| Ubuntu 24.04: Clang and GCC, AVX2, SVML | 90/90 each |
+| Ubuntu 24.04: Clang, ASan + UBSan, Debug | 90/90 |
+| Ubuntu 24.04: install, move, consumer (7.4) | Passes |
+| Lint gate (6.1) on this change set | 0 new findings |
+
+`ScalarsSetupTests` passes in every configuration. Not run: HIP, Metal,
+SVE, and AVX-512 at run time. While building, this machine's compilers
+crashed at random (GCC internal errors, Clang segfaults) on files that
+compiled cleanly on retry; every result above comes from a complete,
+clean build.
+
+## 11. Verification for each phase
 
 For each pull request:
 
@@ -988,7 +1115,7 @@ For each pull request:
 5. The [session checklist](../.agents/skills/session-checklist/SKILL.md)
    before handoff.
 
-## 11. Suggested pull request order
+## 12. Suggested pull request order
 
 | Order | Pull request | Items | Risk |
 | --- | --- | --- | --- |
@@ -1002,7 +1129,8 @@ For each pull request:
 | 8 | Namespace and type-system cleanup | 3.1 to 3.4 | High; breaks the API |
 | 9 | ISA dispatch design | 2.3 (long term) | High; design decision first |
 | 10 | Review follow-ups, fixed | 7.1 to 7.5 | Low; land with PRs 3, 6, and 7 |
-| 11 | Review follow-ups, open | 7.6 to 7.10 | Medium; 7.6 needs GPU CI, 7.7 needs a decision |
+| 11 | Review follow-ups | 7.6 to 7.10 | Medium; 7.6 changes overload resolution, 7.10 class structure |
+| 12 | Windows x86 and CUDA fixes, lint gate | 8.1 to 8.4, 6.1, 6.2 | Medium; 8.2 changes device-code behaviour |
 
 Phase 6.2 tests land with the matching fix rather than as a separate pull
 request.

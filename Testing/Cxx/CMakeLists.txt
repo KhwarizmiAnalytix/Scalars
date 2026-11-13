@@ -38,6 +38,14 @@ if(SCALARS_ENABLE_GTEST)
                 PROPERTIES CUDA_STANDARD ${SCALARS_CXX_STANDARD} CUDA_STANDARD_REQUIRED ON
                            CUDA_ARCHITECTURES "${SCALARS_CUDA_ARCHITECTURES}"
             )
+            # A __host__ __device__ function that calls a host-only (or host-only
+            # constexpr) function is only a warning in nvcc, and the device call
+            # then silently does nothing. Make it an error so device paths that
+            # lose their SCALARS_HOST_DEVICE annotation fail the build.
+            target_compile_options(
+                ScalarsCxxTests
+                PRIVATE $<$<COMPILE_LANGUAGE:CUDA>:--diag-error=20011,20013,20014,20015>
+            )
             if(MSVC)
                 # See cmake/gpu_backend.cmake: cl.exe's traditional preprocessor
                 # trips a hard error in CCCL's headers under nvcc.

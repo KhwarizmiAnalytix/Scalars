@@ -209,7 +209,16 @@ public:
         return a ? component_r::eq(component_r::setzero(), component_r::setzero())
                  : component_r::neq(component_r::setzero(), component_r::setzero());
     }
-    static mask_t set_mask(int_t a) { return component_r::set_mask(a); }
+    // Any integer: nonzero selects every lane. A plain set_mask(int_t) next to
+    // set_mask(bool) made set_mask(1) ambiguous (int -> bool and int -> int_t are
+    // equally good conversions); this template is an exact match for every
+    // integer type, while set_mask(true) still picks the bool overload.
+    template <class I>
+        requires(std::is_integral_v<I> && !std::is_same_v<I, bool>)
+    static mask_t set_mask(I a)
+    {
+        return set_mask(a != 0);
+    }
     static void   broadcast(const value_t* p, simd_t& a, simd_t& b, simd_t& c, simd_t& d)
     {
         a = set(p[0]);

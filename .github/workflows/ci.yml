@@ -64,6 +64,53 @@ jobs:
         run: python3 "${{ github.workspace }}/Scripts/setup.py" test --build-dir . --build-dir build
 
   # ---------------------------------------------------------------------------
+  # Lint: lintrunner with the shared lint-tool adapters (.lintrunner.toml),
+  # clang-format, and clang-tidy. main still has pre-existing findings, so the
+  # job fails only on what a change introduces: unformatted changed lines, and
+  # lintrunner findings in changed files that the merge base does not have
+  # (.github/scripts/lint_changes.py).
+  # ---------------------------------------------------------------------------
+  lint:
+    name: Lint (changed code)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/checkout@v4
+        with:
+          repository: KhwarizmiAnalytix/lint-tool
+          ref: 673af3c227fc3b1bceb8f661b3406fa1fd0c4fd5
+          path: .lint-tool
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+
+      - name: Install lintrunner, lint-tool, clang, and clang-tidy
+        run: |
+          sudo apt-get update && sudo apt-get install -y clang clang-tidy ninja-build
+          python -m pip install cmake==4.1.2 lintrunner==0.13.1 pyyaml==6.0.3 -e ./.lint-tool
+
+      - name: Initialize linters
+        run: lintrunner init
+
+      - name: Lint changes against the base
+        shell: bash
+        run: |
+          if [[ "${{ github.event_name }}" == pull_request ]]; then
+            base="origin/${{ github.base_ref }}"
+          elif [[ "${{ github.event.before }}" =~ ^0+$ ]]; then
+            base="HEAD~1"
+          else
+            base="${{ github.event.before }}"
+          fi
+          python3 .github/scripts/lint_changes.py --base "$base" \
+            --configure "python3 Scripts/setup.py config --compiler=clang --generator Ninja --build-dir build > /dev/null"
+
+  # ---------------------------------------------------------------------------
   # CPU SIMD backend matrix: include/backend/cpu/{sse,avx,avx2,avx512,neon,sve}.
   # Each backend is always configured and built; the runtime CTest pass only
   # runs when the host actually exposes the required ISA, mirroring

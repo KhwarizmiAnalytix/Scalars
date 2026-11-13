@@ -49,6 +49,7 @@ constexpr gpu_error_t kGpuSuccess = cudaSuccess;
 #define gpuMemcpyDeviceToHost cudaMemcpyDeviceToHost
 #define gpuGetErrorString cudaGetErrorString
 #define gpuDeviceSynchronize cudaDeviceSynchronize
+#define gpuGetLastError cudaGetLastError
 #define gpuGetDeviceCount cudaGetDeviceCount
 #elif SCALARS_HAS_HIP
 using gpu_error_t                 = hipError_t;
@@ -60,6 +61,7 @@ constexpr gpu_error_t kGpuSuccess = hipSuccess;
 #define gpuMemcpyDeviceToHost hipMemcpyDeviceToHost
 #define gpuGetErrorString hipGetErrorString
 #define gpuDeviceSynchronize hipDeviceSynchronize
+#define gpuGetLastError hipGetLastError
 #define gpuGetDeviceCount hipGetDeviceCount
 #endif
 
@@ -218,6 +220,7 @@ template <typename T> void run_gpu_simd_test()
     {
         DevBuf<T> r_add(N), r_sub(N), r_mul(N), r_div(N), r_fma(N);
         k_arith<<<kGrid, kBlock>>>(da.d, db.d, r_add.d, r_sub.d, r_mul.d, r_div.d, r_fma.d, N);
+        GPU_CHECK(gpuGetLastError());
         GPU_CHECK(gpuDeviceSynchronize());
 
         auto vadd = r_add.download(), vsub = r_sub.download(), vmul = r_mul.download(),
@@ -239,6 +242,7 @@ template <typename T> void run_gpu_simd_test()
         DevBuf<T> r_sqrt(N), r_sqr(N), r_fabs(N), r_neg(N), r_ceil(N), r_floor(N), r_trunc(N);
         k_unary<<<kGrid, kBlock>>>(
             da.d, r_sqrt.d, r_sqr.d, r_fabs.d, r_neg.d, r_ceil.d, r_floor.d, r_trunc.d, N);
+        GPU_CHECK(gpuGetLastError());
         GPU_CHECK(gpuDeviceSynchronize());
 
         auto vsqrt = r_sqrt.download(), vsqr = r_sqr.download();
@@ -263,6 +267,7 @@ template <typename T> void run_gpu_simd_test()
     {
         DevBuf<T> r_exp(N), r_log(N), r_exp2(N), r_log2(N), r_cbrt(N);
         k_explog<<<kGrid, kBlock>>>(da.d, r_exp.d, r_log.d, r_exp2.d, r_log2.d, r_cbrt.d, N);
+        GPU_CHECK(gpuGetLastError());
         GPU_CHECK(gpuDeviceSynchronize());
 
         auto vexp = r_exp.download(), vlog = r_log.download();
@@ -284,6 +289,7 @@ template <typename T> void run_gpu_simd_test()
     {
         DevBuf<T> r_sin(N), r_cos(N), r_tanh(N);
         k_trig<<<kGrid, kBlock>>>(da.d, r_sin.d, r_cos.d, r_tanh.d, N);
+        GPU_CHECK(gpuGetLastError());
         GPU_CHECK(gpuDeviceSynchronize());
 
         auto vsin = r_sin.download(), vcos = r_cos.download(), vtanh = r_tanh.download();
@@ -301,6 +307,7 @@ template <typename T> void run_gpu_simd_test()
     {
         DevBuf<T> r_lt(N), r_eq(N), r_acc(N), r_hmin(N), r_hmax(N);
         k_cmp_reduce<<<kGrid, kBlock>>>(da.d, db.d, r_lt.d, r_eq.d, r_acc.d, r_hmin.d, r_hmax.d, N);
+        GPU_CHECK(gpuGetLastError());
         GPU_CHECK(gpuDeviceSynchronize());
 
         auto vlt = r_lt.download(), veq = r_eq.download();
@@ -413,6 +420,7 @@ template <typename T> void run_gpu_complex_simd_test()
         DevBuf<T> r_add(N), r_sub(N), r_mul(N), r_div(N), r_fma(N), r_conj(N);
         k_complex_arith<<<kGrid, kBlock>>>(
             da.d, db.d, r_add.d, r_sub.d, r_mul.d, r_div.d, r_fma.d, r_conj.d, N);
+        GPU_CHECK(gpuGetLastError());
         GPU_CHECK(gpuDeviceSynchronize());
 
         auto vadd = r_add.download(), vsub = r_sub.download(), vmul = r_mul.download(),
@@ -434,6 +442,7 @@ template <typename T> void run_gpu_complex_simd_test()
         DevBuf<T>           r_sqrt(N), r_exp(N), r_log(N);
         DevBuf<component_t> r_abs(N), r_arg(N);
         k_complex_math<<<kGrid, kBlock>>>(da.d, r_sqrt.d, r_exp.d, r_log.d, r_abs.d, r_arg.d, N);
+        GPU_CHECK(gpuGetLastError());
         GPU_CHECK(gpuDeviceSynchronize());
 
         auto vsqrt = r_sqrt.download(), vexp = r_exp.download(), vlog = r_log.download();
@@ -456,6 +465,7 @@ template <typename T> void run_gpu_complex_simd_test()
         DevBuf<uint32_t> r_eq(N);
         DevBuf<T>        r_acc(N);
         k_complex_cmp_reduce<<<kGrid, kBlock>>>(da.d, r_eq.d, r_acc.d, N);
+        GPU_CHECK(gpuGetLastError());
         GPU_CHECK(gpuDeviceSynchronize());
 
         auto veq  = r_eq.download();
@@ -540,6 +550,7 @@ template <class T> void run_reduced_contract_test()
     DevBuf<float>    widened(n);
     input.upload(values);
     k_reduced_encoding_contract<<<512, 128>>>(input.d, output.d, masks.d, widened.d);
+    GPU_CHECK(gpuGetLastError());
     GPU_CHECK(gpuDeviceSynchronize());
     const auto result = output.download();
     const auto mask   = masks.download();
@@ -563,6 +574,7 @@ template <class T> void run_reduced_contract_test()
         }
     }
     k_reduced_rounding_contract<T><<<1, 1>>>(output.d, masks.d, widened.d);
+    GPU_CHECK(gpuGetLastError());
     GPU_CHECK(gpuDeviceSynchronize());
     const auto  rounded = output.download();
     const auto  cmp     = masks.download();
@@ -582,6 +594,111 @@ template <class T> void run_reduced_contract_test()
         EXPECT_EQ(cmp[i], 0xffff);
     for (int i : {1, 5})
         EXPECT_EQ(cmp[i], 0);
+}
+
+// half comparisons in device code. cuda_fp16.h/hip_fp16.h declare global
+// operators on __half, and half converts implicitly to both float and __half,
+// so these must still resolve to scalars' own comparisons. Bit k of the result
+// is the k-th comparison below.
+__global__ void k_half_compare(
+    const scalars::half* a, const scalars::half* b, uint32_t* bits, size_t n)
+{
+    size_t i = (size_t)blockIdx.x * blockDim.x + threadIdx.x;
+    if (i >= n)
+        return;
+    const scalars::half x = a[i], y = b[i];
+    const float         yf = static_cast<float>(y);
+    // Parenthesized so clang-format does not read `x < y, ..., x > y` as a
+    // template argument list.
+    const bool r[] = {// half, half
+        (x == y),
+        (x != y),
+        (x < y),
+        (x <= y),
+        (x > y),
+        (x >= y),
+        // half, float
+        (x == yf),
+        (x != yf),
+        (x < yf),
+        (x <= yf),
+        (x > yf),
+        (x >= yf),
+        // float, half
+        (yf == x),
+        (yf != x),
+        (yf < x),
+        (yf <= x),
+        (yf > x),
+        (yf >= x),
+        // double
+        (x == double(yf)),
+        (x < double(yf)),
+        (double(yf) > x),
+        // int
+        (x == 1),
+        (x < 1),
+        (1 > x),
+        (1 != x)};
+    uint32_t   out = 0;
+    for (uint32_t k = 0; k < sizeof(r) / sizeof(r[0]); ++k)
+        out |= uint32_t(r[k]) << k;
+    bits[i] = out;
+}
+
+void run_half_compare_test()
+{
+    const std::vector<float>   values = {-2.f, -1.f, -0.f, 0.f, 0.5f, 1.f, 1.5f, 65504.f, NAN};
+    std::vector<scalars::half> ha, hb;
+    for (float u : values)
+        for (float v : values)
+        {
+            ha.emplace_back(u);
+            hb.emplace_back(v);
+        }
+    const size_t          n = ha.size();
+    DevBuf<scalars::half> da(n), db(n);
+    DevBuf<uint32_t>      dbits(n);
+    da.upload(ha);
+    db.upload(hb);
+    k_half_compare<<<(unsigned)((n + 63) / 64), 64>>>(da.d, db.d, dbits.d, n);
+    GPU_CHECK(gpuGetLastError());
+    GPU_CHECK(gpuDeviceSynchronize());
+    const auto bits = dbits.download();
+
+    for (size_t i = 0; i < n; ++i)
+    {
+        const float x = static_cast<float>(ha[i]), y = static_cast<float>(hb[i]);
+        // Same order as k_half_compare, evaluated in float on the host.
+        const bool e[] = {(x == y),
+            (x != y),
+            (x < y),
+            (x <= y),
+            (x > y),
+            (x >= y),
+            (x == y),
+            (x != y),
+            (x < y),
+            (x <= y),
+            (x > y),
+            (x >= y),
+            (y == x),
+            (y != x),
+            (y < x),
+            (y <= x),
+            (y > x),
+            (y >= x),
+            (x == y),
+            (x < y),
+            (y > x),
+            (x == 1),
+            (x < 1),
+            (1 > x),
+            (1 != x)};
+        for (uint32_t k = 0; k < sizeof(e) / sizeof(e[0]); ++k)
+            EXPECT_EQ(((bits[i] >> k) & 1u) != 0, e[k])
+                << "comparison " << k << " for (" << x << ", " << y << ")";
+    }
 }
 
 }  // namespace
@@ -634,6 +751,15 @@ TEST(GpuSimd, ArithmeticAndMathHalf)
         GTEST_SKIP() << "No GPU device";
     run_gpu_simd_test<scalars::half>();
     run_reduced_contract_test<scalars::half>();
+}
+
+TEST(GpuSimd, HalfComparisonsOnDevice)
+{
+    int ndev = 0;
+    gpuGetDeviceCount(&ndev);
+    if (ndev == 0)
+        GTEST_SKIP() << "No GPU device";
+    run_half_compare_test();
 }
 
 TEST(GpuSimd, ArithmeticAndMathBFloat16)

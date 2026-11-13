@@ -1,10 +1,12 @@
 #include "backend/simd.h"
 
+#include <algorithm>
 #include <array>
 #include <bit>
 #include <cmath>
 #include <complex>
 #include <concepts>
+#include <cstdint>
 #include <gtest/gtest.h>
 #include <limits>
 #include <memory>
@@ -12,6 +14,7 @@
 #include <random>
 #include <string>
 #include <type_traits>
+#include <vector>
 
 #if SCALARS_VECTORIZED
 
@@ -120,7 +123,14 @@ static_assert(complex_packet_api<simd<scalars::complex<double>>>);
 static_assert(excludes_real_only<simd<scalars::complex<float>>>());
 static_assert(excludes_real_only<simd<scalars::complex<double>>>());
 
-template <class T> void expect_component(T actual, T expected, bool check_zero_sign = false)
+// Normwise relative tolerance: errors are measured against `scale`, the size of
+// the whole expected result (max(|re|, |im|) for complex values, |expected| for
+// real ones), with a floor only at the smallest normal number. A fixed absolute
+// floor of 1 would hide relative-accuracy regressions in small results (see
+// plan item 4.1), while a per-component relative bound would reject legitimate
+// rounding residue, such as a ~1e-16 imaginary part next to a real part near 1.
+template <class T>
+void expect_component(T actual, T expected, bool check_zero_sign = false, T scale = T(-1))
 {
     if (std::isnan(expected))
     {
@@ -132,7 +142,9 @@ template <class T> void expect_component(T actual, T expected, bool check_zero_s
     }
     else
     {
-        const T tolerance = 64 * std::numeric_limits<T>::epsilon() * (T(1) + std::fabs(expected));
+        const T magnitude = std::max(scale, std::fabs(expected));
+        const T tolerance =
+            64 * std::numeric_limits<T>::epsilon() * magnitude + std::numeric_limits<T>::min();
         EXPECT_NEAR(actual, expected, tolerance);
         if (check_zero_sign && expected == T(0))
         {
@@ -145,8 +157,16 @@ template <class T>
 void expect_value(
     scalars::complex<T> actual, std::complex<T> expected, bool check_zero_sign = false)
 {
-    expect_component(actual.real(), expected.real(), check_zero_sign);
-    expect_component(actual.imag(), expected.imag(), check_zero_sign);
+    T scale = T(0);
+    for (const T component : {expected.real(), expected.imag()})
+    {
+        if (std::isfinite(component))
+        {
+            scale = std::max(scale, std::fabs(component));
+        }
+    }
+    expect_component(actual.real(), expected.real(), check_zero_sign, scale);
+    expect_component(actual.imag(), expected.imag(), check_zero_sign, scale);
 }
 template <class T> void expect_bits(scalars::complex<T> actual, scalars::complex<T> expected)
 {
@@ -254,6 +274,28 @@ template <class T> void check_masks()
         EXPECT_EQ(flag, ~bits(0));
     }
     s::storeu(s::set_mask(false), flags.data());
+    for (const auto flag : flags)
+    {
+        EXPECT_EQ(flag, bits(0));
+    }
+    // Plain integer literals must compile (they were ambiguous between the bool
+    // and int_t overloads) and follow the nonzero-selects-all rule.
+    s::storeu(s::set_mask(1), flags.data());
+    for (const auto flag : flags)
+    {
+        EXPECT_EQ(flag, ~bits(0));
+    }
+    s::storeu(s::set_mask(0), flags.data());
+    for (const auto flag : flags)
+    {
+        EXPECT_EQ(flag, bits(0));
+    }
+    s::storeu(s::set_mask(std::int64_t(7)), flags.data());
+    for (const auto flag : flags)
+    {
+        EXPECT_EQ(flag, ~bits(0));
+    }
+    s::storeu(s::set_mask(0u), flags.data());
     for (const auto flag : flags)
     {
         EXPECT_EQ(flag, bits(0));
@@ -846,4 +888,114 @@ TEST(SimdComplexParity, MathExponentRanges)
     check_vector_math_ranges<float>();
     check_vector_math_ranges<double>();
 }
+namespace
+{
+// Reduced-precision complex packets: set_mask must accept plain integer
+// literals as well as bool (7.8). The mask is observed through if_else.
+template <class T> void check_reduced_set_mask()
+{
+    using c = scalars::complex<T>;
+    using s = simd<c>;
+    std::array<c, s::size> a{}, b{}, out{};
+    for (int i = 0; i < s::size; ++i)
+    {
+        a[i] = c(T(float(i + 1)), T(float(-i)));
+        b[i] = c(T(-2.f), T(3.f));
+    }
+    const auto pa = s::loadu(a.data()), pb = s::loadu(b.data());
+    auto       expect_selects = [&](typename s::mask_t m, const std::array<c, s::size>& want)
+    {
+        s::storeu(s::if_else(m, pa, pb), out.data());
+        for (int i = 0; i < s::size; ++i)
+        {
+            EXPECT_EQ(float(out[i].real()), float(want[i].real())) << i;
+            EXPECT_EQ(float(out[i].imag()), float(want[i].imag())) << i;
+        }
+    };
+    expect_selects(s::set_mask(1), a);
+    expect_selects(s::set_mask(0), b);
+    expect_selects(s::set_mask(true), a);
+    expect_selects(s::set_mask(false), b);
+    expect_selects(s::set_mask(std::int64_t(-3)), a);
+    expect_selects(s::set_mask(typename s::int_t(0)), b);
+}
+}  // namespace
+
+TEST(SimdComplexParity, ReducedSetMaskAcceptsIntegerLiterals)
+{
+    check_reduced_set_mask<scalars::half>();
+    check_reduced_set_mask<scalars::bfloat16>();
+}
+
+#if SCALARS_HAS_SVML || SCALARS_HAS_MKL || SCALARS_HAS_SLEEF || SCALARS_HAS_ACCELERATE
+namespace
+{
+// Reference log|z| for z near the unit circle, computed without cancellation:
+// |z|^2 - 1 = (hi^2 - 1) + lo^2 with each square split exactly by fma. For
+// float inputs the squares are exact in double, so the double result is far
+// more accurate than float needs.
+double near_unit_log_magnitude_reference(double re, double im)
+{
+    const double hi  = std::max(std::fabs(re), std::fabs(im));
+    const double lo  = std::min(std::fabs(re), std::fabs(im));
+    const double hi2 = hi * hi, hi2_error = std::fma(hi, hi, -hi2);
+    const double lo2 = lo * lo, lo2_error = std::fma(lo, lo, -lo2);
+    // Two-sum (not Fast2Sum) so the reference does not share the
+    // implementation's ordering assumption.
+    const double sum = hi2 + lo2, rounded_hi2 = sum - lo2;
+    const double sum_error = (hi2 - rounded_hi2) + (lo2 - (sum - rounded_hi2));
+    return 0.5 * std::log1p((sum - 1.0) + (sum_error + hi2_error + lo2_error));
+}
+
+// Re(log z) must be accurate relative to itself, not just to |log z|: near
+// |z| = 1 it is tiny while Im(log z) = arg z is not, so the normwise check in
+// expect_value cannot see errors in it (plan items 4.1 and 6.2).
+template <class T> void check_log_real_part_near_unit_circle()
+{
+    using c = scalars::complex<T>;
+    using s = simd<c>;
+    std::vector<c> inputs;
+    // The plan's 4.1 example: |z|^2 - 1 is about 4e-8.
+    inputs.emplace_back(T(0.9323273301), T(0.3616154194));
+    const int deepest = std::is_same_v<T, float> ? 22 : 50;
+    for (int k = 3; k <= deepest; ++k)
+    {
+        for (const double sign : {-1.0, 1.0})
+        {
+            const double radius = 1.0 + sign * std::ldexp(1.0, -k);
+            for (const double angle : {0.05, 0.4, 0.785, 1.2, 2.5, -2.0})
+            {
+                inputs.emplace_back(T(radius * std::cos(angle)), T(radius * std::sin(angle)));
+            }
+        }
+    }
+    while (inputs.size() % s::size != 0)
+    {
+        inputs.push_back(inputs.front());
+    }
+    std::vector<c> outputs(inputs.size());
+    for (std::size_t i = 0; i < inputs.size(); i += s::size)
+    {
+        s::storeu(s::log(s::loadu(inputs.data() + i)), outputs.data() + i);
+    }
+    for (std::size_t i = 0; i < inputs.size(); ++i)
+    {
+        const double expected =
+            near_unit_log_magnitude_reference(double(inputs[i].real()), double(inputs[i].imag()));
+        const double tolerance =
+            16 * double(std::numeric_limits<T>::epsilon()) * std::fabs(expected) +
+            double(std::numeric_limits<T>::min());
+        EXPECT_NEAR(double(outputs[i].real()), expected, tolerance)
+            << "z = (" << double(inputs[i].real()) << ", " << double(inputs[i].imag()) << ")";
+    }
+}
+}  // namespace
+
+TEST(SimdComplexParity, LogRealPartRelativeAccuracyNearUnitCircle)
+{
+    check_log_real_part_near_unit_circle<float>();
+    check_log_real_part_near_unit_circle<double>();
+}
+#endif
+
 #endif

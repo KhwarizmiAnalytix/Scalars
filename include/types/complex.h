@@ -41,7 +41,7 @@ template <class T> inline bool division_component_is_bounded(T value)
 // does not), and this helper is used from a constexpr operator/=. NaN must
 // pass through unchanged: mapping it to 0 would send a NaN divisor down
 // operator/='s divide-by-zero branch and produce inf instead of NaN.
-template <class T> constexpr T division_abs(T value)
+template <class T> SCALARS_HOST_DEVICE constexpr T division_abs(T value)
 {
     return value < T(0) ? -value : (value == T(0) ? T(0) : value);
 }
@@ -234,61 +234,64 @@ template <typename T> struct alignas(sizeof(T) * 2) complex
     {
     }
 
-    constexpr complex<T>& operator=(T re)
+    SCALARS_HOST_DEVICE constexpr complex<T>& operator=(T re)
     {
         real_ = re;
         imag_ = 0;
         return *this;
     }
 
-    constexpr complex<T>& operator+=(T re)
+    SCALARS_HOST_DEVICE constexpr complex<T>& operator+=(T re)
     {
         real_ += re;
         return *this;
     }
 
-    constexpr complex<T>& operator-=(T re)
+    SCALARS_HOST_DEVICE constexpr complex<T>& operator-=(T re)
     {
         real_ -= re;
         return *this;
     }
 
-    constexpr complex<T>& operator*=(T re)
+    SCALARS_HOST_DEVICE constexpr complex<T>& operator*=(T re)
     {
         real_ *= re;
         imag_ *= re;
         return *this;
     }
 
-    constexpr complex<T>& operator/=(T re)
+    SCALARS_HOST_DEVICE constexpr complex<T>& operator/=(T re)
     {
         real_ /= re;
         imag_ /= re;
         return *this;
     }
 
-    template <typename U> constexpr complex<T>& operator=(const complex<U>& rhs)
+    template <typename U> SCALARS_HOST_DEVICE constexpr complex<T>& operator=(const complex<U>& rhs)
     {
         real_ = rhs.real();
         imag_ = rhs.imag();
         return *this;
     }
 
-    template <typename U> constexpr complex<T>& operator+=(const complex<U>& rhs)
+    template <typename U>
+    SCALARS_HOST_DEVICE constexpr complex<T>& operator+=(const complex<U>& rhs)
     {
         real_ += rhs.real();
         imag_ += rhs.imag();
         return *this;
     }
 
-    template <typename U> constexpr complex<T>& operator-=(const complex<U>& rhs)
+    template <typename U>
+    SCALARS_HOST_DEVICE constexpr complex<T>& operator-=(const complex<U>& rhs)
     {
         real_ -= rhs.real();
         imag_ -= rhs.imag();
         return *this;
     }
 
-    template <typename U> constexpr complex<T>& operator*=(const complex<U>& rhs)
+    template <typename U>
+    SCALARS_HOST_DEVICE constexpr complex<T>& operator*=(const complex<U>& rhs)
     {
         // (a + bi) * (c + di) = (a*c - b*d) + (a * d + b * c) i
         T a   = real_;
@@ -301,7 +304,7 @@ template <typename T> struct alignas(sizeof(T) * 2) complex
     }
 
     template <typename U>
-    SCALARS_FORCE_INLINE constexpr complex<T>& operator/=(
+    SCALARS_HOST_DEVICE SCALARS_FORCE_INLINE constexpr complex<T>& operator/=(
         const complex<U>& rhs) SCALARS_UBSAN_IGNORE_FLOAT_DIVIDE_BY_ZERO
     {
         // (a + bi) / (c + di) = (ac + bd)/(c^2 + d^2) + (bc - ad)/(c^2 + d^2) i
@@ -403,115 +406,127 @@ template <typename T> struct alignas(sizeof(T) * 2) complex
 #endif
 
     // consistent with NumPy behavior
-    explicit constexpr operator bool() const { return real() || imag(); }
+    explicit SCALARS_HOST_DEVICE constexpr operator bool() const { return real() || imag(); }
 
     SCALARS_HOST_DEVICE constexpr T real() const { return real_; }
-    constexpr void              real(T value) { real_ = value; }
+    SCALARS_HOST_DEVICE constexpr void real(T value) { real_ = value; }
     SCALARS_HOST_DEVICE constexpr T imag() const { return imag_; }
-    constexpr void              imag(T value) { imag_ = value; }
+    SCALARS_HOST_DEVICE constexpr void imag(T value) { imag_ = value; }
 };
 
 namespace complex_literals
 {
 
-constexpr complex<float> operator""_if(long double imag)
+SCALARS_HOST_DEVICE constexpr complex<float> operator""_if(long double imag)
 {
     return complex<float>(0.0f, static_cast<float>(imag));
 }
 
-constexpr complex<double> operator""_id(long double imag)
+SCALARS_HOST_DEVICE constexpr complex<double> operator""_id(long double imag)
 {
     return complex<double>(0.0, static_cast<double>(imag));
 }
 
-constexpr complex<float> operator""_if(unsigned long long imag)
+SCALARS_HOST_DEVICE constexpr complex<float> operator""_if(unsigned long long imag)
 {
     return complex<float>(0.0f, static_cast<float>(imag));
 }
 
-constexpr complex<double> operator""_id(unsigned long long imag)
+SCALARS_HOST_DEVICE constexpr complex<double> operator""_id(unsigned long long imag)
 {
     return complex<double>(0.0, static_cast<double>(imag));
 }
 
 }  // namespace complex_literals
 
-template <typename T> constexpr complex<T> operator+(const complex<T>& val)
+template <typename T> SCALARS_HOST_DEVICE constexpr complex<T> operator+(const complex<T>& val)
 {
     return val;
 }
 
-template <typename T> constexpr complex<T> operator-(const complex<T>& val)
+template <typename T> SCALARS_HOST_DEVICE constexpr complex<T> operator-(const complex<T>& val)
 {
     return complex<T>(-val.real(), -val.imag());
 }
 
-template <typename T> constexpr complex<T> operator+(const complex<T>& lhs, const complex<T>& rhs)
+template <typename T>
+SCALARS_HOST_DEVICE constexpr complex<T> operator+(const complex<T>& lhs, const complex<T>& rhs)
 {
     complex<T> result = lhs;
     return result += rhs;
 }
 
-template <typename T> constexpr complex<T> operator+(const complex<T>& lhs, const T& rhs)
+template <typename T>
+SCALARS_HOST_DEVICE constexpr complex<T> operator+(const complex<T>& lhs, const T& rhs)
 {
     complex<T> result = lhs;
     return result += rhs;
 }
 
-template <typename T> constexpr complex<T> operator+(const T& lhs, const complex<T>& rhs)
+template <typename T>
+SCALARS_HOST_DEVICE constexpr complex<T> operator+(const T& lhs, const complex<T>& rhs)
 {
     return complex<T>(lhs + rhs.real(), rhs.imag());
 }
 
-template <typename T> constexpr complex<T> operator-(const complex<T>& lhs, const complex<T>& rhs)
+template <typename T>
+SCALARS_HOST_DEVICE constexpr complex<T> operator-(const complex<T>& lhs, const complex<T>& rhs)
 {
     complex<T> result = lhs;
     return result -= rhs;
 }
 
-template <typename T> constexpr complex<T> operator-(const complex<T>& lhs, const T& rhs)
+template <typename T>
+SCALARS_HOST_DEVICE constexpr complex<T> operator-(const complex<T>& lhs, const T& rhs)
 {
     complex<T> result = lhs;
     return result -= rhs;
 }
 
-template <typename T> constexpr complex<T> operator-(const T& lhs, const complex<T>& rhs)
+template <typename T>
+SCALARS_HOST_DEVICE constexpr complex<T> operator-(const T& lhs, const complex<T>& rhs)
 {
     complex<T> result = -rhs;
     return result += lhs;
 }
 
-template <typename T> constexpr complex<T> operator*(const complex<T>& lhs, const complex<T>& rhs)
+template <typename T>
+SCALARS_HOST_DEVICE constexpr complex<T> operator*(const complex<T>& lhs, const complex<T>& rhs)
 {
     complex<T> result = lhs;
     return result *= rhs;
 }
 
-template <typename T> constexpr complex<T> operator*(const complex<T>& lhs, const T& rhs)
+template <typename T>
+SCALARS_HOST_DEVICE constexpr complex<T> operator*(const complex<T>& lhs, const T& rhs)
 {
     complex<T> result = lhs;
     return result *= rhs;
 }
 
-template <typename T> constexpr complex<T> operator*(const T& lhs, const complex<T>& rhs)
+template <typename T>
+SCALARS_HOST_DEVICE constexpr complex<T> operator*(const T& lhs, const complex<T>& rhs)
 {
     complex<T> result = rhs;
     return result *= lhs;
 }
 
-template <typename T> constexpr complex<T> operator/(const complex<T>& lhs, const complex<T>& rhs)
+template <typename T>
+SCALARS_HOST_DEVICE constexpr complex<T> operator/(const complex<T>& lhs, const complex<T>& rhs)
 {
     complex<T> result = lhs;
     return result /= rhs;
 }
 
-template <typename T> constexpr complex<T> operator/(const complex<T>& lhs, const T& rhs)
+template <typename T>
+SCALARS_HOST_DEVICE constexpr complex<T> operator/(const complex<T>& lhs, const T& rhs)
 {
     complex<T> result = lhs;
     return result /= rhs;
 }
 
-template <typename T> constexpr complex<T> operator/(const T& lhs, const complex<T>& rhs)
+template <typename T>
+SCALARS_HOST_DEVICE constexpr complex<T> operator/(const T& lhs, const complex<T>& rhs)
 {
     complex<T> result(lhs, T());
     return result /= rhs;
@@ -525,81 +540,95 @@ template <typename T> constexpr complex<T> operator/(const T& lhs, const complex
     typename std::enable_if_t<std::is_floating_point_v<fT> && std::is_integral_v<iT>, int> = 0
 
 template <typename fT, typename iT, COMPLEX_INTEGER_OP_TEMPLATE_CONDITION>
-constexpr scalars::complex<fT> operator+(const scalars::complex<fT>& a, const iT& b)
+SCALARS_HOST_DEVICE constexpr scalars::complex<fT> operator+(
+    const scalars::complex<fT>& a, const iT& b)
 {
     return a + static_cast<fT>(b);
 }
 
 template <typename fT, typename iT, COMPLEX_INTEGER_OP_TEMPLATE_CONDITION>
-constexpr scalars::complex<fT> operator+(const iT& a, const scalars::complex<fT>& b)
+SCALARS_HOST_DEVICE constexpr scalars::complex<fT> operator+(
+    const iT& a, const scalars::complex<fT>& b)
 {
     return static_cast<fT>(a) + b;
 }
 
 template <typename fT, typename iT, COMPLEX_INTEGER_OP_TEMPLATE_CONDITION>
-constexpr scalars::complex<fT> operator-(const scalars::complex<fT>& a, const iT& b)
+SCALARS_HOST_DEVICE constexpr scalars::complex<fT> operator-(
+    const scalars::complex<fT>& a, const iT& b)
 {
     return a - static_cast<fT>(b);
 }
 
 template <typename fT, typename iT, COMPLEX_INTEGER_OP_TEMPLATE_CONDITION>
-constexpr scalars::complex<fT> operator-(const iT& a, const scalars::complex<fT>& b)
+SCALARS_HOST_DEVICE constexpr scalars::complex<fT> operator-(
+    const iT& a, const scalars::complex<fT>& b)
 {
     return static_cast<fT>(a) - b;
 }
 
 template <typename fT, typename iT, COMPLEX_INTEGER_OP_TEMPLATE_CONDITION>
-constexpr scalars::complex<fT> operator*(const scalars::complex<fT>& a, const iT& b)
+SCALARS_HOST_DEVICE constexpr scalars::complex<fT> operator*(
+    const scalars::complex<fT>& a, const iT& b)
 {
     return a * static_cast<fT>(b);
 }
 
 template <typename fT, typename iT, COMPLEX_INTEGER_OP_TEMPLATE_CONDITION>
-constexpr scalars::complex<fT> operator*(const iT& a, const scalars::complex<fT>& b)
+SCALARS_HOST_DEVICE constexpr scalars::complex<fT> operator*(
+    const iT& a, const scalars::complex<fT>& b)
 {
     return static_cast<fT>(a) * b;
 }
 
 template <typename fT, typename iT, COMPLEX_INTEGER_OP_TEMPLATE_CONDITION>
-constexpr scalars::complex<fT> operator/(const scalars::complex<fT>& a, const iT& b)
+SCALARS_HOST_DEVICE constexpr scalars::complex<fT> operator/(
+    const scalars::complex<fT>& a, const iT& b)
 {
     return a / static_cast<fT>(b);
 }
 
 template <typename fT, typename iT, COMPLEX_INTEGER_OP_TEMPLATE_CONDITION>
-constexpr scalars::complex<fT> operator/(const iT& a, const scalars::complex<fT>& b)
+SCALARS_HOST_DEVICE constexpr scalars::complex<fT> operator/(
+    const iT& a, const scalars::complex<fT>& b)
 {
     return static_cast<fT>(a) / b;
 }
 
 #undef COMPLEX_INTEGER_OP_TEMPLATE_CONDITION
 
-template <typename T> constexpr bool operator==(const complex<T>& lhs, const complex<T>& rhs)
+template <typename T>
+SCALARS_HOST_DEVICE constexpr bool operator==(const complex<T>& lhs, const complex<T>& rhs)
 {
     return (lhs.real() == rhs.real()) && (lhs.imag() == rhs.imag());
 }
 
-template <typename T> constexpr bool operator==(const complex<T>& lhs, const T& rhs)
+template <typename T>
+SCALARS_HOST_DEVICE constexpr bool operator==(const complex<T>& lhs, const T& rhs)
 {
     return (lhs.real() == rhs) && (lhs.imag() == T());
 }
 
-template <typename T> constexpr bool operator==(const T& lhs, const complex<T>& rhs)
+template <typename T>
+SCALARS_HOST_DEVICE constexpr bool operator==(const T& lhs, const complex<T>& rhs)
 {
     return (lhs == rhs.real()) && (T() == rhs.imag());
 }
 
-template <typename T> constexpr bool operator!=(const complex<T>& lhs, const complex<T>& rhs)
+template <typename T>
+SCALARS_HOST_DEVICE constexpr bool operator!=(const complex<T>& lhs, const complex<T>& rhs)
 {
     return !(lhs == rhs);
 }
 
-template <typename T> constexpr bool operator!=(const complex<T>& lhs, const T& rhs)
+template <typename T>
+SCALARS_HOST_DEVICE constexpr bool operator!=(const complex<T>& lhs, const T& rhs)
 {
     return !(lhs == rhs);
 }
 
-template <typename T> constexpr bool operator!=(const T& lhs, const complex<T>& rhs)
+template <typename T>
+SCALARS_HOST_DEVICE constexpr bool operator!=(const T& lhs, const complex<T>& rhs)
 {
     return !(lhs == rhs);
 }
@@ -631,175 +660,132 @@ template <typename T> SCALARS_HOST_DEVICE complex<T> polar(const T& r, const T& 
 #endif
 }
 
-template <> struct alignas(4) complex<half>
+namespace detail_complex
 {
-    half real_;
-    half imag_;
-
-    // Constructors
-    complex() = default;
-    // half constructor is not constexpr so the following constructor can't
-    // be constexpr
-    SCALARS_HOST_DEVICE explicit inline complex(const half& real, const half& imag)
-        : real_(real), imag_(imag)
-    {
-    }
-    // cppcheck-suppress noExplicitConstructor -- deliberate, matches half's own implicit
-    // narrowing conversion from float used throughout the reduced-precision types.
-    SCALARS_HOST_DEVICE inline complex(const scalars::complex<float>& value)
-        : real_(value.real()), imag_(value.imag())
-    {
-    }
-
-    // Conversion operator
-    inline SCALARS_HOST_DEVICE operator scalars::complex<float>() const { return {real_, imag_}; }
-
-    constexpr SCALARS_HOST_DEVICE half real() const { return real_; }
-    constexpr SCALARS_HOST_DEVICE void real(half value) { real_ = value; }
-    constexpr SCALARS_HOST_DEVICE half imag() const { return imag_; }
-    constexpr SCALARS_HOST_DEVICE void imag(half value) { imag_ = value; }
-
-    SCALARS_HOST_DEVICE complex<half>& operator+=(const complex<half>& other)
-    {
-        real_ = static_cast<float>(real_) + static_cast<float>(other.real_);
-        imag_ = static_cast<float>(imag_) + static_cast<float>(other.imag_);
-        return *this;
-    }
-
-    SCALARS_HOST_DEVICE complex<half>& operator-=(const complex<half>& other)
-    {
-        real_ = static_cast<float>(real_) - static_cast<float>(other.real_);
-        imag_ = static_cast<float>(imag_) - static_cast<float>(other.imag_);
-        return *this;
-    }
-
-    SCALARS_HOST_DEVICE complex<half>& operator*=(const complex<half>& other)
-    {
-        auto a = static_cast<float>(real_);
-        auto b = static_cast<float>(imag_);
-        auto c = static_cast<float>(other.real());
-        auto d = static_cast<float>(other.imag());
-        real_  = a * c - b * d;
-        imag_  = a * d + b * c;
-        return *this;
-    }
-
-    // Reduced-precision complex division computes in complex<float> and
-    // narrows the result once, as PyTorch does for c10::complex<c10::Half>.
-    // This avoids the signed-zero and overflow pitfalls of dividing directly
-    // in half precision.
-    SCALARS_HOST_DEVICE complex<half>& operator/=(const complex<half>& other)
-    {
-        const scalars::complex<float> result =
-            scalars::complex<float>(*this) / scalars::complex<float>(other);
-        real_ = result.real();
-        imag_ = result.imag();
-        return *this;
-    }
-};
-
-// scalars::complex<bfloat16> mirrors scalars::complex<half> above: arithmetic
-// is computed in complex<float> and narrowed once, rather than instantiating
-// the generic complex<T> template directly with T = bfloat16 (which would
-// compute each component operation in bfloat16, double-rounding, and whose
-// division has no reduced-precision fast path).
-template <> struct alignas(4) complex<bfloat16>
+// Shared implementation of complex<half> and complex<bfloat16>. Arithmetic is
+// computed in float (division in complex<float>) and narrowed once, as PyTorch
+// does for c10::complex<c10::Half>, rather than instantiating the generic
+// complex<T> with T = half/bfloat16, which would round every component
+// operation in reduced precision and has no reduced-precision division path.
+// Keeping both types on this one template stops their interfaces drifting
+// apart.
+template <class T> struct reduced_complex_base
 {
-    // Zero-initialized, as the generic complex<T> this specialization
-    // replaced was: `complex<bfloat16> acc; acc += x;` must start from 0.
-    bfloat16 real_{};
-    bfloat16 imag_{};
+    // Zero-initialized like the generic complex<T>: `complex<T> acc; acc += x;`
+    // must start from 0.
+    T real_{};
+    T imag_{};
 
-    complex() = default;
-    // bfloat16's constructor is not constexpr, so this constructor can't be either.
-    SCALARS_HOST_DEVICE explicit inline complex(const bfloat16& real, const bfloat16& imag)
+    reduced_complex_base() = default;
+    // T's constructor is not constexpr, so these constructors can't be either.
+    SCALARS_HOST_DEVICE explicit inline reduced_complex_base(const T& real, const T& imag)
         : real_(real), imag_(imag)
     {
     }
     // Implicit real -> complex conversion with a zero imaginary part, as the
-    // generic complex<T> provides. Constrained to exactly bfloat16: an
-    // unconstrained complex(const bfloat16&) would make complex<bfloat16>(1.0f)
-    // ambiguous with the complex<float> converting constructor below.
-    template <typename U, std::enable_if_t<std::is_same_v<U, bfloat16>, int> = 0>
+    // generic complex<T> provides. Constrained to exactly T: an unconstrained
+    // constructor from const T& would make complex<T>(1.0f) ambiguous with the
+    // complex<float> converting constructor below.
+    template <typename U, std::enable_if_t<std::is_same_v<U, T>, int> = 0>
     // cppcheck-suppress noExplicitConstructor -- deliberate, matches std::complex.
-    SCALARS_HOST_DEVICE inline complex(const U& real) : real_(real), imag_()
+    SCALARS_HOST_DEVICE inline reduced_complex_base(const U& real) : real_(real), imag_()
     {
     }
-    // cppcheck-suppress noExplicitConstructor -- deliberate, matches bfloat16's own implicit
+    // cppcheck-suppress noExplicitConstructor -- deliberate, matches T's own implicit
     // narrowing conversion from float used throughout the reduced-precision types.
-    SCALARS_HOST_DEVICE inline complex(const scalars::complex<float>& value)
+    SCALARS_HOST_DEVICE inline reduced_complex_base(const scalars::complex<float>& value)
         : real_(value.real()), imag_(value.imag())
     {
     }
 
     inline SCALARS_HOST_DEVICE operator scalars::complex<float>() const { return {real_, imag_}; }
 
-    constexpr SCALARS_HOST_DEVICE bfloat16 real() const { return real_; }
-    constexpr SCALARS_HOST_DEVICE void     real(bfloat16 value) { real_ = value; }
-    constexpr SCALARS_HOST_DEVICE bfloat16 imag() const { return imag_; }
-    constexpr SCALARS_HOST_DEVICE void     imag(bfloat16 value) { imag_ = value; }
+    constexpr SCALARS_HOST_DEVICE T    real() const { return real_; }
+    constexpr SCALARS_HOST_DEVICE void real(T value) { real_ = value; }
+    constexpr SCALARS_HOST_DEVICE T    imag() const { return imag_; }
+    constexpr SCALARS_HOST_DEVICE void imag(T value) { imag_ = value; }
 
-    SCALARS_HOST_DEVICE complex<bfloat16>& operator+=(const complex<bfloat16>& other)
+    SCALARS_HOST_DEVICE complex<T>& operator+=(const complex<T>& other)
     {
         real_ = static_cast<float>(real_) + static_cast<float>(other.real_);
         imag_ = static_cast<float>(imag_) + static_cast<float>(other.imag_);
-        return *this;
+        return self();
     }
 
-    SCALARS_HOST_DEVICE complex<bfloat16>& operator-=(const complex<bfloat16>& other)
+    SCALARS_HOST_DEVICE complex<T>& operator-=(const complex<T>& other)
     {
         real_ = static_cast<float>(real_) - static_cast<float>(other.real_);
         imag_ = static_cast<float>(imag_) - static_cast<float>(other.imag_);
-        return *this;
+        return self();
+    }
+
+    SCALARS_HOST_DEVICE complex<T>& operator*=(const complex<T>& other)
+    {
+        const auto a = static_cast<float>(real_);
+        const auto b = static_cast<float>(imag_);
+        const auto c = static_cast<float>(other.real_);
+        const auto d = static_cast<float>(other.imag_);
+        real_        = a * c - b * d;
+        imag_        = a * d + b * c;
+        return self();
+    }
+
+    // Division in complex<float> avoids the signed-zero and overflow pitfalls
+    // of dividing directly in reduced precision.
+    SCALARS_HOST_DEVICE complex<T>& operator/=(const complex<T>& other)
+    {
+        const scalars::complex<float> result =
+            scalars::complex<float>(self()) / scalars::complex<float>(other);
+        real_ = result.real();
+        imag_ = result.imag();
+        return self();
     }
 
     // Scalar compound operators, as the generic complex<T> provides; the
     // non-member complex<T> (op) T operators are implemented through these.
-    SCALARS_HOST_DEVICE complex<bfloat16>& operator+=(const bfloat16& re)
+    SCALARS_HOST_DEVICE complex<T>& operator+=(const T& re)
     {
         real_ = static_cast<float>(real_) + static_cast<float>(re);
-        return *this;
+        return self();
     }
 
-    SCALARS_HOST_DEVICE complex<bfloat16>& operator-=(const bfloat16& re)
+    SCALARS_HOST_DEVICE complex<T>& operator-=(const T& re)
     {
         real_ = static_cast<float>(real_) - static_cast<float>(re);
-        return *this;
+        return self();
     }
 
-    SCALARS_HOST_DEVICE complex<bfloat16>& operator*=(const bfloat16& re)
+    SCALARS_HOST_DEVICE complex<T>& operator*=(const T& re)
     {
         real_ = static_cast<float>(real_) * static_cast<float>(re);
         imag_ = static_cast<float>(imag_) * static_cast<float>(re);
-        return *this;
+        return self();
     }
 
-    SCALARS_HOST_DEVICE complex<bfloat16>& operator/=(const bfloat16& re)
+    SCALARS_HOST_DEVICE complex<T>& operator/=(const T& re)
     {
         real_ = static_cast<float>(real_) / static_cast<float>(re);
         imag_ = static_cast<float>(imag_) / static_cast<float>(re);
-        return *this;
+        return self();
     }
 
-    SCALARS_HOST_DEVICE complex<bfloat16>& operator*=(const complex<bfloat16>& other)
+private:
+    SCALARS_HOST_DEVICE complex<T>& self() { return static_cast<complex<T>&>(*this); }
+    SCALARS_HOST_DEVICE const complex<T>& self() const
     {
-        auto a = static_cast<float>(real_);
-        auto b = static_cast<float>(imag_);
-        auto c = static_cast<float>(other.real());
-        auto d = static_cast<float>(other.imag());
-        real_  = a * c - b * d;
-        imag_  = a * d + b * c;
-        return *this;
+        return static_cast<const complex<T>&>(*this);
     }
+};
+}  // namespace detail_complex
 
-    SCALARS_HOST_DEVICE complex<bfloat16>& operator/=(const complex<bfloat16>& other)
-    {
-        const scalars::complex<float> result =
-            scalars::complex<float>(*this) / scalars::complex<float>(other);
-        real_ = result.real();
-        imag_ = result.imag();
-        return *this;
-    }
+template <> struct alignas(4) complex<half> : detail_complex::reduced_complex_base<half>
+{
+    using reduced_complex_base::reduced_complex_base;
+};
+
+template <> struct alignas(4) complex<bfloat16> : detail_complex::reduced_complex_base<bfloat16>
+{
+    using reduced_complex_base::reduced_complex_base;
 };
 
 }  // namespace scalars
@@ -816,12 +802,12 @@ namespace std
 // PyTorch's c10/util/complex.h: these overloads let generic code call
 // std::abs/std::real/etc. uniformly on scalars::complex<T>.
 
-template <typename T> constexpr T real(const scalars::complex<T>& z)
+template <typename T> SCALARS_HOST_DEVICE constexpr T real(const scalars::complex<T>& z)
 {
     return z.real();
 }
 
-template <typename T> constexpr T imag(const scalars::complex<T>& z)
+template <typename T> SCALARS_HOST_DEVICE constexpr T imag(const scalars::complex<T>& z)
 {
     return z.imag();
 }
@@ -848,7 +834,7 @@ template <typename T> SCALARS_HOST_DEVICE T arg(const scalars::complex<T>& z)
 
 #undef ROCm_Bug
 
-template <typename T> constexpr T norm(const scalars::complex<T>& z)
+template <typename T> SCALARS_HOST_DEVICE constexpr T norm(const scalars::complex<T>& z)
 {
     return z.real() * z.real() + z.imag() * z.imag();
 }
@@ -860,7 +846,8 @@ template <typename T> constexpr T norm(const scalars::complex<T>& z)
 //   constexpr std::complex<long double> conj( long double z );
 // These are not implemented
 // TODO: implement them as scalars::conj
-template <typename T> constexpr scalars::complex<T> conj(const scalars::complex<T>& z)
+template <typename T>
+SCALARS_HOST_DEVICE constexpr scalars::complex<T> conj(const scalars::complex<T>& z)
 {
     return scalars::complex<T>(z.real(), -z.imag());
 }

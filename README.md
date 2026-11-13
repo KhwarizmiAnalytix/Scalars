@@ -379,6 +379,33 @@ selected type and are responsible for their own storage conversions.
 - complex_math.h is CPU-only because of the `std::complex` backend.
 - Not a drop-in ABI replacement for c10, std::complex, cuComplex, or rocComplex.
 
+## Upgrade notes
+
+Source-level changes that can affect existing callers:
+
+- `accumulation_type_t<T>` is now an alias for `acc_type<T, false>`, so
+  `accumulation_type_t<float>` is `double` (it was `float`), and
+  `complex<float>` accumulates in `complex<double>`. Code such as
+  `simd<accumulation_type_t<float>>` now names `simd<double>`. Types with no
+  `acc_type` entry, such as `long double` and `uint32_t`, no longer have an
+  accumulation type and fail to compile instead of accumulating in
+  themselves. Use `float` explicitly where single-precision accumulation was
+  intended.
+- `half` comparisons are function templates over `half` and arithmetic
+  operands. Results are unchanged (operands compare in the usual arithmetic
+  common type, with `half` as `float`), but the comparisons now also resolve
+  in CUDA/HIP code that includes `cuda_fp16.h`/`hip_fp16.h`.
+- `complex<half>` shares `complex<bfloat16>`'s implementation: it is
+  zero-initialized by default, converts implicitly from `half`, and has scalar
+  compound operators (`z += h`, `z * h`).
+- The complex packets' `set_mask(int_t)` is now `set_mask(I)` for any integer
+  type `I`, so `set_mask(1)` and `set_mask(0)` compile; nonzero still selects
+  every lane, and `set_mask(bool)` is unchanged.
+- The `scalars::complex` operators, `std::real`/`std::imag`/`std::norm`/
+  `std::conj` overloads, and `bit_cast` are now `__host__ __device__`. Device
+  code that used them previously compiled with only a warning and produced
+  wrong results.
+
 ## Reference code investigated
 
 - https://github.com/pytorch/pytorch/blob/main/torch/headeronly/util/half.h

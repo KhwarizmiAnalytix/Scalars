@@ -8,6 +8,10 @@
 #define svml_pd_ha(op) __svml_##op##4_ha
 #define svml_ps_mask(op) __svml_##op##f8_mask
 #define svml_pd_mask(op) __svml_##op##4_mask
+// Under clang on Windows the entry points are redeclared below as __vectorcall
+// under the same symbol names; a default-convention declaration of the same
+// symbol would take precedence and reintroduce the by-pointer call.
+#if !(defined(_MSC_VER) && defined(__clang__))
 extern "C"
 {
     __m256  __svml_expf8(__m256);
@@ -69,12 +73,51 @@ extern "C"
     __m256  __svml_hypotf8_ha(__m256, __m256);
     __m256d __svml_hypot4_ha(__m256d, __m256d);
 }
+#endif  // !(defined(_MSC_VER) && defined(__clang__))
 
 // MSVC provides these names as intrinsics once the compiler probe succeeds.
 // Defining them is error C2169. simd.h then calls the compiler entry points,
 // which is how Vectorization uses the ISA when it does not wrap SVML.
 #if !defined(_MSC_VER) || !SCALARS_COMPILER_SUPPORTS_SVML_EXTENSIONS
-#if defined(_MSC_VER)
+#if defined(_MSC_VER) && defined(__clang__)
+
+// Intel SVML takes and returns vectors in registers (__vectorcall). Under
+// clang SCALARS_VECTORCALL is empty, so the reinterpret_cast wrapper in the
+// MSVC branch below would call SVML with the default x64 convention, which
+// passes the vector by pointer in rcx; SVML then computes on whatever value
+// is left in its argument register. Declare each entry point __vectorcall
+// instead; the \01 prefix keeps the undecorated DLL symbol (no @@N suffix).
+#define SVML_FUNCTION_ONE_ARG(op)                                                                  \
+    extern "C" __m256 __vectorcall scalars_svml_##op##f8(__m256) __asm__("\01"                     \
+                                                                         "__svml_" #op "f8");      \
+    extern "C" __m256d __vectorcall scalars_svml_##op##4(__m256d) __asm__("\01"                    \
+                                                                          "__svml_" #op "4");      \
+    SCALARS_FORCE_INLINE __m256 __vectorcall _mm256_##op##_ps(__m256 x)                            \
+    {                                                                                              \
+        return scalars_svml_##op##f8(x);                                                           \
+    }                                                                                              \
+    SCALARS_FORCE_INLINE __m256d __vectorcall _mm256_##op##_pd(__m256d x)                          \
+    {                                                                                              \
+        return scalars_svml_##op##4(x);                                                            \
+    }
+
+#define SVML_FUNCTION_TWO_ARGS(op)                                                                 \
+    extern "C" __m256 __vectorcall scalars_svml_##op##f8(__m256, __m256) __asm__(                  \
+        "\01"                                                                                      \
+        "__svml_" #op "f8");                                                                       \
+    extern "C" __m256d __vectorcall scalars_svml_##op##4(__m256d, __m256d) __asm__(                \
+        "\01"                                                                                      \
+        "__svml_" #op "4");                                                                        \
+    SCALARS_FORCE_INLINE __m256 __vectorcall _mm256_##op##_ps(__m256 x, __m256 y)                  \
+    {                                                                                              \
+        return scalars_svml_##op##f8(x, y);                                                        \
+    }                                                                                              \
+    SCALARS_FORCE_INLINE __m256d __vectorcall _mm256_##op##_pd(__m256d x, __m256d y)               \
+    {                                                                                              \
+        return scalars_svml_##op##4(x, y);                                                         \
+    }
+
+#elif defined(_MSC_VER)
 
 #define SVML_FUNCTION_ONE_ARG(op)                                                             \
     SCALARS_FORCE_INLINE __m256 SCALARS_VECTORCALL _mm256_##op##_ps(__m256 x)     \
@@ -153,9 +196,10 @@ SVML_FUNCTION_ONE_ARG(cdfnorm)
 SVML_FUNCTION_ONE_ARG(cdfnorminv)
 SVML_FUNCTION_ONE_ARG(trunc)
 SVML_FUNCTION_ONE_ARG(invsqrt)
-#if defined(_MSC_VER) && !defined(NDEBUG)
-// clang-cl Debug builds mis-call Intel SVML two-arg entry points through the
-// reinterpret_cast wrapper above; scalar lane fallbacks match std::pow/hypot.
+#if defined(_MSC_VER) && !defined(__clang__) && !defined(NDEBUG)
+// Debug builds without the clang __vectorcall declarations above can mis-call
+// Intel SVML two-arg entry points through the reinterpret_cast wrapper; scalar
+// lane fallbacks match std::pow/hypot.
 #include <cmath>
 
 SCALARS_FORCE_INLINE __m256 SCALARS_VECTORCALL _mm256_pow_ps(__m256 x, __m256 y)

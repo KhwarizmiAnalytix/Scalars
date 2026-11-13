@@ -9,6 +9,10 @@
 #define svml_ps_mask(op) __svml_##op##f16_mask
 #define svml_pd_mask(op) __svml_##op##8_mask
 
+// Under clang on Windows the entry points are redeclared below as __vectorcall
+// under the same symbol names; a default-convention declaration of the same
+// symbol would take precedence and reintroduce the by-pointer call.
+#if !(defined(_MSC_VER) && defined(__clang__))
 extern "C"
 {
     __m512  __svml_expf16(__m512);
@@ -76,11 +80,50 @@ extern "C"
     __m512d __svml_floor8(__m512d);
 #endif
 }
+#endif  // !(defined(_MSC_VER) && defined(__clang__))
 
 // MSVC provides these names as intrinsics once the compiler probe succeeds.
 // Defining them is error C2169. simd.h then calls the compiler entry points.
 #if !defined(_MSC_VER) || !SCALARS_COMPILER_SUPPORTS_SVML_EXTENSIONS
-#if defined(_MSC_VER)
+#if defined(_MSC_VER) && defined(__clang__)
+
+// Intel SVML takes and returns vectors in registers (__vectorcall). Under
+// clang SCALARS_VECTORCALL is empty, so the reinterpret_cast wrapper in the
+// MSVC branch below would call SVML with the default x64 convention, which
+// passes the vector by pointer in rcx; SVML then computes on whatever value
+// is left in its argument register. Declare each entry point __vectorcall
+// instead; the \01 prefix keeps the undecorated DLL symbol (no @@N suffix).
+#define SVML_FUNCTION_ONE_ARG(op)                                                                  \
+    extern "C" __m512 __vectorcall scalars_svml_##op##f16(__m512) __asm__("\01"                    \
+                                                                          "__svml_" #op "f16");    \
+    extern "C" __m512d __vectorcall scalars_svml_##op##8(__m512d) __asm__("\01"                    \
+                                                                          "__svml_" #op "8");      \
+    SCALARS_FORCE_INLINE __m512 __vectorcall _mm512_##op##_ps(__m512 x)                            \
+    {                                                                                              \
+        return scalars_svml_##op##f16(x);                                                          \
+    }                                                                                              \
+    SCALARS_FORCE_INLINE __m512d __vectorcall _mm512_##op##_pd(__m512d x)                          \
+    {                                                                                              \
+        return scalars_svml_##op##8(x);                                                            \
+    }
+
+#define SVML_FUNCTION_TWO_ARGS(op)                                                                 \
+    extern "C" __m512 __vectorcall scalars_svml_##op##f16(__m512, __m512) __asm__(                 \
+        "\01"                                                                                      \
+        "__svml_" #op "f16");                                                                      \
+    extern "C" __m512d __vectorcall scalars_svml_##op##8(__m512d, __m512d) __asm__(                \
+        "\01"                                                                                      \
+        "__svml_" #op "8");                                                                        \
+    SCALARS_FORCE_INLINE __m512 __vectorcall _mm512_##op##_ps(__m512 x, __m512 y)                  \
+    {                                                                                              \
+        return scalars_svml_##op##f16(x, y);                                                       \
+    }                                                                                              \
+    SCALARS_FORCE_INLINE __m512d __vectorcall _mm512_##op##_pd(__m512d x, __m512d y)               \
+    {                                                                                              \
+        return scalars_svml_##op##8(x, y);                                                         \
+    }
+
+#elif defined(_MSC_VER)
 
 #define SVML_FUNCTION_ONE_ARG(op)                                                             \
     SCALARS_FORCE_INLINE __m512 SCALARS_VECTORCALL _mm512_##op##_ps(__m512 x)     \

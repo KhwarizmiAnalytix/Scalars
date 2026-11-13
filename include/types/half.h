@@ -22,6 +22,7 @@
 #include <cstdint>
 #include <cstring>
 #include <ostream>
+#include <type_traits>
 
 #ifdef __CUDACC__
 #include <cuda_fp16.h>
@@ -118,7 +119,12 @@ namespace detail
 SCALARS_HOST_DEVICE inline float fp16_ieee_to_fp32_value(uint16_t h)
 {
 #ifdef SCALARS_X86_F16
+#if defined(_MSC_VER) && !defined(__clang__)
+    // MSVC has no scalar _cvtsh_ss; use the packed F16C form on lane 0.
+    return _mm_cvtss_f32(_mm_cvtph_ps(_mm_cvtsi32_si128(static_cast<int>(h))));
+#else
     return _cvtsh_ss(h);
+#endif
 #else
     /*
      * Extend the half-precision floating-point number to 32 bits and shift to the
@@ -259,7 +265,13 @@ SCALARS_HOST_DEVICE inline float fp16_ieee_to_fp32_value(uint16_t h)
 inline uint16_t fp16_ieee_from_fp32_value(float f)
 {
 #ifdef SCALARS_X86_F16
+#if defined(_MSC_VER) && !defined(__clang__)
+    // MSVC has no scalar _cvtss_sh; use the packed F16C form on lane 0.
+    return static_cast<uint16_t>(
+        _mm_extract_epi16(_mm_cvtps_ph(_mm_set_ss(f), _MM_FROUND_TO_NEAREST_INT), 0));
+#else
     return _cvtss_sh(f, _MM_FROUND_TO_NEAREST_INT);
+#endif
 #else
     // const float scale_to_inf = 0x1.0p+112f;
     // const float scale_to_zero = 0x1.0p-110f;
@@ -532,7 +544,7 @@ inline SCALARS_HOST_DEVICE half operator/(
 inline SCALARS_HOST_DEVICE half operator-(const half& a)
 {
 #if (defined(__CUDA_ARCH__) && __CUDA_ARCH__ >= 530) || defined(__HIP_DEVICE_COMPILE__)
-    return __hneg(a);
+    return __hneg(static_cast<__half>(a));
 #elif defined(__SYCL_DEVICE_ONLY__)
     return -scalars::bit_cast<sycl::half>(a);
 #else
@@ -745,12 +757,59 @@ inline SCALARS_HOST_DEVICE half operator/(int64_t a, half b)
     return static_cast<half>(a) / b;
 }
 
-// No comparison operators are defined for (half, half): half has an implicit
-// constructor from float and an implicit conversion to float, so defining
-// operator==(half, half) etc. makes `h == 1.0f` ambiguous between that
-// overload (1.0f -> half) and the built-in float comparison (h -> float).
-// Instead, every comparison -- half-half, half-float, half-double, half-int --
-// resolves through the implicit conversion to float, matching c10::Half.
+/// Comparisons
+//
+// Non-template (half, half) overloads would make `h == 1.0f` ambiguous: the
+// overload needs 1.0f -> half, the built-in float comparison needs h -> float.
+// Relying on the implicit conversion alone is also ambiguous under CUDA/HIP,
+// where half converts to both float and __half and cuda_fp16.h declares global
+// operator<(const __half&, const __half&) etc. These templates match both
+// operands exactly, so they beat both alternatives. Operands are compared in
+// the usual arithmetic common type, with half treated as float, so results
+// match what the built-in comparison through float gives (h < 1 compares in
+// float, h < 1.0 in double).
+namespace detail
+{
+template <class T>
+using half_compare_operand_t = std::conditional_t<std::is_same_v<T, half>, float, T>;
+
+template <class A, class B>
+inline constexpr bool is_half_comparison_v = (std::is_same_v<A, half> || std::is_same_v<B, half>) &&
+                                             (std::is_same_v<A, half> || std::is_arithmetic_v<A>) &&
+                                             (std::is_same_v<B, half> || std::is_arithmetic_v<B>);
+
+template <class A, class B>
+using half_compare_t = std::common_type_t<half_compare_operand_t<A>, half_compare_operand_t<B>>;
+
+template <class R, class T> SCALARS_HOST_DEVICE inline R half_compare_cast(const T& value)
+{
+    if constexpr (std::is_same_v<T, half>)
+    {
+        return static_cast<R>(static_cast<float>(value));
+    }
+    else
+    {
+        return static_cast<R>(value);
+    }
+}
+}  // namespace detail
+
+#define SCALARS_HALF_COMPARISON(op)                                                                \
+    template <class A, class B, std::enable_if_t<detail::is_half_comparison_v<A, B>, int> = 0>     \
+    SCALARS_HOST_DEVICE inline bool operator op(const A& a, const B& b)                            \
+    {                                                                                              \
+        using common_t = detail::half_compare_t<A, B>;                                             \
+        return detail::half_compare_cast<common_t>(a) op detail::half_compare_cast<common_t>(b);   \
+    }
+
+SCALARS_HALF_COMPARISON(==)
+SCALARS_HALF_COMPARISON(!=)
+SCALARS_HALF_COMPARISON(<)
+SCALARS_HALF_COMPARISON(<=)
+SCALARS_HALF_COMPARISON(>)
+SCALARS_HALF_COMPARISON(>=)
+
+#undef SCALARS_HALF_COMPARISON
 
 SCALARS_CLANG_DIAGNOSTIC_POP()
 

@@ -170,9 +170,10 @@ private:
         // true value can be as small as ~1e-8. Computing the "-1" via
         // hi/lo (as abs() above does for the magnitude itself) keeps that
         // subtraction exact -- Sterbenz's lemma applies since hi is within
-        // [0.5, 2] near the unit circle -- so log1p is fed a value limited
-        // only by lo^2's own rounding, not by cancellation in re^2+im^2
-        // itself. This is *not* valid away from the unit circle: Sterbenz's
+        // [0.5, 2] near the unit circle -- and recovering the squares'
+        // rounding errors with fma (see refined_formula below) feeds log1p
+        // |z|^2 - 1 without cancellation in re^2+im^2 itself. This is *not*
+        // valid away from the unit circle: Sterbenz's
         // lemma needs hi within a factor of 2 of 1, specifically, not of
         // whatever re^2+im^2 actually is, so for a tiny or huge hi, hi-1 is
         // itself a lossy cancellation (e.g. hi=1e-15 gives hi-1 == -1
@@ -184,11 +185,46 @@ private:
         const auto hi = r::max(re, im), lo = r::min(re, im);
         const auto near_one =
             r::and_mask(r::ge(hi, r::set(T(0.5))), r::le(hi, r::set(T(2))));
-        const auto magnitude_sq_minus_one =
-            r::fma(r::add(hi, r::set(T(1))), r::sub(hi, r::set(T(1))), r::mul(lo, lo));
-        const auto refined = r::log1p(magnitude_sq_minus_one);
-        const auto plain    = r::log(r::fma(a.real, a.real, r::mul(a.imag, a.imag)));
-        return {r::mul(r::set(T(.5)), r::if_else(near_one, refined, plain)), arg(a)};
+        // Each formula is a full transcendental call, so evaluate only the ones
+        // some lane actually needs: packets entirely inside or entirely outside
+        // the band (the common case for clustered inputs) pay for one.
+        const auto refined_formula = [&]
+        {
+            // |z|^2 - 1 = (S - 1) + (s + E + e), where hi^2 = P + E and
+            // lo^2 = p + e exactly (fma recovers each product's rounding
+            // error), P + p = S + s exactly (Fast2Sum, valid since P >= p), and
+            // S - 1 is exact by Sterbenz's lemma because S ~ |z|^2 ~ 1. Only
+            // the final additions round, so log1p sees |z|^2 - 1 to about one
+            // ulp even when it is ~1e-8. Subtracting 1 from P alone is not
+            // enough: at re ~ im ~ 0.707, P < 0.5 and P - 1 rounds. The earlier
+            // (hi+1)(hi-1) + lo^2 form kept the rounding errors of hi+1 and
+            // lo^2, which are as large as the result there (about 3% relative
+            // error at |z|^2 - 1 ~ 4e-8). Without hardware fma, E and e
+            // evaluate to 0 and this degrades gracefully.
+            const auto hi2 = r::mul(hi, hi), lo2 = r::mul(lo, lo);
+            const auto hi2_error = r::fma(hi, hi, r::neg(hi2));
+            const auto lo2_error = r::fma(lo, lo, r::neg(lo2));
+            const auto sum       = r::add(hi2, lo2);
+            const auto sum_error = r::sub(lo2, r::sub(sum, hi2));
+            const auto tail      = r::add(sum_error, r::add(hi2_error, lo2_error));
+            return r::log1p(r::add(r::sub(sum, r::set(T(1))), tail));
+        };
+        const auto plain_formula = [&]
+        { return r::log(r::fma(a.real, a.real, r::mul(a.imag, a.imag))); };
+        typename r::simd_t log_magnitude_sq;
+        if (Ops::all(near_one))
+        {
+            log_magnitude_sq = refined_formula();
+        }
+        else if (Ops::all(r::not_mask(near_one)))
+        {
+            log_magnitude_sq = plain_formula();
+        }
+        else
+        {
+            log_magnitude_sq = r::if_else(near_one, refined_formula(), plain_formula());
+        }
+        return {r::mul(r::set(T(.5)), log_magnitude_sq), arg(a)};
     }
     static SCALARS_NOINLINE simd_t log_fallback(simd_t a, mask_t safe)
     {
@@ -358,7 +394,16 @@ public:
     {
         return set(value_t(static_cast<T>(a), T(0)));
     }
-    static mask_t set_mask(int_t a) { return set_mask(a != 0); }
+    // Any integer: nonzero selects every lane. A plain set_mask(int_t) next to
+    // set_mask(bool) made set_mask(1) ambiguous (int -> bool and int -> int_t are
+    // equally good conversions); this template is an exact match for every
+    // integer type, while set_mask(true) still picks the bool overload.
+    template <class I>
+        requires(std::is_integral_v<I> && !std::is_same_v<I, bool>)
+    static mask_t set_mask(I a)
+    {
+        return set_mask(a != 0);
+    }
     static simd_t setzero() { return {r::setzero(), r::setzero()}; }
     static mask_t set_mask(bool a)
     {

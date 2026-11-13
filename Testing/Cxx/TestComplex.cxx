@@ -271,49 +271,64 @@ TEST(Complex, HalfAndBFloat16Division)
 // complex<bfloat16> used to be the generic complex<T>; its specialization must
 // keep that template's zero default, implicit real constructor, and scalar
 // compound/binary operators.
-TEST(Complex, BFloat16KeepsGenericComplexInterface)
+namespace
 {
-    const complex<bfloat16> zero;
+template <class R> void check_reduced_complex_interface()
+{
+    const complex<R> zero;
     EXPECT_EQ(static_cast<float>(zero.real()), 0.0f);
     EXPECT_EQ(static_cast<float>(zero.imag()), 0.0f);
 
-    complex<bfloat16> value = bfloat16(2.0f);
+    complex<R> value = R(2.0f);
     EXPECT_EQ(static_cast<float>(value.real()), 2.0f);
     EXPECT_EQ(static_cast<float>(value.imag()), 0.0f);
 
     // Still resolves to the complex<float> converting constructor, not ambiguous.
-    const complex<bfloat16> from_float(1.5f);
+    const complex<R> from_float(1.5f);
     EXPECT_EQ(static_cast<float>(from_float.real()), 1.5f);
     EXPECT_EQ(static_cast<float>(from_float.imag()), 0.0f);
 
-    value = complex<bfloat16>(bfloat16(2.0f), bfloat16(4.0f));
-    value += bfloat16(1.0f);
-    value -= bfloat16(2.0f);
+    value = complex<R>(R(2.0f), R(4.0f));
+    value += R(1.0f);
+    value -= R(2.0f);
     EXPECT_EQ(static_cast<float>(value.real()), 1.0f);
     EXPECT_EQ(static_cast<float>(value.imag()), 4.0f);
-    value *= bfloat16(2.0f);
+    value *= R(2.0f);
     EXPECT_EQ(static_cast<float>(value.real()), 2.0f);
     EXPECT_EQ(static_cast<float>(value.imag()), 8.0f);
-    value /= bfloat16(4.0f);
+    value /= R(4.0f);
     EXPECT_EQ(static_cast<float>(value.real()), 0.5f);
     EXPECT_EQ(static_cast<float>(value.imag()), 2.0f);
 
     // Non-member complex<T> (op) T operators are built on the scalar
     // compound operators above.
-    const auto scaled = complex<bfloat16>(bfloat16(1.0f), bfloat16(3.0f)) * bfloat16(2.0f);
+    const auto scaled = complex<R>(R(1.0f), R(3.0f)) * R(2.0f);
     EXPECT_EQ(static_cast<float>(scaled.real()), 2.0f);
     EXPECT_EQ(static_cast<float>(scaled.imag()), 6.0f);
-    const auto shifted = complex<bfloat16>(bfloat16(1.0f), bfloat16(3.0f)) + bfloat16(1.0f);
+    const auto shifted = complex<R>(R(1.0f), R(3.0f)) + R(1.0f);
     EXPECT_EQ(static_cast<float>(shifted.real()), 2.0f);
     EXPECT_EQ(static_cast<float>(shifted.imag()), 3.0f);
 
-    complex<bfloat16> accumulator;
+    complex<R> accumulator;
     for (int i = 0; i < 4; ++i)
     {
-        accumulator += complex<bfloat16>(bfloat16(1.0f), bfloat16(0.5f));
+        accumulator += complex<R>(R(1.0f), R(0.5f));
     }
     EXPECT_EQ(static_cast<float>(accumulator.real()), 4.0f);
     EXPECT_EQ(static_cast<float>(accumulator.imag()), 2.0f);
+}
+}  // namespace
+
+TEST(Complex, BFloat16KeepsGenericComplexInterface)
+{
+    check_reduced_complex_interface<bfloat16>();
+}
+
+// complex<half> shares complex<bfloat16>'s implementation, so it has the same
+// interface: zero default, implicit real constructor, scalar operators.
+TEST(Complex, HalfKeepsGenericComplexInterface)
+{
+    check_reduced_complex_interface<half>();
 }
 
 namespace

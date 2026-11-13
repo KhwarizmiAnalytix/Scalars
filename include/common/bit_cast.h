@@ -5,7 +5,10 @@
 
 #include "scalars_macros.h"
 
-#if __has_include(<bit>) && (defined(__cpp_lib_bit_cast) && __cpp_lib_bit_cast >= 201806L)
+// std::bit_cast is constexpr but not __device__, so CUDA/HIP TUs (compiled
+// without --expt-relaxed-constexpr) use the SCALARS_HOST_DEVICE fallback.
+#if __has_include(<bit>) && (defined(__cpp_lib_bit_cast) && __cpp_lib_bit_cast >= 201806L) && \
+    !defined(__CUDACC__) && !defined(__HIPCC__)
 #include <bit>
 #define SCALARS_HAVE_STD_BIT_CAST 1
 #else
