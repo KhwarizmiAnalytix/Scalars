@@ -12,7 +12,13 @@
 #include <iosfwd>
 #include <ostream>
 
-#if defined(__CUDACC__) && (!defined(SCALARS_USE_HIP) || (SCALARS_HIP_VERSION >= 702))
+// __nv_bfloat16 and the intrinsics built on it below come from NVIDIA's
+// cuda_bf16.h and have no AMD/ROCm equivalent, so this branch is CUDA-only;
+// the HIP_VERSION>=702 disjunct this file inherited from c10 can only ever
+// be true together with SCALARS_USE_HIP and __CUDACC__ both defined, which
+// happens only under HIP's (now removed) NVIDIA backend, never on real
+// AMD/ROCm hipcc builds (__HIPCC__ without __CUDACC__) -- dropped as dead.
+#if defined(__CUDACC__) && !defined(SCALARS_USE_HIP)
 #include <cuda_bf16.h>
 #endif
 
@@ -45,7 +51,7 @@ struct alignas(2) bfloat16
     /* implicit */ inline SCALARS_HOST_DEVICE bfloat16(float value);
     inline SCALARS_HOST_DEVICE                operator float() const;
 
-#if defined(__CUDACC__) && (!defined(SCALARS_USE_HIP) || (SCALARS_HIP_VERSION >= 702))
+#if defined(__CUDACC__) && !defined(SCALARS_USE_HIP)
     inline SCALARS_HOST_DEVICE          bfloat16(const __nv_bfloat16& value);
     explicit inline SCALARS_HOST_DEVICE operator __nv_bfloat16() const;
 #endif
@@ -133,9 +139,7 @@ SCALARS_CLANG_DIAGNOSTIC_IGNORE("-Wimplicit-int-float-conversion")
 /// Constructors
 inline SCALARS_HOST_DEVICE bfloat16::bfloat16(float value)
     :
-#if defined(__CUDACC__) &&                                                                         \
-    (!defined(SCALARS_USE_HIP) && defined(__CUDA_ARCH__) && __CUDA_ARCH__ >= 800 ||                       \
-        defined(SCALARS_USE_HIP) && (SCALARS_HIP_VERSION >= 702))
+#if defined(__CUDACC__) && !defined(SCALARS_USE_HIP) && defined(__CUDA_ARCH__) && __CUDA_ARCH__ >= 800
       x(__bfloat16_as_ushort(__float2bfloat16(value)))
 #elif defined(__SYCL_DEVICE_ONLY__) && defined(SYCL_EXT_ONEAPI_BFLOAT16_MATH_FUNCTIONS)
       x(scalars::bit_cast<uint16_t>(sycl::ext::oneapi::bfloat16(value)))
@@ -149,7 +153,7 @@ inline SCALARS_HOST_DEVICE bfloat16::bfloat16(float value)
 /// Implicit conversions
 inline SCALARS_HOST_DEVICE bfloat16::operator float() const
 {
-#if defined(__CUDACC__) && (!defined(SCALARS_USE_HIP) || (SCALARS_HIP_VERSION >= 702))
+#if defined(__CUDACC__) && !defined(SCALARS_USE_HIP)
     return __bfloat162float(*reinterpret_cast<const __nv_bfloat16*>(&x));
 #elif defined(__SYCL_DEVICE_ONLY__) && defined(SYCL_EXT_ONEAPI_BFLOAT16_MATH_FUNCTIONS)
     return float(*reinterpret_cast<const sycl::ext::oneapi::bfloat16*>(&x));
@@ -158,7 +162,7 @@ inline SCALARS_HOST_DEVICE bfloat16::operator float() const
 #endif
 }
 
-#if defined(__CUDACC__) && (!defined(SCALARS_USE_HIP) || (SCALARS_HIP_VERSION >= 702))
+#if defined(__CUDACC__) && !defined(SCALARS_USE_HIP)
 inline SCALARS_HOST_DEVICE bfloat16::bfloat16(const __nv_bfloat16& value)
 {
     x = *reinterpret_cast<const unsigned short*>(&value);
@@ -245,22 +249,25 @@ inline SCALARS_HOST_DEVICE bfloat16& operator/=(bfloat16& a, const bfloat16& b)
     return a;
 }
 
-inline SCALARS_HOST_DEVICE bfloat16& operator|(bfloat16& a, const bfloat16& b)
+inline SCALARS_HOST_DEVICE bfloat16 operator|(const bfloat16& a, const bfloat16& b)
 {
-    a.x = a.x | b.x;
-    return a;
+    bfloat16 result;
+    result.x = a.x | b.x;
+    return result;
 }
 
-inline SCALARS_HOST_DEVICE bfloat16& operator^(bfloat16& a, const bfloat16& b)
+inline SCALARS_HOST_DEVICE bfloat16 operator^(const bfloat16& a, const bfloat16& b)
 {
-    a.x = a.x ^ b.x;
-    return a;
+    bfloat16 result;
+    result.x = a.x ^ b.x;
+    return result;
 }
 
-inline SCALARS_HOST_DEVICE bfloat16& operator&(bfloat16& a, const bfloat16& b)
+inline SCALARS_HOST_DEVICE bfloat16 operator&(const bfloat16& a, const bfloat16& b)
 {
-    a.x = a.x & b.x;
-    return a;
+    bfloat16 result;
+    result.x = a.x & b.x;
+    return result;
 }
 
 /// Arithmetic with floats
@@ -440,17 +447,12 @@ inline SCALARS_HOST_DEVICE bfloat16 operator/(int64_t a, bfloat16 b)
     return static_cast<bfloat16>(a) / b;
 }
 
-// Overloading < and > operators, because std::max and std::min use them.
-
-inline SCALARS_HOST_DEVICE bool operator>(const bfloat16& lhs, const bfloat16& rhs)
-{
-    return float(lhs) > float(rhs);
-}
-
-inline SCALARS_HOST_DEVICE bool operator<(const bfloat16& lhs, const bfloat16& rhs)
-{
-    return float(lhs) < float(rhs);
-}
+// No comparison operators are defined for (bfloat16, bfloat16), for the same
+// reason as scalars::half: bfloat16 has an implicit constructor from float
+// and an implicit conversion to float, so a custom operator<(bfloat16,
+// bfloat16) would make `b < 1.0f` ambiguous between it and the built-in
+// float comparison. Every comparison, including std::max/std::min on two
+// bfloat16 values, resolves through the implicit conversion to float.
 
 SCALARS_CLANG_DIAGNOSTIC_POP()
 }  // namespace scalars
@@ -515,7 +517,7 @@ public:
     }
     static constexpr scalars::bfloat16 signaling_NaN()
     {
-        return scalars::bfloat16(0x7F80, scalars::bfloat16::from_bits());
+        return scalars::bfloat16(0x7FA0, scalars::bfloat16::from_bits());
     }
     static constexpr scalars::bfloat16 denorm_min()
     {

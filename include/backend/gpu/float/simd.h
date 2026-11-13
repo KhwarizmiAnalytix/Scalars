@@ -23,6 +23,9 @@
 
 #include "scalars_macros.h"
 
+namespace scalars
+{
+
 // Primary template forward declaration required before the explicit specialization.
 template <typename T>
 struct simd;
@@ -182,3 +185,5 @@ struct simd<float>
 
     SCALARS_SIMD_METHOD simd_t if_else(mask_t m, simd_t t, simd_t f) { return m ? t : f; }
 };
+
+}  // namespace scalars

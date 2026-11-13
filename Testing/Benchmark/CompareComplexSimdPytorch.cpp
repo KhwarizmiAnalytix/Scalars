@@ -23,6 +23,8 @@
 #include <system_error>
 #include <vector>
 
+using scalars::simd;
+
 namespace
 {
 template <class T> using complex_t       = scalars::complex<T>;

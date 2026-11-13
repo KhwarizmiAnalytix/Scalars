@@ -13,6 +13,8 @@
 #include <string>
 #include <vector>
 
+using scalars::simd;
+
 TEST(BackendSimd, FloatAddMatchesScalar)
 {
     using simd_f              = simd<float>;

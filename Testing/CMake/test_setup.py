@@ -191,6 +191,23 @@ class setup_tests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn("Scalars Build Configuration Helper", result.stdout)
 
+    def test_summary_message_colon_alignment(self):
+        import re
+
+        label_pattern = re.compile(r'message\("( {2}[^"$]+?:)')
+        for relative in ("cmake/summary.cmake", "cmake/lto.cmake"):
+            path = SCRIPTS.parent / relative
+            for lineno, line in enumerate(path.read_text().splitlines(), start=1):
+                match = label_pattern.search(line)
+                if not match:
+                    continue
+                with self.subTest(file=relative, line=lineno):
+                    self.assertEqual(
+                        len(match.group(1)),
+                        23,
+                        f"colon must sit at index 23 in: {line!r}",
+                    )
+
 
 if __name__ == "__main__":
     unittest.main()

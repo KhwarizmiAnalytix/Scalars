@@ -257,7 +257,11 @@ public:
         std::memcpy(to, from.bits.data(), sizeof(from));
     }
     SCALARS_FORCE_INLINE static void   store(mask_t from, int_t* to) { storeu(from, to); }
-    SCALARS_FORCE_INLINE static mask_t set(int_t bits)
+    // Same fix as backend/cpu/detail/complex_simd.h::set_mask: giving the
+    // mask-returning overload its own name instead of overloading set(),
+    // since set(int_t) happened to win over the set(U) template for an
+    // exact int_t argument, silently returning a mask instead of a packet.
+    SCALARS_FORCE_INLINE static mask_t set_mask(int_t bits)
     {
         mask_t out;
         out.bits.fill(bits != 0 ? uint16_t(0xffff) : uint16_t(0));
@@ -462,6 +466,8 @@ public:
 };
 }  // namespace scalars::detail_reduced
 
+namespace scalars
+{
 template <> struct simd<scalars::half> : scalars::detail_reduced::reduced_simd<scalars::half>
 {
 };
@@ -469,3 +475,4 @@ template <>
 struct simd<scalars::bfloat16> : scalars::detail_reduced::reduced_simd<scalars::bfloat16>
 {
 };
+}  // namespace scalars

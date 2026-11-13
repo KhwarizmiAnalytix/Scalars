@@ -136,6 +136,7 @@ constexpr scalar_type to_accumulate_type(scalar_type type, device_type device) n
     case scalar_type::complex_double:
       return scalar_type::complex_double;
   }
+  return type;  // unreachable: the switch above covers every scalar_type enumerator
 }
 
 constexpr scalar_type to_accumulate_type(scalar_type type, bool is_cuda) noexcept {

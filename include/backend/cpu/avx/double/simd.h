@@ -17,6 +17,9 @@
 
 #include "scalars_macros.h"
 
+namespace scalars
+{
+
 template <>
 struct simd<double>
 {
@@ -320,3 +323,5 @@ struct simd<double>
         return _mm256_broadcast_sd(from);
     }
 };
+
+}  // namespace scalars

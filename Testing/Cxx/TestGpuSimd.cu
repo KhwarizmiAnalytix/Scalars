@@ -34,6 +34,8 @@
 #include "scalars_test.h"
 #include "types/complex.h"
 
+using scalars::simd;
+
 // ---- CUDA/HIP runtime API aliases -----------------------------------------
 // The two runtimes expose an identical API surface under different names;
 // aliasing lets the kernels/tests below be written once for both backends.

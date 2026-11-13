@@ -5,6 +5,7 @@
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
+#include <limits>
 #include <type_traits>
 
 #include "backend/cpu/neon/svml.h"
@@ -26,8 +27,45 @@ SCALARS_FORCE_INLINE float32x4_t map1_f32(float32x4_t v, float (*fn)(float))
     b[3] = fn(b[3]);
     return vld1q_f32(b);
 }
+
+// sqrt(x*x + y*y) overflows for huge components and underflows to 0 for tiny
+// ones well before the true hypot result would. Scale by the larger
+// magnitude instead, as std::hypot does, and resolve inf/NaN explicitly
+// since vmaxq_f32/vminq_f32 are not guaranteed to propagate NaN the way
+// std::hypot requires (inf beats NaN; otherwise NaN propagates).
+SCALARS_FORCE_INLINE float32x4_t hypot_f32(float32x4_t x, float32x4_t y)
+{
+    const uint32x4_t abs_mask = vdupq_n_u32(0x7FFFFFFFu);
+    const uint32x4_t inf_bits = vdupq_n_u32(0x7F800000u);
+    const float32x4_t zero    = vdupq_n_f32(0.f);
+    const float32x4_t one     = vdupq_n_f32(1.f);
+
+    const uint32x4_t ax_bits = vandq_u32(vreinterpretq_u32_f32(x), abs_mask);
+    const uint32x4_t ay_bits = vandq_u32(vreinterpretq_u32_f32(y), abs_mask);
+    const float32x4_t ax     = vreinterpretq_f32_u32(ax_bits);
+    const float32x4_t ay     = vreinterpretq_f32_u32(ay_bits);
+
+    const float32x4_t m = vmaxq_f32(ax, ay);
+    const float32x4_t n = vminq_f32(ax, ay);
+
+    const uint32x4_t m_is_zero = vceqq_f32(m, zero);
+    const float32x4_t safe_m   = vbslq_f32(m_is_zero, one, m);
+    const float32x4_t t        = vdivq_f32(n, safe_m);
+    const float32x4_t scaled   = vmulq_f32(m, vsqrtq_f32(vfmaq_f32(one, t, t)));
+    float32x4_t result         = vbslq_f32(m_is_zero, zero, scaled);
+
+    const uint32x4_t any_inf =
+        vorrq_u32(vceqq_u32(ax_bits, inf_bits), vceqq_u32(ay_bits, inf_bits));
+    const uint32x4_t any_nan =
+        vorrq_u32(vmvnq_u32(vceqq_f32(x, x)), vmvnq_u32(vceqq_f32(y, y)));
+    const float32x4_t nan = vdupq_n_f32(std::numeric_limits<float>::quiet_NaN());
+    const float32x4_t inf = vdupq_n_f32(std::numeric_limits<float>::infinity());
+
+    result = vbslq_f32(vbicq_u32(any_nan, any_inf), nan, result);
+    result = vbslq_f32(any_inf, inf, result);
+    return result;
+}
 }  // namespace detail_neon
-}  // namespace scalars
 
 template <> struct simd<float>
 {
@@ -61,7 +99,14 @@ template <> struct simd<float>
         return vdupq_n_f32(static_cast<value_t>(alpha));
     }
 
-    SCALARS_SIMD_METHOD mask_t set(int_t const from) { return vdupq_n_u32(from != 0 ? ~0u : 0u); }
+    // Same fix as backend/cpu/detail/complex_simd.h::set_mask: a distinct
+    // name instead of overloading set(), since the non-template set(int_t)
+    // won ties against the set(scalar_t) template for an exact int_t
+    // argument, silently returning a mask instead of a broadcast packet.
+    SCALARS_SIMD_METHOD mask_t set_mask(int_t const from)
+    {
+        return vdupq_n_u32(from != 0 ? ~0u : 0u);
+    }
 
     SCALARS_SIMD_METHOD simd_t setzero() { return vdupq_n_f32(0.f); }
 
@@ -77,7 +122,7 @@ template <> struct simd<float>
 
     SCALARS_SIMD_METHOD simd_t hypot(simd_t x, simd_t y)
     {
-        return vsqrtq_f32(vaddq_f32(vmulq_f32(x, x), vmulq_f32(y, y)));
+        return scalars::detail_neon::hypot_f32(x, y);
     }
 
     SCALARS_SIMD_METHOD simd_t min(simd_t x, simd_t y) { return vminq_f32(x, y); }
@@ -368,6 +413,16 @@ template <> struct simd<float>
         vst1q_f32(to, vld1q_f32(from));
     }
 
+    // Deviates from Eigen's ploadquad semantics (which, for a 4-wide packet,
+    // is equivalent to pload1: one scalar broadcast to all 4 lanes). This
+    // reads 2 scalars and duplicates each one 2x -- {a0,a0,a1,a1} -- matching
+    // the SSE float backend's own ploadquad (see its comment) rather than
+    // the "N/4 scalars, each repeated 4x" pattern every other (8/16-wide)
+    // backend follows. complex_simd.h's own ploadquad special-cases exactly
+    // this (`repeats = 2` for `T=float, size=4`), so this is intentional and
+    // already accounted for, not a bug; documented rather than changed,
+    // since callers depend on this exact lane pattern and are covered by
+    // existing tests (TestSimdUtility.cxx, TestSimdComplex.cxx).
     SCALARS_FORCE_INLINE static simd_t ploadquad(const value_t* from)
     {
         float32x2_t lo = vld1_dup_f32(from);
@@ -412,3 +467,5 @@ template <> struct simd<float>
         to[stride] = vget_lane_f32(from, 1);
     }
 };
+
+}  // namespace scalars

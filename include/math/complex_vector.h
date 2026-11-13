@@ -24,7 +24,7 @@ complex<T> complex_dot(const complex<T>* x,
     std::ptrdiff_t k = 0;
     complex<T>     result{};
 #if SCALARS_VECTORIZED && !SCALARS_ON_GPU_DEVICE
-    using p         = ::simd<complex<T>>;
+    using p         = simd<complex<T>>;
     auto       sum0 = p::setzero(), sum1 = sum0, sum2 = sum0, sum3 = sum0;
     const auto product_add = [&](std::ptrdiff_t index, typename p::simd_t sum)
     {
@@ -69,7 +69,7 @@ void complex_axpy(complex<T>* y,
     assert(count >= 0 && (count <= 1 || sy != 0));
     std::ptrdiff_t k = 0;
 #if SCALARS_VECTORIZED && !SCALARS_ON_GPU_DEVICE
-    using p           = ::simd<complex<T>>;
+    using p           = simd<complex<T>>;
     const auto factor = p::set(alpha);
     for (; count - k >= p::size; k += p::size)
     {
@@ -94,8 +94,8 @@ void complex_scale(complex<T>* x, std::ptrdiff_t stride, std::ptrdiff_t count, T
     assert(count >= 0 && (count <= 1 || stride != 0));
     std::ptrdiff_t k = 0;
 #if SCALARS_VECTORIZED && !SCALARS_ON_GPU_DEVICE
-    using p           = ::simd<complex<T>>;
-    using r           = ::simd<T>;
+    using p           = simd<complex<T>>;
+    using r           = simd<T>;
     const auto factor = r::set(scale);
     for (; count - k >= p::size; k += p::size)
     {
@@ -125,8 +125,8 @@ void complex_rotate(complex<T>* x,
     assert(count >= 0 && (count <= 1 || (sx != 0 && sy != 0)));
     std::ptrdiff_t k = 0;
 #if SCALARS_VECTORIZED && !SCALARS_ON_GPU_DEVICE
-    using p                       = ::simd<complex<T>>;
-    using r                       = ::simd<T>;
+    using p                       = simd<complex<T>>;
+    using r                       = simd<T>;
     const auto cosine             = r::set(c);
     const auto sine               = p::set(s);
     const auto negative_conjugate = p::neg(p::conj(sine));

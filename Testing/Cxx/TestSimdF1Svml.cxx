@@ -21,6 +21,8 @@
 #include "math/scalar_helper_functions.h"
 #include "scalars_test.h"
 
+using scalars::simd;
+
 namespace
 {
 

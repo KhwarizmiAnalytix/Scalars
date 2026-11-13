@@ -232,6 +232,64 @@ TEST_F(metal_complex, BatchedFusedAndDestructorCompletion)
     }
 }
 
+TEST_F(metal_complex, FusedPipelineCacheEviction)
+{
+    const std::size_t original_capacity = mb::fused_pipeline_cache_capacity();
+    struct restore_capacity
+    {
+        std::size_t value;
+        ~restore_capacity() { mb::set_fused_pipeline_cache_capacity(value); }
+    } restore{original_capacity};
+
+    mb::set_fused_pipeline_cache_capacity(2);
+    EXPECT_EQ(mb::fused_pipeline_cache_capacity(), 2u);
+
+    constexpr std::size_t n = 17;
+    metal_buffer<float>   input(n), out(n);
+    mb::execution_context context;
+    context.dispatch_fill(input.data, 2.f, n);
+    const void* inputs[] = {input.data};
+    const float factor   = 3.f;
+
+    auto source_for = [](int tag)
+    {
+        return std::string(R"(
+        #include <metal_stdlib>
+        using namespace metal;
+        kernel void fused_float(device const float* a [[buffer(0)]],
+            constant float& factor [[buffer(1)]], device float* out [[buffer(2)]],
+            constant uint& n [[buffer(3)]], uint i [[thread_position_in_grid]]) {
+            if (i < n) out[i] = a[i] * factor + )") +
+               std::to_string(tag) + " - " + std::to_string(tag) + ";\n        }";
+    };
+
+    // Three distinct source texts under a capacity of 2: the first must be
+    // evicted once the third is compiled.
+    for (int tag : {1, 2, 3})
+    {
+        context.dispatch_fused(source_for(tag), inputs, 1, &factor, 1, out.data, n);
+        context.wait();
+        for (std::size_t i = 0; i < n; ++i)
+        {
+            EXPECT_EQ(out.data[i], 6.f);
+        }
+        EXPECT_LE(mb::fused_pipeline_cache_size(), 2u);
+    }
+
+    // Re-dispatching the evicted first source still works: it recompiles
+    // rather than returning a stale or invalid pipeline.
+    context.dispatch_fused(source_for(1), inputs, 1, &factor, 1, out.data, n);
+    context.wait();
+    for (std::size_t i = 0; i < n; ++i)
+    {
+        EXPECT_EQ(out.data[i], 6.f);
+    }
+
+    // Growing the capacity back does not evict anything by itself.
+    mb::set_fused_pipeline_cache_capacity(original_capacity);
+    EXPECT_LE(mb::fused_pipeline_cache_size(), 2u);
+}
+
 TEST_F(metal_complex, BatchRecoversFromEncodingError)
 {
     metal_buffer<float>   out(3);

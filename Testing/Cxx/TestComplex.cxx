@@ -136,6 +136,38 @@ TEST(Complex, ArithmeticDivisionAndIntegers)
     EXPECT_TRUE(!std::isfinite(zero_result.real()) || !std::isfinite(zero_result.imag()));
 }
 
+TEST(Complex, DivisionBySignedZeroMatchesPositiveZero)
+{
+    // Confirmed bug: `abs_c = c < 0 ? -c : c` leaves a negative zero divisor
+    // negative (c < 0 is false for -0.0), flipping the sign of the quotient.
+    // (1+1i) / (-0-0i) must equal (1+1i) / (0+0i), both (+inf, +inf).
+    const complex<double> numerator{1.0, 1.0};
+    const auto positive_zero = complex<double>{1.0, 1.0} / complex<double>{0.0, 0.0};
+    const auto negative_zero = numerator / complex<double>{-0.0, -0.0};
+    EXPECT_EQ(positive_zero.real(), negative_zero.real());
+    EXPECT_EQ(positive_zero.imag(), negative_zero.imag());
+    EXPECT_GT(negative_zero.real(), 0.0);
+    EXPECT_GT(negative_zero.imag(), 0.0);
+}
+
+TEST(Complex, DivisionByNaNYieldsNaN)
+{
+    // division_abs must keep NaN: mapping it to 0 sent a NaN divisor down the
+    // divide-by-zero branch, giving (+inf, +inf) instead of NaN.
+    const double nan  = std::numeric_limits<double>::quiet_NaN();
+    const auto   both = complex<double>{1.0, 1.0} / complex<double>{nan, nan};
+    EXPECT_TRUE(std::isnan(both.real()));
+    EXPECT_TRUE(std::isnan(both.imag()));
+
+    const float nanf      = std::numeric_limits<float>::quiet_NaN();
+    const auto  real_only = complex<float>{1.0f, 1.0f} / complex<float>{nanf, 0.0f};
+    EXPECT_TRUE(std::isnan(real_only.real()));
+    EXPECT_TRUE(std::isnan(real_only.imag()));
+    const auto imag_only = complex<float>{1.0f, 1.0f} / complex<float>{0.0f, nanf};
+    EXPECT_TRUE(std::isnan(imag_only.real()));
+    EXPECT_TRUE(std::isnan(imag_only.imag()));
+}
+
 TEST(Complex, ComparisonStreamLiteralsAndStd)
 {
     const complex<double> value{1.0, 2.0};
@@ -203,6 +235,85 @@ TEST(Complex, HalfAndBFloat16)
     brain *= complex<bfloat16>(bfloat16(2.0f), bfloat16(0.0f));
     EXPECT_NEAR(static_cast<float>(brain.real()), 6.0f, 0.05f);
     EXPECT_NEAR(static_cast<float>(brain.imag()), 10.0f, 0.05f);
+}
+
+// Confirmed bug: complex<half> had no operator/= at all, and
+// complex<bfloat16> (the generic complex<T> template instantiated with T =
+// bfloat16) failed to compile because `c < 0` was ambiguous between
+// bfloat16 and int. Both now divide by promoting to complex<float>.
+TEST(Complex, HalfAndBFloat16Division)
+{
+    complex<half> half_value(half(3.0f), half(4.0f));
+    half_value /= complex<half>(half(1.0f), half(2.0f));
+    const complex<float> half_reference =
+        complex<float>(3.0f, 4.0f) / complex<float>(1.0f, 2.0f);
+    EXPECT_NEAR(static_cast<float>(half_value.real()), half_reference.real(), 1e-2f);
+    EXPECT_NEAR(static_cast<float>(half_value.imag()), half_reference.imag(), 1e-2f);
+
+    complex<bfloat16> brain_value(bfloat16(3.0f), bfloat16(4.0f));
+    brain_value /= complex<bfloat16>(bfloat16(1.0f), bfloat16(2.0f));
+    const complex<float> brain_reference =
+        complex<float>(3.0f, 4.0f) / complex<float>(1.0f, 2.0f);
+    EXPECT_NEAR(static_cast<float>(brain_value.real()), brain_reference.real(), 0.05f);
+    EXPECT_NEAR(static_cast<float>(brain_value.imag()), brain_reference.imag(), 0.05f);
+
+    // Division by a signed-zero divisor: real/imag setters are also new
+    // members (complex<half>/complex<bfloat16> previously only had the
+    // const real()/imag() getters).
+    complex<half> half_numerator;
+    half_numerator.real(half(1.0f));
+    half_numerator.imag(half(1.0f));
+    half_numerator /= complex<half>(half(-0.0f), half(-0.0f));
+    EXPECT_GT(static_cast<float>(half_numerator.real()), 0.0f);
+    EXPECT_TRUE(std::isinf(static_cast<float>(half_numerator.real())));
+}
+
+// complex<bfloat16> used to be the generic complex<T>; its specialization must
+// keep that template's zero default, implicit real constructor, and scalar
+// compound/binary operators.
+TEST(Complex, BFloat16KeepsGenericComplexInterface)
+{
+    const complex<bfloat16> zero;
+    EXPECT_EQ(static_cast<float>(zero.real()), 0.0f);
+    EXPECT_EQ(static_cast<float>(zero.imag()), 0.0f);
+
+    complex<bfloat16> value = bfloat16(2.0f);
+    EXPECT_EQ(static_cast<float>(value.real()), 2.0f);
+    EXPECT_EQ(static_cast<float>(value.imag()), 0.0f);
+
+    // Still resolves to the complex<float> converting constructor, not ambiguous.
+    const complex<bfloat16> from_float(1.5f);
+    EXPECT_EQ(static_cast<float>(from_float.real()), 1.5f);
+    EXPECT_EQ(static_cast<float>(from_float.imag()), 0.0f);
+
+    value = complex<bfloat16>(bfloat16(2.0f), bfloat16(4.0f));
+    value += bfloat16(1.0f);
+    value -= bfloat16(2.0f);
+    EXPECT_EQ(static_cast<float>(value.real()), 1.0f);
+    EXPECT_EQ(static_cast<float>(value.imag()), 4.0f);
+    value *= bfloat16(2.0f);
+    EXPECT_EQ(static_cast<float>(value.real()), 2.0f);
+    EXPECT_EQ(static_cast<float>(value.imag()), 8.0f);
+    value /= bfloat16(4.0f);
+    EXPECT_EQ(static_cast<float>(value.real()), 0.5f);
+    EXPECT_EQ(static_cast<float>(value.imag()), 2.0f);
+
+    // Non-member complex<T> (op) T operators are built on the scalar
+    // compound operators above.
+    const auto scaled = complex<bfloat16>(bfloat16(1.0f), bfloat16(3.0f)) * bfloat16(2.0f);
+    EXPECT_EQ(static_cast<float>(scaled.real()), 2.0f);
+    EXPECT_EQ(static_cast<float>(scaled.imag()), 6.0f);
+    const auto shifted = complex<bfloat16>(bfloat16(1.0f), bfloat16(3.0f)) + bfloat16(1.0f);
+    EXPECT_EQ(static_cast<float>(shifted.real()), 2.0f);
+    EXPECT_EQ(static_cast<float>(shifted.imag()), 3.0f);
+
+    complex<bfloat16> accumulator;
+    for (int i = 0; i < 4; ++i)
+    {
+        accumulator += complex<bfloat16>(bfloat16(1.0f), bfloat16(0.5f));
+    }
+    EXPECT_EQ(static_cast<float>(accumulator.real()), 4.0f);
+    EXPECT_EQ(static_cast<float>(accumulator.imag()), 2.0f);
 }
 
 namespace

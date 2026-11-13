@@ -15,6 +15,8 @@
 #include "math/scalar_helper_functions.h"
 #include "scalars_test.h"
 
+using scalars::simd;
+
 namespace
 {
 
@@ -243,6 +245,72 @@ template <typename value_t> void test_pow(value_t tolerance)
         [](value_t x, value_t y) { return std::pow(x, y); });
 }
 
+// Confirmed bug: the NEON hypot implementation computed sqrt(x*x + y*y)
+// directly, which overflows for huge components (hypot(1e20, 1e20) == inf)
+// and underflows to zero for tiny/subnormal components before the square
+// root even runs. Sweep huge, tiny, subnormal, inf, and NaN inputs against
+// std::hypot across every CPU backend.
+template <typename value_t> void test_hypot_special_values()
+{
+    using simd_t  = typename simd<value_t>::simd_t;
+    using limits  = std::numeric_limits<value_t>;
+    const value_t huge    = limits::max() / static_cast<value_t>(4);
+    const value_t tiny    = limits::denorm_min() * static_cast<value_t>(4);
+    const value_t inf     = limits::infinity();
+    const value_t nan     = limits::quiet_NaN();
+    const value_t one     = static_cast<value_t>(1);
+    const value_t zero    = static_cast<value_t>(0);
+
+    struct Case
+    {
+        value_t x;
+        value_t y;
+    };
+    const std::array<Case, 11> cases{Case{huge, huge},
+        Case{tiny, tiny * static_cast<value_t>(2)},
+        Case{zero, zero},
+        Case{-zero, -zero},
+        Case{inf, one},
+        Case{one, inf},
+        Case{inf, nan},
+        Case{nan, inf},
+        Case{nan, one},
+        Case{static_cast<value_t>(3), static_cast<value_t>(4)},
+        Case{-static_cast<value_t>(3), static_cast<value_t>(4)}};
+
+    for (const auto& c : cases)
+    {
+        SCOPED_TRACE(::testing::Message() << "x=" << c.x << " y=" << c.y);
+        const simd_t                              a = simd<value_t>::set(c.x);
+        const simd_t                              b = simd<value_t>::set(c.y);
+        const simd_t                              r = simd<value_t>::hypot(a, b);
+        std::array<value_t, simd<value_t>::size>  out{};
+        simd<value_t>::storeu(r, out.data());
+        const value_t expected = std::hypot(c.x, c.y);
+
+        for (value_t lane : out)
+        {
+            if (std::isnan(expected))
+            {
+                EXPECT_TRUE(std::isnan(lane));
+            }
+            else if (std::isinf(expected))
+            {
+                EXPECT_TRUE(std::isinf(lane));
+                EXPECT_GT(lane, zero);
+            }
+            else if (expected == zero)
+            {
+                EXPECT_EQ(lane, zero);
+            }
+            else
+            {
+                EXPECT_NEAR(lane / expected, one, static_cast<value_t>(1e-6));
+            }
+        }
+    }
+}
+
 template <typename value_t> void test_all_simd_binary(value_t tolerance)
 {
     test_add(tolerance);
@@ -266,6 +334,12 @@ TEST(Simd, F2Binary)
     constexpr double kSimdTolD = 5.e-12;
     test_all_simd_binary<float>(kSimdTolF);
     test_all_simd_binary<double>(kSimdTolD);
+}
+
+TEST(Simd, HypotSpecialValues)
+{
+    test_hypot_special_values<float>();
+    test_hypot_special_values<double>();
 }
 
 #endif  // SCALARS_VECTORIZED

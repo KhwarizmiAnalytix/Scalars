@@ -14,6 +14,8 @@
 
 #include "scalars_test.h"
 
+using scalars::simd;
+
 namespace
 {
 template <class T> class simd_reduced : public ::testing::Test
@@ -271,7 +273,7 @@ TYPED_TEST(simd_reduced, MasksComparisonsAndBitPreservingSelect)
     {
         EXPECT_EQ(bits, 0xffff);
     }
-    S::storeu(S::set(typename S::int_t(1)), mask.data());
+    S::storeu(S::set_mask(typename S::int_t(1)), mask.data());
     for (auto bits : mask)
     {
         EXPECT_EQ(bits, 0xffff);

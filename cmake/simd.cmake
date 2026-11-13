@@ -7,7 +7,7 @@
 #   avx512 -> SCALARS_HAS_AVX512=1; neon -> SCALARS_HAS_NEON=1; sve -> SCALARS_HAS_SVE=1.
 # SCALARS_CPU_CAPABILITY_AVX2 / SCALARS_CPU_CAPABILITY_AVX512 are defined (ifdef-style,
 # no value) exactly when backend is avx2 / avx512 -- these are what
-# include/types/half.h and include/detail/vec_half.h test via #if defined(...).
+# include/types/half.h and include/common/vec_half.h test via #if defined(...).
 include_guard(GLOBAL)
 
 # Host-aware default: x86 family -> avx2, aarch64 -> neon, anything else -> no.
@@ -60,6 +60,16 @@ mark_as_advanced(SCALARS_ENABLE_ACCELERATE)
 option(USE_NATIVE_ARCH "Prefer host CPU instruction tuning (-march=native, Clang/GCC only)" OFF)
 
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_LIST_DIR}/packages")
+
+# Install the custom find modules so an installed package's ScalarsConfig.cmake
+# can call find_dependency(SVML) / find_dependency(MKL) to re-find them (see
+# scalars_config.cmake.in); otherwise a consumer's find_package(Scalars) has
+# no way to recreate the SVML::SVML / MKL::MKL imported targets that Scalars
+# links against PUBLIC.
+install(FILES "${CMAKE_CURRENT_LIST_DIR}/packages/FindSVML.cmake"
+              "${CMAKE_CURRENT_LIST_DIR}/packages/FindMKL.cmake"
+        DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake/Scalars/Modules"
+)
 
 set(SCALARS_HAS_SVML 0)
 set(SCALARS_HAS_MKL 0)
@@ -120,10 +130,13 @@ endif()
 
 include("${CMAKE_CURRENT_LIST_DIR}/utils.cmake")
 
-# compile_definition() in Vectorization maps VECTORIZATION_ENABLE_SVML to
-# VECTORIZATION_HAS_SVML=1/0 from the option itself, including when the probe
-# above forces it on. A missing ThirdParty package warns; it does not clear the flag.
-if(SCALARS_ENABLE_SVML)
+# Confirmed bug: this used to be set from SCALARS_ENABLE_SVML alone, so
+# SCALARS_HAS_SVML=1 was defined even when the ThirdParty SVML package was
+# not found (utils.cmake only warns in that case; it does not clear the
+# enable flag) or on non-x86 targets where SVML is never probed at all.
+# Require the actual imported target, matching how SCALARS_HAS_MKL is set
+# from MKL_FOUND above.
+if(SCALARS_ENABLE_SVML AND TARGET SVML::SVML)
     set(SCALARS_HAS_SVML 1)
 else()
     set(SCALARS_HAS_SVML 0)
@@ -244,12 +257,16 @@ function(scalars_apply_simd_compile_definitions target)
         target_compile_definitions(${target} PUBLIC SCALARS_CPU_CAPABILITY_AVX512)
     endif()
     # Link ThirdParty SVML for this build and stage its runtimes next to the
-    # output library. SVML:: targets are not part of the Scalars install export,
-    # so they stay in BUILD_INTERFACE. Otherwise find_package(Scalars) fails
-    # because the consumer has no SVML::SVML target. libintlc.so.5 is a direct
-    # DT_NEEDED of libsvml; Linux ld.so does not use an executable RUNPATH to
-    # find a shared library's own dependencies, so the library searches $ORIGIN,
-    # where the installed copies live.
+    # output library. SVML::SVML is linked PUBLIC, unrestricted -- a consumer
+    # of the installed package also needs it: SVML calls are emitted by
+    # inline headers (include/backend/cpu/*/svml.h), so they end up compiled
+    # directly into the consumer's own translation units, not just inside
+    # libScalars itself. scalars_config.cmake.in calls find_dependency(SVML)
+    # (via the installed FindSVML.cmake module) before including
+    # ScalarsTargets.cmake, which is what makes this resolve for a consumer.
+    # libintlc.so.5 is a direct DT_NEEDED of libsvml; Linux ld.so does not use
+    # an executable RUNPATH to find a shared library's own dependencies, so
+    # the library searches $ORIGIN, where the installed copies live.
     if(SCALARS_ENABLE_SVML AND TARGET SVML::SVML)
         if(UNIX AND NOT APPLE)
             # Nothing in Scalars calls libirc/libintlc symbols directly, so the
@@ -261,14 +278,19 @@ function(scalars_apply_simd_compile_definitions target)
             # Forcing it onto this target's own DT_NEEDED makes ld.so resolve
             # and load it via this target's RUNPATH up front; libsvml's later
             # request for the same soname then reuses the already-loaded copy.
+            # The bracketing --no-as-needed/--as-needed flags stay in
+            # BUILD_INTERFACE: exported, they would be positional raw linker
+            # flags in a consumer's link line, which CMake may reorder or
+            # deduplicate, and the trailing --as-needed would apply to every
+            # library the consumer links after Scalars.
             target_link_libraries(${target} PUBLIC "$<BUILD_INTERFACE:-Wl$<COMMA>--no-as-needed>")
         endif()
-        target_link_libraries(${target} PUBLIC $<BUILD_INTERFACE:SVML::SVML>)
+        target_link_libraries(${target} PUBLIC SVML::SVML)
         if(TARGET SVML::IRC)
-            target_link_libraries(${target} PUBLIC $<BUILD_INTERFACE:SVML::IRC>)
+            target_link_libraries(${target} PUBLIC SVML::IRC)
         endif()
         if(TARGET SVML::INTLC)
-            target_link_libraries(${target} PUBLIC $<BUILD_INTERFACE:SVML::INTLC>)
+            target_link_libraries(${target} PUBLIC SVML::INTLC)
         endif()
         if(UNIX AND NOT APPLE)
             target_link_libraries(${target} PUBLIC "$<BUILD_INTERFACE:-Wl$<COMMA>--as-needed>")
@@ -293,6 +315,14 @@ function(scalars_apply_simd_compile_definitions target)
             else()
                 install(FILES ${SVML_RUNTIME_LIBRARIES} DESTINATION ${CMAKE_INSTALL_LIBDIR})
             endif()
+        endif()
+        if(WIN32 AND SVML_LIBRARIES)
+            # SVML_RUNTIME_LIBRARIES is only the DLL on Windows (see
+            # FindSVML.cmake); the .lib import library a consumer links
+            # against is never staged otherwise, so find_dependency(SVML)
+            # from an installed ScalarsConfig.cmake would find the DLL but
+            # not the import library.
+            install(FILES ${SVML_LIBRARIES} DESTINATION ${CMAKE_INSTALL_LIBDIR})
         endif()
         if(UNIX AND NOT APPLE)
             set_property(TARGET ${target} APPEND PROPERTY BUILD_RPATH "\$ORIGIN")

@@ -4,10 +4,10 @@
 /// to standard C types and basic arithmetic operations. Note that arithmetic
 /// operations are implemented by converting to floating point and
 /// performing the operation in float32, instead of using CUDA half intrinsics.
-/// Most uses of this type within ATen are memory bound, including the
-/// element-wise kernels, and the half intrinsics aren't efficient on all GPUs.
-/// If you are writing a compute bound kernel, you can use the CUDA half
-/// intrinsics directly on the half type from device code.
+/// Most uses of this type are memory bound, including element-wise kernels,
+/// and the half intrinsics aren't efficient on all GPUs. If you are writing a
+/// compute bound kernel, you can use the CUDA half intrinsics directly on the
+/// half type from device code.
 
 #include "common/bit_cast.h"
 #include "common/floating_point_utils.h"
@@ -45,6 +45,19 @@
 #if (defined(__aarch64__) || defined(__x86_64__) || defined(_M_X64) || defined(__i386) || defined(_M_IX86)) && \
     !defined(__CUDACC__) && !defined(__HIPCC__)
 #include "common/intrinsics.h"
+#endif
+
+// F16C gives hardware half<->float conversion (VCVTPH2PS/VCVTPS2PH) instead of
+// the portable bit-twiddling fallback below. __F16C__ is predefined by
+// GCC/Clang whenever -mf16c is active, and cmake/utils.cmake passes
+// /D__F16C__ to MSVC under the same condition, so this mirrors the compiler's
+// own ISA selection rather than guessing it. Excluded whenever
+// common/intrinsics.h above was not included (CUDA/HIP TUs), since the x86
+// intrinsic headers that declare _cvtsh_ss/_cvtss_sh are not pulled in there.
+#if defined(__F16C__) && \
+    (defined(__x86_64__) || defined(__i386__) || defined(_M_X64) || defined(_M_IX86)) && \
+    !defined(__CUDACC__) && !defined(__HIPCC__)
+#define SCALARS_X86_F16 1
 #endif
 
 namespace scalars
@@ -454,8 +467,6 @@ inline SCALARS_HOST_DEVICE half::operator float() const
 #elif (defined(SCALARS_CPU_CAPABILITY_AVX2) || defined(SCALARS_CPU_CAPABILITY_AVX512)) &&          \
     !defined(__APPLE__)
     return scalars::vec::half2float_scalar(x);
-#elif defined(__aarch64__) && !defined(__CUDACC__) && !defined(__HIPCC__)
-    return detail::native_fp16_to_fp32_value(x);
 #else
     return detail::fp16_ieee_to_fp32_value(x);
 #endif
@@ -734,32 +745,12 @@ inline SCALARS_HOST_DEVICE half operator/(int64_t a, half b)
     return static_cast<half>(a) / b;
 }
 
-// Compare in float. These operators are the single exact match for CUDA, where
-// half also converts to __half.
-inline SCALARS_HOST_DEVICE bool operator==(const half& lhs, const half& rhs)
-{
-    return static_cast<float>(lhs) == static_cast<float>(rhs);
-}
-inline SCALARS_HOST_DEVICE bool operator!=(const half& lhs, const half& rhs)
-{
-    return static_cast<float>(lhs) != static_cast<float>(rhs);
-}
-inline SCALARS_HOST_DEVICE bool operator<(const half& lhs, const half& rhs)
-{
-    return static_cast<float>(lhs) < static_cast<float>(rhs);
-}
-inline SCALARS_HOST_DEVICE bool operator>(const half& lhs, const half& rhs)
-{
-    return static_cast<float>(lhs) > static_cast<float>(rhs);
-}
-inline SCALARS_HOST_DEVICE bool operator<=(const half& lhs, const half& rhs)
-{
-    return static_cast<float>(lhs) <= static_cast<float>(rhs);
-}
-inline SCALARS_HOST_DEVICE bool operator>=(const half& lhs, const half& rhs)
-{
-    return static_cast<float>(lhs) >= static_cast<float>(rhs);
-}
+// No comparison operators are defined for (half, half): half has an implicit
+// constructor from float and an implicit conversion to float, so defining
+// operator==(half, half) etc. makes `h == 1.0f` ambiguous between that
+// overload (1.0f -> half) and the built-in float comparison (h -> float).
+// Instead, every comparison -- half-half, half-float, half-double, half-int --
+// resolves through the implicit conversion to float, matching c10::Half.
 
 SCALARS_CLANG_DIAGNOSTIC_POP()
 
@@ -833,8 +824,3 @@ public:
 };
 
 }  // namespace std
-
-namespace scalars
-{
-using half = scalars::half;
-}

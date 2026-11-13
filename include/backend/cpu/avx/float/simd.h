@@ -17,6 +17,9 @@
 
 #include "scalars_macros.h"
 
+namespace scalars
+{
+
 template <>
 struct simd<float>
 {
@@ -440,3 +443,5 @@ struct simd<float>
         to[stride * 3] = _mm_cvtss_f32(_mm_shuffle_ps(from, from, 3));
     }
 };
+
+}  // namespace scalars

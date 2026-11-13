@@ -8,6 +8,8 @@
 
 #include "backend/simd.h"
 
+using scalars::simd;
+
 // Bounded inputs and a separate output avoid saturation and fixed points.
 template <class T, bool Multiply, bool Vectorized>
 void benchmark_reduced_arithmetic(benchmark::State& state)

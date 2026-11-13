@@ -41,9 +41,9 @@ template <class T> struct complex_reduced_simd
     static_assert(std::is_same_v<T, half> || std::is_same_v<T, bfloat16>);
 
     using value_t            = complex<T>;
-    using component_r        = ::simd<T>;                        // reduced_simd<T>
+    using component_r        = simd<T>;                        // reduced_simd<T>
     using component_packet_t = typename component_r::simd_t;     // packet<T, size>
-    using cf                 = ::simd<scalars::complex<float>>;  // complete complex<float> backend
+    using cf                 = simd<scalars::complex<float>>;  // complete complex<float> backend
     using simd_t             = complex_packet<T>;                // {component_packet_t real, imag}
     using real_packet_t      = component_packet_t;
     using mask_t             = typename component_r::mask_t;
@@ -198,7 +198,7 @@ public:
         return {component_r::set(a.real()), component_r::set(a.imag())};
     }
     template <class U>
-        requires(std::is_arithmetic_v<U> && !std::is_same_v<U, int_t>)
+        requires(std::is_arithmetic_v<U>)
     static simd_t set(U a)
     {
         return set(value_t(static_cast<T>(static_cast<float>(a)), T(0.f)));
@@ -209,7 +209,7 @@ public:
         return a ? component_r::eq(component_r::setzero(), component_r::setzero())
                  : component_r::neq(component_r::setzero(), component_r::setzero());
     }
-    static mask_t set(int_t a) { return component_r::set(a); }
+    static mask_t set_mask(int_t a) { return component_r::set_mask(a); }
     static void   broadcast(const value_t* p, simd_t& a, simd_t& b, simd_t& c, simd_t& d)
     {
         a = set(p[0]);
@@ -425,6 +425,8 @@ public:
 };
 }  // namespace scalars::detail_reduced_complex
 
+namespace scalars
+{
 template <>
 struct simd<scalars::complex<scalars::half>>
     : scalars::detail_reduced_complex::complex_reduced_simd<scalars::half>
@@ -435,3 +437,4 @@ struct simd<scalars::complex<scalars::bfloat16>>
     : scalars::detail_reduced_complex::complex_reduced_simd<scalars::bfloat16>
 {
 };
+}  // namespace scalars

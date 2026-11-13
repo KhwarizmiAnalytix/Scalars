@@ -20,6 +20,11 @@ template <class T, class Cpu, class Gpu> void expect_accumulate()
     static_assert(std::is_same_v<acc_type_device<T, device_type::gpu>, Gpu>);
     static_assert(std::is_same_v<typename accumulate_type_impl<T, false>::type, Cpu>);
     static_assert(std::is_same_v<typename accumulate_type_impl<T, true>::type, Gpu>);
+    // accumulation_type_t<T> is the CPU form of acc_type; these two tables
+    // used to disagree for float (accumulation_type_t<float> was float,
+    // not double). Checking it against every row of this table is the
+    // "unify the accumulation-type systems" fix.
+    static_assert(std::is_same_v<accumulation_type_t<T>, Cpu>);
 }
 }  // namespace
 
@@ -33,9 +38,12 @@ TEST(ScalarTraits, ComplexRealAndAccumulation)
     static_assert(std::is_same_v<real_type_t<float>, float>);
     static_assert(std::is_same_v<accumulation_type_t<half>, float>);
     static_assert(std::is_same_v<accumulation_type_t<bfloat16>, float>);
-    static_assert(std::is_same_v<accumulation_type_t<float>, float>);
+    // Confirmed inconsistency, now fixed: this used to be float (the old,
+    // independent accumulation_type table); it must match acc_type<float,
+    // false>, which is double.
+    static_assert(std::is_same_v<accumulation_type_t<float>, double>);
     static_assert(std::is_same_v<accumulation_type_t<complex<half>>, complex<float>>);
-    static_assert(std::is_same_v<accumulation_type_t<complex<float>>, complex<float>>);
+    static_assert(std::is_same_v<accumulation_type_t<complex<float>>, complex<double>>);
     static_assert(std::is_same_v<scalar_value_type<complex<double>>::type, double>);
     static_assert(std::is_same_v<scalar_value_type<std::complex<float>>::type, float>);
     static_assert(std::is_same_v<scalar_value_type<int>::type, int>);

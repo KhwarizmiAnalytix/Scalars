@@ -19,6 +19,9 @@
 #include "backend/cpu/sse/intrinsics.h"
 #include "scalars_macros.h"
 
+namespace scalars
+{
+
 template <> struct simd<double>
 {
     using simd_t      = __m128d;
@@ -342,3 +345,5 @@ template <> struct simd<double>
 
     SCALARS_SIMD_METHOD simd_t ploadquad(const double* from) { return _mm_set1_pd(from[0]); }
 };
+
+}  // namespace scalars

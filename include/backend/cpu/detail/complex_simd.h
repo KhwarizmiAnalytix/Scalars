@@ -18,7 +18,7 @@ namespace scalars::detail_complex_simd
 {
 template <class T> struct complex_packet
 {
-    typename ::simd<T>::simd_t real, imag;
+    typename simd<T>::simd_t real, imag;
 };
 
 // A distinct type keeps half-width overloads unambiguous even on backends
@@ -31,7 +31,7 @@ template <class T> struct complex_half_packet
 // Avoid GCC's ignored-attributes diagnostic for intrinsic vector template arguments.
 template <class T> struct packed_registers
 {
-    using register_t = typename ::simd<T>::simd_t;
+    using register_t = typename simd<T>::simd_t;
     register_t values[2];
     packed_registers() = default;
     packed_registers(register_t lo, register_t hi) : values{lo, hi} {}
@@ -67,7 +67,7 @@ template <class T> constexpr T division_upper()
 
 template <class T> SCALARS_FORCE_INLINE auto division_mask(complex_packet<T> a, complex_packet<T> b)
 {
-    using r            = ::simd<T>;
+    using r            = simd<T>;
     const auto zero    = r::setzero();
     const auto bounded = [&](typename r::simd_t v)
     {
@@ -84,7 +84,7 @@ template <class T> SCALARS_FORCE_INLINE auto division_mask(complex_packet<T> a, 
 // This layer contains no backend selection or architecture intrinsics.
 template <class T, class Ops> struct complex_simd
 {
-    using r                         = ::simd<T>;
+    using r                         = simd<T>;
     using value_t                   = complex<T>;
     using simd_t                    = complex_packet<T>;
     using real_packet_t             = typename r::simd_t;
@@ -164,8 +164,31 @@ private:
     }
     static simd_t log_fast(simd_t a)
     {
-        const auto squared = r::fma(a.real, a.real, r::mul(a.imag, a.imag));
-        return {r::mul(r::set(T(.5)), r::log(squared)), arg(a)};
+        // 0.5*log(re^2+im^2) loses all relative precision once re^2+im^2
+        // rounds to exactly 1 near the unit circle: for T=float this washes
+        // out any true log-magnitude signal below ~1.2e-7, even though the
+        // true value can be as small as ~1e-8. Computing the "-1" via
+        // hi/lo (as abs() above does for the magnitude itself) keeps that
+        // subtraction exact -- Sterbenz's lemma applies since hi is within
+        // [0.5, 2] near the unit circle -- so log1p is fed a value limited
+        // only by lo^2's own rounding, not by cancellation in re^2+im^2
+        // itself. This is *not* valid away from the unit circle: Sterbenz's
+        // lemma needs hi within a factor of 2 of 1, specifically, not of
+        // whatever re^2+im^2 actually is, so for a tiny or huge hi, hi-1 is
+        // itself a lossy cancellation (e.g. hi=1e-15 gives hi-1 == -1
+        // exactly, losing hi entirely, where log(re^2+im^2) should be a
+        // large finite negative, not log1p(-1) = -inf). So this is used
+        // only in the band Sterbenz's lemma actually covers; the plain
+        // formula, unconditionally correct away from 1, covers the rest.
+        const auto re = r::fabs(a.real), im = r::fabs(a.imag);
+        const auto hi = r::max(re, im), lo = r::min(re, im);
+        const auto near_one =
+            r::and_mask(r::ge(hi, r::set(T(0.5))), r::le(hi, r::set(T(2))));
+        const auto magnitude_sq_minus_one =
+            r::fma(r::add(hi, r::set(T(1))), r::sub(hi, r::set(T(1))), r::mul(lo, lo));
+        const auto refined = r::log1p(magnitude_sq_minus_one);
+        const auto plain    = r::log(r::fma(a.real, a.real, r::mul(a.imag, a.imag)));
+        return {r::mul(r::set(T(.5)), r::if_else(near_one, refined, plain)), arg(a)};
     }
     static SCALARS_NOINLINE simd_t log_fallback(simd_t a, mask_t safe)
     {
@@ -321,13 +344,21 @@ public:
         }
     }
     static simd_t set(value_t a) { return {r::set(a.real()), r::set(a.imag())}; }
+    // Confirmed bug: when this took the same name, set(U) was constrained to
+    // exclude exactly int_t to avoid an overload collision, but that made
+    // set's return type depend on the argument's exact type rather than its
+    // value: set(1) returned a packet, while set(1u) silently returned a
+    // mask whenever unsigned int happened to be int_t's underlying type
+    // (likewise any uint64_t/size_t argument for the double specialization).
+    // Giving the mask-returning overload its own name, matching the
+    // existing set_mask(bool), removes the trap instead of tightening it.
     template <class U>
-        requires(std::is_arithmetic_v<U> && !std::is_same_v<U, int_t>)
+        requires(std::is_arithmetic_v<U>)
     static simd_t set(U a)
     {
         return set(value_t(static_cast<T>(a), T(0)));
     }
-    static mask_t set(int_t a) { return set_mask(a != 0); }
+    static mask_t set_mask(int_t a) { return set_mask(a != 0); }
     static simd_t setzero() { return {r::setzero(), r::setzero()}; }
     static mask_t set_mask(bool a)
     {
@@ -385,6 +416,10 @@ public:
     }
     static simd_t ploadquad(const value_t* p)
     {
+        // repeats=2 mirrors the SSE/NEON 4-wide float ploadquad's own
+        // deviation from Eigen's usual "N/4 scalars, each repeated 4x"
+        // semantics (see those backends' ploadquad comments); every other
+        // packet width/type follows Eigen's rule, hence repeats=4 there.
         constexpr int             repeats = std::is_same_v<T, float> && size == 4 ? 2 : 4;
         std::array<value_t, size> lanes;
         for (int i = 0; i < size; ++i)
@@ -490,11 +525,7 @@ public:
     {
         return {r::sub(a.real, b.real), r::sub(a.imag, b.imag)};
     }
-    static simd_t neg(simd_t a)
-    {
-        const auto x = Ops::interleave(a);
-        return Ops::deinterleave({r::neg(x[0]), r::neg(x[1])});
-    }
+    static simd_t neg(simd_t a) { return {r::neg(a.real), r::neg(a.imag)}; }
     static simd_t conj(simd_t a) { return {a.real, r::neg(a.imag)}; }
     static simd_t mul(simd_t a, simd_t b)
     {
@@ -617,7 +648,18 @@ public:
     }
     static simd_t log(simd_t a)
     {
-#if (SCALARS_HAS_SVML || SCALARS_HAS_SLEEF) && !SCALARS_HAS_ACCELERATE
+#if SCALARS_HAS_SVML || SCALARS_HAS_MKL || SCALARS_HAS_SLEEF || SCALARS_HAS_ACCELERATE
+        // Same fast-path condition as exp() above. This used to exclude
+        // Accelerate, which was only ever load-bearing while log_fast()
+        // computed 0.5*log(re^2+im^2) directly: that formula loses all
+        // relative precision near |z|=1 (see log_fast()'s own comment),
+        // and excluding Accelerate -- the default backend on this
+        // platform, and so the one actually exercised by default local
+        // test runs -- kept that bug from showing up here. Now that
+        // log_fast() uses the hi/lo-based log1p formula, it is accurate
+        // everywhere Accelerate's own vForce-backed log()/log1p() are
+        // (see neon/svml.h's vlogq_f32/vlog1pq_f32), so there is no
+        // remaining reason for log() to be gated more narrowly than exp().
         // The larger component bounds the squared magnitude. Components below
         // the lower bound are harmless when the other component dominates.
         const auto re = r::fabs(a.real), im = r::fabs(a.imag);
@@ -709,22 +751,13 @@ public:
     {
         return map(a, [](value_t x) { return scalars::atanh(x); });
     }
-    // For standalone rounding, surrounding memory shuffles can cancel.
-    static simd_t ceil(simd_t a)
-    {
-        const auto x = Ops::interleave(a);
-        return Ops::deinterleave({r::ceil(x[0]), r::ceil(x[1])});
-    }
-    static simd_t floor(simd_t a)
-    {
-        const auto x = Ops::interleave(a);
-        return Ops::deinterleave({r::floor(x[0]), r::floor(x[1])});
-    }
-    static simd_t trunc(simd_t a)
-    {
-        const auto x = Ops::interleave(a);
-        return Ops::deinterleave({r::trunc(x[0]), r::trunc(x[1])});
-    }
+    // ceil/floor/trunc act independently on each lane regardless of layout,
+    // so (unlike e.g. reductions) they need no interleave/deinterleave round
+    // trip through the AoS registers -- applying r::ceil/floor/trunc to the
+    // real/imag SoA pair directly does the same work without it.
+    static simd_t ceil(simd_t a) { return {r::ceil(a.real), r::ceil(a.imag)}; }
+    static simd_t floor(simd_t a) { return {r::floor(a.real), r::floor(a.imag)}; }
+    static simd_t trunc(simd_t a) { return {r::trunc(a.real), r::trunc(a.imag)}; }
     static simd_t fma(simd_t a, simd_t b, simd_t c)
     {
         return {r::fma(r::neg(a.imag), b.imag, r::fma(a.real, b.real, c.real)),

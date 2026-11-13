@@ -17,6 +17,46 @@
 #include <hip/hip_runtime.h>
 #endif
 
+// ISA consistency guard. SCALARS_HAS_* (defined by cmake/simd.cmake,
+// scalars_apply_simd_compile_definitions) reflects the instruction-set
+// baseline SCALARS_CPU_BACKEND selected when Scalars was configured, and the
+// matching compiler ISA flags (-mavx2, -march=armv8.2-a, ...) are PUBLIC on
+// the Scalars target -- an ordinary CMake consumer linking Scalars::Scalars
+// has those flags applied to its own translation units too, so this never
+// fires. It exists for a translation unit that reaches this header some
+// other way (a different build system, or compile options overridden after
+// fetching Scalars::Scalars's usage requirements): without it, calling SIMD
+// code built for an instruction set this TU does not have crashes with an
+// illegal instruction at runtime instead of failing here, at compile time.
+// GPU device passes (nvcc/clang-CUDA __CUDA_ARCH__, hipcc
+// __HIP_DEVICE_COMPILE__) are skipped: they target nvptx/amdgcn, never define
+// the host ISA macros, and do not run host SIMD code. The host pass of the
+// same .cu/.hip file still receives the ISA flags (-Xcompiler) and is checked.
+#if defined(__CUDA_ARCH__) || defined(__HIP_DEVICE_COMPILE__)
+// Device pass: no host ISA check.
+#elif defined(SCALARS_HAS_AVX2) && SCALARS_HAS_AVX2 && !defined(__AVX2__)
+#error \
+    "Scalars was configured with SCALARS_CPU_BACKEND=avx2, but this translation unit is compiled without AVX2 (-mavx2) enabled. Compile it with the same ISA flags as Scalars, or rebuild Scalars with a narrower SCALARS_CPU_BACKEND."
+#elif defined(SCALARS_HAS_AVX512) && SCALARS_HAS_AVX512 && !defined(__AVX512F__)
+#error \
+    "Scalars was configured with SCALARS_CPU_BACKEND=avx512, but this translation unit is compiled without AVX-512 (-mavx512f) enabled. Compile it with the same ISA flags as Scalars, or rebuild Scalars with a narrower SCALARS_CPU_BACKEND."
+#elif defined(SCALARS_HAS_AVX) && SCALARS_HAS_AVX && !defined(__AVX__)
+#error \
+    "Scalars was configured with SCALARS_CPU_BACKEND=avx, but this translation unit is compiled without AVX (-mavx) enabled. Compile it with the same ISA flags as Scalars, or rebuild Scalars with a narrower SCALARS_CPU_BACKEND."
+#elif defined(SCALARS_HAS_SSE) && SCALARS_HAS_SSE && !defined(__SSE2__) && !defined(_M_X64) && \
+    !defined(_M_AMD64)
+#error \
+    "Scalars was configured with SCALARS_CPU_BACKEND=sse, but this translation unit is compiled without SSE2 (-msse2) enabled. Compile it with the same ISA flags as Scalars, or rebuild Scalars with -DSCALARS_CPU_BACKEND=no."
+#elif defined(SCALARS_HAS_NEON) && SCALARS_HAS_NEON && defined(__aarch64__) && \
+    !defined(__ARM_NEON)
+#error \
+    "Scalars was configured with SCALARS_CPU_BACKEND=neon, but this translation unit is compiled without NEON enabled. Compile it with the same ISA flags as Scalars, or rebuild Scalars with -DSCALARS_CPU_BACKEND=no."
+#elif defined(SCALARS_HAS_SVE) && SCALARS_HAS_SVE && defined(__aarch64__) && \
+    !defined(__ARM_FEATURE_SVE)
+#error \
+    "Scalars was configured with SCALARS_CPU_BACKEND=sve, but this translation unit is compiled without SVE enabled. Compile it with the same ISA flags as Scalars, or rebuild Scalars with -DSCALARS_CPU_BACKEND=no."
+#endif
+
 #if defined(__clang__)
 #define SCALARS_UBSAN_IGNORE_FLOAT_DIVIDE_BY_ZERO \
     __attribute__((no_sanitize("float-divide-by-zero")))

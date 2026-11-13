@@ -94,11 +94,62 @@ TEST(half, NumericLimitsAndStream)
     EXPECT_TRUE(std::isinf(static_cast<float>(limits::infinity())));
     EXPECT_TRUE(std::isnan(static_cast<float>(limits::quiet_NaN())));
     EXPECT_TRUE(std::isnan(static_cast<float>(limits::signaling_NaN())));
+    // Quiet bit (mantissa MSB, bit 9) clear, and distinct from infinity.
+    EXPECT_EQ(limits::signaling_NaN().x & 0x0200, 0);
+    EXPECT_NE(limits::signaling_NaN().x, limits::infinity().x);
     EXPECT_GT(static_cast<float>(limits::denorm_min()), 0.0f);
 
     std::ostringstream stream;
     stream << half(1.5f);
     EXPECT_NE(stream.str().find('1'), std::string::npos);
+}
+
+TEST(half, MixedComparisons)
+{
+    const half h(1.0f);
+
+    EXPECT_TRUE(h == 1.0f);
+    EXPECT_TRUE(1.0f == h);
+    EXPECT_TRUE(h == 1.0);
+    EXPECT_TRUE(1.0 == h);
+    EXPECT_TRUE(h == 1);
+    EXPECT_TRUE(1 == h);
+
+    EXPECT_TRUE(h != 2.0f);
+    EXPECT_TRUE(2.0f != h);
+    EXPECT_TRUE(h != 2.0);
+    EXPECT_TRUE(h != 2);
+
+    EXPECT_TRUE(h < 2.0f);
+    EXPECT_TRUE(0.5f < h);
+    EXPECT_TRUE(h < 2.0);
+    EXPECT_TRUE(h < 2);
+
+    EXPECT_TRUE(h > 0.5f);
+    EXPECT_TRUE(2.0f > h);
+    EXPECT_TRUE(h > 0.5);
+    EXPECT_TRUE(h > 0);
+
+    EXPECT_TRUE(h <= 1.0f);
+    EXPECT_TRUE(h <= 2.0f);
+    EXPECT_TRUE(1.0f <= h);
+    EXPECT_TRUE(h <= 1.0);
+    EXPECT_TRUE(h <= 1);
+
+    EXPECT_TRUE(h >= 1.0f);
+    EXPECT_TRUE(h >= 0.5f);
+    EXPECT_TRUE(1.0f >= h);
+    EXPECT_TRUE(h >= 1.0);
+    EXPECT_TRUE(h >= 1);
+
+    // half-half comparisons also resolve through the implicit conversion to
+    // float, with no ambiguity now that no (half, half) overload exists.
+    EXPECT_TRUE(half(1.0f) == half(1.0f));
+    EXPECT_TRUE(half(1.0f) != half(2.0f));
+    EXPECT_TRUE(half(1.0f) < half(2.0f));
+    EXPECT_TRUE(half(2.0f) > half(1.0f));
+    EXPECT_TRUE(half(1.0f) <= half(1.0f));
+    EXPECT_TRUE(half(1.0f) >= half(1.0f));
 }
 
 TEST(half, SoftwareIeeeConversion)

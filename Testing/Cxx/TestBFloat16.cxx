@@ -102,6 +102,63 @@ TEST(bfloat16, BitwiseAndComparison)
     EXPECT_EQ(bits.x, static_cast<std::uint16_t>(bfloat16(1.0f).x & left.x));
 }
 
+TEST(bfloat16, BitwiseOperatorsDoNotMutateOperands)
+{
+    // Confirmed bug: operator|, operator^, and operator& used to take their
+    // left operand by non-const reference and write the result into it, so
+    // `c = a | b` also changed `a`.
+    const bfloat16 a(1.0f);
+    const bfloat16 b(2.0f);
+    const auto     a_before = a.x;
+    const auto     b_before = b.x;
+
+    const bfloat16 or_result  = a | b;
+    const bfloat16 xor_result = a ^ b;
+    const bfloat16 and_result = a & b;
+
+    EXPECT_EQ(a.x, a_before);
+    EXPECT_EQ(b.x, b_before);
+    EXPECT_EQ(or_result.x, static_cast<std::uint16_t>(a_before | b_before));
+    EXPECT_EQ(xor_result.x, static_cast<std::uint16_t>(a_before ^ b_before));
+    EXPECT_EQ(and_result.x, static_cast<std::uint16_t>(a_before & b_before));
+}
+
+TEST(bfloat16, MixedComparisons)
+{
+    const bfloat16 b(1.0f);
+
+    EXPECT_TRUE(b == 1.0f);
+    EXPECT_TRUE(1.0f == b);
+    EXPECT_TRUE(b == 1.0);
+    EXPECT_TRUE(b == 1);
+
+    EXPECT_TRUE(b != 2.0f);
+    EXPECT_TRUE(b != 2.0);
+    EXPECT_TRUE(b != 2);
+
+    EXPECT_TRUE(b < 2.0f);
+    EXPECT_TRUE(0.5f < b);
+    EXPECT_TRUE(b < 2.0);
+    EXPECT_TRUE(b < 2);
+
+    EXPECT_TRUE(b > 0.5f);
+    EXPECT_TRUE(2.0f > b);
+    EXPECT_TRUE(b > 0.5);
+    EXPECT_TRUE(b > 0);
+
+    EXPECT_TRUE(b <= 1.0f);
+    EXPECT_TRUE(1.0f <= b);
+    EXPECT_TRUE(b <= 1);
+
+    EXPECT_TRUE(b >= 1.0f);
+    EXPECT_TRUE(1.0f >= b);
+    EXPECT_TRUE(b >= 1);
+
+    EXPECT_TRUE(bfloat16(1.0f) == bfloat16(1.0f));
+    EXPECT_TRUE(bfloat16(1.0f) < bfloat16(2.0f));
+    EXPECT_TRUE(bfloat16(2.0f) > bfloat16(1.0f));
+}
+
 TEST(bfloat16, NumericLimitsStreamAndRoundTrip)
 {
     using limits = std::numeric_limits<bfloat16>;
@@ -114,8 +171,12 @@ TEST(bfloat16, NumericLimitsStreamAndRoundTrip)
     EXPECT_GT(static_cast<float>(limits::round_error()), 0.0f);
     EXPECT_TRUE(std::isinf(static_cast<float>(limits::infinity())));
     EXPECT_TRUE(std::isnan(static_cast<float>(limits::quiet_NaN())));
-    EXPECT_TRUE(std::isnan(static_cast<float>(limits::signaling_NaN())) ||
-                std::isinf(static_cast<float>(limits::signaling_NaN())));
+    // Confirmed bug: signaling_NaN() used to reuse infinity()'s bit pattern
+    // (0x7F80), so isnan() on it was false.
+    EXPECT_TRUE(std::isnan(static_cast<float>(limits::signaling_NaN())));
+    // Quiet bit (mantissa MSB, bit 6) clear, and distinct from infinity.
+    EXPECT_EQ(limits::signaling_NaN().x & 0x0040, 0);
+    EXPECT_NE(limits::signaling_NaN().x, limits::infinity().x);
     EXPECT_GT(static_cast<float>(limits::denorm_min()), 0.0f);
 
     std::ostringstream stream;
@@ -144,8 +205,8 @@ TEST(bfloat16, AccumulationType)
                   "bfloat16 accumulation type must be float");
     static_assert(std::is_same_v<accumulation_type_t<half>, float>,
                   "half accumulation type must be float");
-    static_assert(std::is_same_v<accumulation_type_t<float>, float>,
-                  "float accumulation type must be float");
+    static_assert(std::is_same_v<accumulation_type_t<float>, double>,
+                  "float accumulation type must be double, matching acc_type<float, false>");
     static_assert(std::is_same_v<accumulation_type_t<double>, double>,
                   "double accumulation type must be double");
 }

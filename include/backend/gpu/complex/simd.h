@@ -33,8 +33,11 @@
 #include "scalars_macros.h"
 #include "types/complex.h"
 
+namespace scalars
+{
 // Primary template forward declaration required before the explicit specialization.
 template <typename T> struct simd;
+}  // namespace scalars
 
 namespace scalars::detail_gpu_complex
 {
@@ -212,6 +215,8 @@ template <class T> struct complex_gpu_simd
 };
 }  // namespace scalars::detail_gpu_complex
 
+namespace scalars
+{
 template <>
 struct simd<scalars::complex<float>> : scalars::detail_gpu_complex::complex_gpu_simd<float>
 {
@@ -220,3 +225,4 @@ template <>
 struct simd<scalars::complex<double>> : scalars::detail_gpu_complex::complex_gpu_simd<double>
 {
 };
+}  // namespace scalars

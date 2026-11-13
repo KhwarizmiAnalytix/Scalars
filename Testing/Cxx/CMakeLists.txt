@@ -75,6 +75,9 @@ if(SCALARS_ENABLE_GTEST)
     set_target_properties(
         ScalarsCxxTests PROPERTIES FOLDER "Tests" VS_DEBUGGER_WORKING_DIRECTORY
                                                   "$<TARGET_FILE_DIR:ScalarsCxxTests>"
+                                   CXX_STANDARD ${SCALARS_CXX_STANDARD}
+                                   CXX_STANDARD_REQUIRED ON
+                                   CXX_EXTENSIONS OFF
     )
     add_test(NAME ScalarsCxxTests COMMAND ScalarsCxxTests
              WORKING_DIRECTORY "$<TARGET_FILE_DIR:ScalarsCxxTests>"

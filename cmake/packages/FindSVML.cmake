@@ -20,6 +20,15 @@ get_filename_component(_svml_mod_dir "${CMAKE_CURRENT_LIST_FILE}" DIRECTORY)
 get_filename_component(_svml_tp_root "${_svml_mod_dir}/../.." ABSOLUTE)
 set(_svml_tp "${_svml_tp_root}/ThirdParty/svml")
 
+# This module is also installed to <prefix>/lib/cmake/Scalars/Modules (see
+# scalars_config.cmake.in), so find_dependency(SVML) can re-find SVML for an
+# installed package's consumers. In that layout ThirdParty/svml does not
+# exist; simd.cmake instead staged the runtime libraries (and, on Windows,
+# the import library) flat into the install prefix's lib directory. Search
+# both layouts.
+get_filename_component(_svml_installed_libdir "${_svml_mod_dir}/../../.." ABSOLUTE)
+get_filename_component(_svml_installed_bindir "${_svml_installed_libdir}/../bin" ABSOLUTE)
+
 set(SVML_LIBRARIES)
 set(SVML_RUNTIME_LIBRARIES)
 
@@ -32,12 +41,12 @@ if(WIN32)
 
   find_library(SVML_LIBRARY_SVML
     NAMES svml_dispmd
-    PATHS "${_svml_lib_dir}"
+    PATHS "${_svml_lib_dir}" "${_svml_installed_libdir}"
     NO_DEFAULT_PATH
   )
   find_file(SVML_DLL_SVML
     NAMES svml_dispmd.dll
-    PATHS "${_svml_bin_dir}"
+    PATHS "${_svml_bin_dir}" "${_svml_installed_bindir}"
     NO_DEFAULT_PATH
   )
 
@@ -55,14 +64,19 @@ endif()
 if(UNIX)
   set(_svml_lib_dir "${_svml_tp}/unix/lib")
 
-  find_library(SVML_LIBRARY_SVML   NAMES svml   PATHS "${_svml_lib_dir}" NO_DEFAULT_PATH)
-  find_library(SVML_LIBRARY_IRC    NAMES irc    PATHS "${_svml_lib_dir}" NO_DEFAULT_PATH)
+  find_library(SVML_LIBRARY_SVML   NAMES svml
+    PATHS "${_svml_lib_dir}" "${_svml_installed_libdir}" NO_DEFAULT_PATH)
+  find_library(SVML_LIBRARY_IRC    NAMES irc
+    PATHS "${_svml_lib_dir}" "${_svml_installed_libdir}" NO_DEFAULT_PATH)
   # libintlc.so is a GNU ld script ("INPUT (libintlc.so.5)"). mold does not
   # search the script's directory for that name and fails the link with
   # "library not found: libintlc.so.5". Link the real shared object. Its SONAME
   # is libintlc.so.5, which is also libsvml's DT_NEEDED entry. A cached hit on
   # the script (from an older configure) is replaced; an explicit ELF path is kept.
   set(_svml_intlc_real "${_svml_lib_dir}/libintlc.so.5")
+  if(NOT EXISTS "${_svml_intlc_real}")
+    set(_svml_intlc_real "${_svml_installed_libdir}/libintlc.so.5")
+  endif()
   set(_svml_intlc_head "")
   if(SVML_LIBRARY_INTLC AND EXISTS "${SVML_LIBRARY_INTLC}")
     file(READ "${SVML_LIBRARY_INTLC}" _svml_intlc_head LIMIT 32)
@@ -72,7 +86,8 @@ if(UNIX)
       set(SVML_LIBRARY_INTLC "${_svml_intlc_real}"
           CACHE FILEPATH "Path to the Intel libintlc runtime" FORCE)
     else()
-      find_library(SVML_LIBRARY_INTLC NAMES intlc PATHS "${_svml_lib_dir}" NO_DEFAULT_PATH)
+      find_library(SVML_LIBRARY_INTLC NAMES intlc
+        PATHS "${_svml_lib_dir}" "${_svml_installed_libdir}" NO_DEFAULT_PATH)
     endif()
   endif()
   unset(_svml_intlc_head)
@@ -149,3 +164,5 @@ unset(_svml_tp_root)
 unset(_svml_tp)
 unset(_svml_lib_dir)
 unset(_svml_bin_dir)
+unset(_svml_installed_libdir)
+unset(_svml_installed_bindir)

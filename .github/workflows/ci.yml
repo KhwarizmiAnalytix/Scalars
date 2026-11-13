@@ -41,7 +41,7 @@ jobs:
         with:
           python-version: '3.12'
 
-      - uses: ilammy/msvc-dev-cmd@v1
+      - uses: ilammy/msvc-dev-cmd@0b201ec74fa43914dc39ae48a89fd1d8cb592756 # v1
         if: runner.os == 'Windows'
         with:
           arch: x64
@@ -156,7 +156,7 @@ jobs:
         with:
           python-version: '3.12'
 
-      - uses: ilammy/msvc-dev-cmd@v1
+      - uses: ilammy/msvc-dev-cmd@0b201ec74fa43914dc39ae48a89fd1d8cb592756 # v1
         if: runner.os == 'Windows'
         with:
           arch: x64
@@ -294,11 +294,11 @@ jobs:
       - uses: actions/setup-python@v7
         with:
           python-version: '3.12'
-      - uses: ilammy/msvc-dev-cmd@v1
+      - uses: ilammy/msvc-dev-cmd@0b201ec74fa43914dc39ae48a89fd1d8cb592756 # v1
         with:
           arch: x64
       - run: python -m pip install cmake==4.1.2 ninja
-      - uses: Jimver/cuda-toolkit@v0.2.36
+      - uses: Jimver/cuda-toolkit@b8bf9c6c28f8a92fbb04dcfcaee872e60c57462d # v0.2.36
         with:
           cuda: '13.2.0'
           method: network
@@ -458,7 +458,7 @@ jobs:
       - uses: actions/setup-python@v7
         with:
           python-version: '3.12'
-      - uses: ilammy/msvc-dev-cmd@v1
+      - uses: ilammy/msvc-dev-cmd@0b201ec74fa43914dc39ae48a89fd1d8cb592756 # v1
         if: runner.os == 'Windows'
         with:
           arch: x64
@@ -489,6 +489,68 @@ jobs:
             "${rpath_args[@]}"
           python3 "${{ github.workspace }}/Scripts/setup.py" build --build-dir build-install --parallel 4
           python3 "${{ github.workspace }}/Scripts/setup.py" install --build-dir build-install
+          mv "$package_prefix" "$RUNNER_TEMP/scalars-package-moved"
+          package_prefix="$RUNNER_TEMP/scalars-package-moved"
+          # Copy the consumer outside the checkout; it must use installed headers/libraries.
+          cp -R Testing/InstallConsumer "$RUNNER_TEMP/scalars-consumer"
+          python3 "${{ github.workspace }}/Scripts/setup.py" config --compiler=default --generator=default --source-dir "$RUNNER_TEMP/scalars-consumer" --build-dir "$RUNNER_TEMP/scalars-consumer-build" \
+            --generator Ninja --build-type=Release --prefix-path="$package_prefix" \
+            --package-dir="$package_prefix/lib/cmake/Scalars"
+          python3 "${{ github.workspace }}/Scripts/setup.py" build --build-dir "$RUNNER_TEMP/scalars-consumer-build" --parallel 4
+          if [[ "$RUNNER_OS" == Windows ]]; then
+            # Scalars.dll lives in bin/, next to the import lib in lib/; put
+            # it on PATH so the consumer executables can load it at test time.
+            export PATH="$package_prefix/bin:$PATH"
+          fi
+          python3 "${{ github.workspace }}/Scripts/setup.py" test --build-dir . --build-dir "$RUNNER_TEMP/scalars-consumer-build"
+
+  # ---------------------------------------------------------------------------
+  # Installed SVML consumer: on Linux/Windows x86 with GCC/Clang, SVML gets
+  # auto-enabled by cmake/utils.cmake whenever the compiler lacks builtin
+  # SVML-equivalent intrinsics, so install-consumer above already links
+  # against it implicitly in most configurations. This job instead forces
+  # SCALARS_ENABLE_SVML=ON explicitly (matching the svml job above) so the
+  # exported SVML::SVML/IRC/INTLC PUBLIC link requirement is exercised the
+  # same way regardless of host compiler, and InstallConsumer's
+  # check_simd_math() calls the exp/log/sin entry points backed by it.
+  # ThirdParty/svml ships only Linux/Windows binaries, so there is no macOS
+  # entry here (see the svml job above).
+  # ---------------------------------------------------------------------------
+  install-consumer-svml:
+    name: Installed package with SVML (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-2022]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+      - uses: ilammy/msvc-dev-cmd@0b201ec74fa43914dc39ae48a89fd1d8cb592756 # v1
+        if: runner.os == 'Windows'
+        with:
+          arch: x64
+      - run: python -m pip install cmake==4.1.2 ninja
+
+      - name: Build, install, then build/run the external consumer
+        shell: bash
+        run: |
+          package_prefix="$RUNNER_TEMP/scalars-package"
+          rpath_args=()
+          if [[ "$RUNNER_OS" == Linux ]]; then
+            # shellcheck disable=SC2016 # Keep the loader's literal origin token.
+            rpath_args=(--install-rpath='$ORIGIN/../lib')
+          fi
+          python3 "${{ github.workspace }}/Scripts/setup.py" config --compiler=default --source-dir . --build-dir build-install-svml --generator Ninja --build-type=Release \
+            --shared=ON --testing=OFF \
+            --svml=ON --cpu-backend=avx2 \
+            --install-libdir=lib --install-prefix="$package_prefix" \
+            "${rpath_args[@]}"
+          python3 "${{ github.workspace }}/Scripts/setup.py" build --build-dir build-install-svml --parallel 4
+          python3 "${{ github.workspace }}/Scripts/setup.py" install --build-dir build-install-svml
           mv "$package_prefix" "$RUNNER_TEMP/scalars-package-moved"
           package_prefix="$RUNNER_TEMP/scalars-package-moved"
           # Copy the consumer outside the checkout; it must use installed headers/libraries.
@@ -544,7 +606,7 @@ jobs:
         with:
           python-version: '3.12'
 
-      - uses: ilammy/msvc-dev-cmd@v1
+      - uses: ilammy/msvc-dev-cmd@0b201ec74fa43914dc39ae48a89fd1d8cb592756 # v1
         if: matrix.os == 'windows-latest'
         with:
           arch: x64
@@ -601,7 +663,7 @@ jobs:
 
       - name: Upload to Codecov
         if: matrix.os == 'ubuntu-latest'
-        uses: codecov/codecov-action@v4
+        uses: codecov/codecov-action@b9fd7d16f6d7d1b5d2bec1a2887e65ceed900238 # v4
         with:
           files: build/coverage_filtered.info
           name: coverage-${{ matrix.os }}
@@ -665,7 +727,7 @@ jobs:
         with:
           python-version: '3.12'
 
-      - uses: ilammy/msvc-dev-cmd@v1
+      - uses: ilammy/msvc-dev-cmd@0b201ec74fa43914dc39ae48a89fd1d8cb592756 # v1
         if: runner.os == 'Windows'
         with:
           arch: x64
@@ -693,7 +755,7 @@ jobs:
         if: runner.os == 'Windows' && matrix.backend == 'ccache'
         run: choco install -y ccache
 
-      - uses: mozilla-actions/sccache-action@v0.0.9
+      - uses: mozilla-actions/sccache-action@7d986dd989559c6ecdb630a3fd2557667be217ad # v0.0.9
         if: matrix.backend == 'sccache'
         with:
           version: v0.12.0

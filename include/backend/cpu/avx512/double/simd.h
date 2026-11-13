@@ -17,6 +17,9 @@
 
 #include "scalars_macros.h"
 
+namespace scalars
+{
+
 template <>
 struct simd<double>
 {
@@ -294,7 +297,11 @@ struct simd<double>
         to[7] = (from & 0x80);
     }
 
-    SCALARS_SIMD_METHOD mask_t set(int_t const from)
+    // Same fix as backend/cpu/detail/complex_simd.h::set_mask: a distinct
+    // name instead of overloading set(), since the non-template set(int_t)
+    // won ties against the set(scalar_t) template for an exact int_t
+    // argument, silently returning a mask instead of a broadcast packet.
+    SCALARS_SIMD_METHOD mask_t set_mask(int_t const from)
     {
         return static_cast<mask_t>(from != 0 ? 0xFF : 0X00);
     }
@@ -491,3 +498,5 @@ struct simd<double>
         }
     }
 };
+
+}  // namespace scalars

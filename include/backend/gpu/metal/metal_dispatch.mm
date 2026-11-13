@@ -10,6 +10,7 @@
 
 #include <cstdint>
 #include <limits>
+#include <list>
 #include <mutex>
 #include <stdexcept>
 #include <string>
@@ -125,6 +126,52 @@ std::unordered_map<std::string, id<MTLComputePipelineState>>& pipeline_cache()
 {
     static std::unordered_map<std::string, id<MTLComputePipelineState>> cache;
     return cache;
+}
+
+// pipeline_for_fused_source() below keys this cache by the full kernel
+// source text of a caller-generated fused kernel, unlike pipeline_cache()
+// above (a small, fixed set of kernel names from kernels.metal). A caller
+// that fuses many distinct expression graphs over a long-running process
+// would grow that unbounded, so this one tracks recency and evicts past
+// fused_pipeline_capacity. Kept separate from pipeline_cache_mutex()/
+// pipeline_cache() so bounding this one never evicts (or contends with
+// lookups of) the small fixed kernel set.
+std::mutex& fused_pipeline_cache_mutex()
+{
+    static std::mutex m;
+    return m;
+}
+struct fused_pipeline_entry
+{
+    id<MTLComputePipelineState>      pso;
+    std::list<std::string>::iterator order_it;  // this entry's node in fused_pipeline_order()
+};
+std::unordered_map<std::string, fused_pipeline_entry>& fused_pipeline_map()
+{
+    static std::unordered_map<std::string, fused_pipeline_entry> map;
+    return map;
+}
+// Most-recently-used key at front, least-recently-used at back.
+std::list<std::string>& fused_pipeline_order()
+{
+    static std::list<std::string> order;
+    return order;
+}
+std::size_t& fused_pipeline_capacity_ref()
+{
+    static std::size_t capacity = 256;
+    return capacity;
+}
+// Caller holds fused_pipeline_cache_mutex().
+void evict_fused_pipelines_locked()
+{
+    auto& map   = fused_pipeline_map();
+    auto& order = fused_pipeline_order();
+    while (map.size() > fused_pipeline_capacity_ref())
+    {
+        map.erase(order.back());
+        order.pop_back();
+    }
 }
 
 id<MTLComputePipelineState> pipeline_for(const std::string& function_name)
@@ -285,13 +332,15 @@ void encode_run(id<MTLCommandBuffer> cb,
 id<MTLComputePipelineState> pipeline_for_fused_source(
     std::string_view source, std::string const& function_name)
 {
-    std::lock_guard<std::mutex> lock(pipeline_cache_mutex());
-    auto&                       cache = pipeline_cache();
+    std::lock_guard<std::mutex> lock(fused_pipeline_cache_mutex());
+    auto&                       map   = fused_pipeline_map();
+    auto&                       order = fused_pipeline_order();
     const std::string           key   = function_name + "\n" + std::string(source);
-    auto                        it    = cache.find(key);
-    if (it != cache.end())
+    auto                        it    = map.find(key);
+    if (it != map.end())
     {
-        return it->second;
+        order.splice(order.begin(), order, it->second.order_it);
+        return it->second.pso;
     }
 
     NSString* src = [[NSString alloc] initWithBytes:source.data()
@@ -318,7 +367,9 @@ id<MTLComputePipelineState> pipeline_for_fused_source(
             "Metal fused pipeline creation failed: " +
             std::string([[err localizedDescription] UTF8String]));
     }
-    cache.emplace(key, pso);
+    order.push_front(key);
+    map.emplace(key, fused_pipeline_entry{pso, order.begin()});
+    evict_fused_pipelines_locked();
     return pso;
 }
 
@@ -796,6 +847,23 @@ float reduce_min(const void* buffer, std::size_t n)
 float reduce_max(const void* buffer, std::size_t n)
 {
     return reduce_max(buffer, n, dtype::float32);
+}
+
+void set_fused_pipeline_cache_capacity(std::size_t capacity)
+{
+    std::lock_guard<std::mutex> lock(fused_pipeline_cache_mutex());
+    fused_pipeline_capacity_ref() = capacity;
+    evict_fused_pipelines_locked();
+}
+std::size_t fused_pipeline_cache_capacity()
+{
+    std::lock_guard<std::mutex> lock(fused_pipeline_cache_mutex());
+    return fused_pipeline_capacity_ref();
+}
+std::size_t fused_pipeline_cache_size()
+{
+    std::lock_guard<std::mutex> lock(fused_pipeline_cache_mutex());
+    return fused_pipeline_map().size();
 }
 
 }  // namespace scalars::metal_backend

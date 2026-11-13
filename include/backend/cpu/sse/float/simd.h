@@ -18,6 +18,9 @@
 #include "backend/cpu/sse/intrinsics.h"
 #include "scalars_macros.h"
 
+namespace scalars
+{
+
 template <> struct simd<float>
 {
     using simd_t = __m128;
@@ -338,6 +341,17 @@ template <> struct simd<float>
         _mm_storeu_ps(to, _mm_loadu_ps(from));
     }
 
+    // Deviates from Eigen's ploadquad semantics (which, for a 4-wide packet,
+    // is equivalent to pload1: one scalar broadcast to all 4 lanes). This
+    // reads 2 scalars and duplicates each one 2x -- {a0,a0,a1,a1} -- matching
+    // every other (8/16-wide) backend's "N/4 scalars, each repeated 4x"
+    // pattern would need 1 scalar here instead. complex_simd.h's own
+    // ploadquad special-cases exactly this (`repeats = 2` for `T=float,
+    // size=4`) rather than assuming the general N/4-scalars-times-4 rule, so
+    // this is an intentional, already-accounted-for difference, not a bug;
+    // documented here instead of changed, since callers (including the
+    // complex layer above) depend on this exact lane pattern and are
+    // covered by existing tests (TestSimdUtility.cxx, TestSimdComplex.cxx).
     SCALARS_SIMD_METHOD simd_t ploadquad(const value_t* from)
     {
         return _mm_set_ps(from[1], from[1], from[0], from[0]);
@@ -386,3 +400,5 @@ template <> struct simd<float>
         to[stride] = _mm_cvtss_f32(_mm_shuffle_ps(from.v, from.v, 1));
     }
 };
+
+}  // namespace scalars

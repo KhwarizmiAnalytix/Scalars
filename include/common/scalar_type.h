@@ -1,4 +1,5 @@
 #pragma once
+#include "common/scalars_export.h"
 #include <cstddef>
 #include <cstdint>
 #include <string_view>
@@ -15,6 +16,6 @@ enum class scalar_type : std::uint8_t
     complex_float,
     complex_double
 };
-std::string_view scalar_type_name(scalar_type type) noexcept;
-std::size_t      scalar_type_size(scalar_type type) noexcept;
+SCALARS_API std::string_view scalar_type_name(scalar_type type) noexcept;
+SCALARS_API std::size_t      scalar_type_size(scalar_type type) noexcept;
 }  // namespace scalars

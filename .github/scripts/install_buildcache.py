@@ -13,19 +13,29 @@ def main():
     args = parser.parse_args()
     prefix = args.prefix.resolve()
     source, build = prefix / "source", prefix / "build"
+    # Pinned to the v0.33.1 tag's commit, not the tag name, so a repoint of
+    # that tag upstream can't silently change what CI builds. A shallow
+    # --depth clone can't fetch an arbitrary commit, so clone in full and
+    # check out the pinned commit explicitly.
     subprocess.run(
         [
             "git",
             "clone",
-            "--depth",
-            "1",
-            "--branch",
-            "v0.33.1",
             "--recurse-submodules",
             "https://gitlab.com/bits-n-bites/buildcache.git",
             str(source),
         ],
         check=True,
+    )
+    subprocess.run(
+        ["git", "checkout", "aa10336e06bc4a6caa55e039b7887047e82dbf20"],
+        check=True,
+        cwd=source,
+    )
+    subprocess.run(
+        ["git", "submodule", "update", "--init", "--recursive"],
+        check=True,
+        cwd=source,
     )
     subprocess.run(
         [

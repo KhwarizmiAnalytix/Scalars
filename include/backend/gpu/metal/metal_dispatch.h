@@ -89,7 +89,8 @@ void dispatch_fill(void* out_buffer, float value, std::size_t n_elems);
 // One fused element-wise kernel compiled from `kernel_source` (MSL). Tensor
 // leaves bind as device buffers 0..n_in-1, scalars as constant buffers
 // n_in..n_in+n_scalars-1 (setBytes), then out and n. The kernel function
-// must be named fused_float. Source is compiled once and cached.
+// must be named fused_float. Source is compiled once and cached in an
+// LRU-bounded cache (see set_fused_pipeline_cache_capacity below).
 void dispatch_fused(std::string_view    kernel_source,
     const void* const*                  in_buffers,
     int                                 n_in,
@@ -129,5 +130,15 @@ void dispatch_fused(std::string_view    kernel_source,
 float reduce_sum(const void* buffer, std::size_t n_elems, dtype type);
 float reduce_min(const void* buffer, std::size_t n_elems, dtype type);
 float reduce_max(const void* buffer, std::size_t n_elems, dtype type);
+
+// dispatch_fused()'s compiled-pipeline cache is keyed by the full kernel
+// source text, so a caller that generates many distinct fused sources over
+// a long-running process (e.g. one fused kernel per distinct expression
+// graph) would otherwise grow it without bound. It evicts least-recently-used
+// entries past this capacity; the default is 256 distinct fused sources.
+// Shrinking it evicts immediately. Thread-safe; callable at any time.
+void              set_fused_pipeline_cache_capacity(std::size_t capacity);
+std::size_t       fused_pipeline_cache_capacity();
+std::size_t       fused_pipeline_cache_size();
 
 }  // namespace scalars::metal_backend

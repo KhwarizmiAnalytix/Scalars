@@ -9,6 +9,8 @@
 #include "math/complex_vector.h"
 #include "types/complex.h"
 
+using scalars::simd;
+
 namespace
 {
 enum class complex_operation : std::uint8_t

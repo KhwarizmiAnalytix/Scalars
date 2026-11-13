@@ -74,6 +74,8 @@ template <> struct ops<double>
 };
 }  // namespace scalars::detail_avx_complex
 
+namespace scalars
+{
 template <>
 struct simd<scalars::complex<float>>
     : scalars::detail_complex_simd::complex_simd<float, scalars::detail_avx_complex::ops<float>>
@@ -84,3 +86,4 @@ struct simd<scalars::complex<double>>
     : scalars::detail_complex_simd::complex_simd<double, scalars::detail_avx_complex::ops<double>>
 {
 };
+}  // namespace scalars

@@ -2,6 +2,7 @@
 
 #include <array>
 #include <cmath>
+#include <limits>
 
 namespace scalars
 {
@@ -48,19 +49,17 @@ constexpr auto POLYNOM_7(T1 coefficients, T2 X)
 //-----------------------------------------------------------------------------
 double normalcdf(double z)
 {
-    if (z < -7.071067811865475)
+    if (z <= -7.071067811865475)
     {
-        const double x2 = 1. / (z * z);
-        const double p =
-            -z * z * 0.5 +
-            log(std::fabs(
-                1. / z *
-                (1. -
-                 x2 * (1. -
-                       3. * x2 *
-                           (1. - 5. * x2 * (1. - 7. * x2 * (1. - 9. * x2 * (1. - 11. * x2))))))));
-
-        return k_inverse_sqrt_2pi * std::exp(p);
+        // The asymptotic series used elsewhere in this function for large |z|
+        // is truncated too early to reach double precision this far into the
+        // tail (confirmed relative error ~1.3e-7 near z = -7.07). erfc is
+        // accurate to double precision over this whole range. Using <= (not
+        // <) also routes the exact boundary z == -7.071067811865475 here:
+        // with a strict <, that single value fell through to the *other*
+        // truncated asymptotic series below (x >= 7.071, returning p
+        // directly since z <= 0), hitting the same ~1.3e-7 error.
+        return 0.5 * std::erfc(-z * 0.70710678118654752440084436210485);  // -z / sqrt(2)
     }
 
     const auto x = std::fabs(z);
@@ -74,7 +73,7 @@ double normalcdf(double z)
 
     if (x < 7.071067811865475)
     {
-        static std::array<double, 7> A = {
+        static constexpr std::array<double, 7> A = {
             220.2068679123761,
             221.2135961699311,
             112.0792914978709,
@@ -83,7 +82,7 @@ double normalcdf(double z)
             .7003830644436881,
             .03526249659989109};
 
-        static std::array<double, 8> B = {
+        static constexpr std::array<double, 8> B = {
             440.4137358247522,
             793.8265125199484,
             637.3336333788311,
@@ -118,6 +117,23 @@ double normalcdf(double z)
 //-----------------------------------------------------------------------------
 double inv_normalcdf(double p)
 {
+    // The rational approximations below divide by log(r) with r computed
+    // from p; at the exact endpoints that quotient is inf/inf == NaN instead
+    // of the mathematically correct ±infinity, and outside [0, 1] the result
+    // is undefined.
+    if (!(p >= 0. && p <= 1.))
+    {
+        return std::numeric_limits<double>::quiet_NaN();
+    }
+    if (p == 0.)
+    {
+        return -std::numeric_limits<double>::infinity();
+    }
+    if (p == 1.)
+    {
+        return std::numeric_limits<double>::infinity();
+    }
+
     static const double SPLIT1 = .425;
     static const double CONST1 = .180625;
     static const double SPLIT2 = 5.;

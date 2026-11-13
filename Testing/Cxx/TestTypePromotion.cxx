@@ -18,4 +18,12 @@ TEST(TypePromotion, RealAndComplex)
     static_assert(std::is_same_v<promote_t<float, complex<double>>, complex<double>>);
     static_assert(std::is_same_v<promote_t<complex<float>, complex<float>>, complex<float>>);
     EXPECT_TRUE((std::is_same_v<promote_t<half, bfloat16>, float>));
+
+    // Confirmed bug: long double used to be narrowed away instead of
+    // dominating the promotion, matching the usual arithmetic conversions.
+    static_assert(std::is_same_v<promote_t<long double, long double>, long double>);
+    static_assert(std::is_same_v<promote_t<long double, double>, long double>);
+    static_assert(std::is_same_v<promote_t<double, long double>, long double>);
+    static_assert(std::is_same_v<promote_t<long double, float>, long double>);
+    static_assert(std::is_same_v<promote_t<float, long double>, long double>);
 }

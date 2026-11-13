@@ -19,6 +19,13 @@ function(scalars_configure_sanitizer target prefix)
             message(FATAL_ERROR "Incompatible sanitizer combination: ${_types}")
         endif()
     endif()
+    # Confirmed bug: the raw, unnormalized ${_types} was used below. A CMake
+    # list value such as "address;undefined" (semicolons, not commas) made
+    # the outer $<...> generator expression split it into separate compile
+    # options -- "-fsanitize=address" and a bare "undefined" -- instead of
+    # one "-fsanitize=address,undefined" flag. Join the validated list with
+    # commas, which both clang and gcc require in a single -fsanitize= flag.
+    string(REPLACE ";" "," _types "${_type_list}")
     target_compile_options(
         ${target}
         PRIVATE

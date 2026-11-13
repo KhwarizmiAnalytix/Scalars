@@ -1,6 +1,6 @@
 # Scalars
 
-Standalone C++20 scalar library for **half**, **bfloat16**, and **complex<T>**, with dtype metadata, traits, promotion rules, casts, and standard-library-backed math functions. Inspired by the *architecture* of PyTorch `c10`, but independently implemented; no PyTorch source files are copied.
+Standalone C++20 scalar library for **half**, **bfloat16**, and **complex<T>**, with dtype metadata, traits, promotion rules, casts, and standard-library-backed math functions. Most of the design follows the *architecture* of PyTorch `c10` and is independently implemented, but [`include/types/half.h`](include/types/half.h) and [`include/types/bfloat16.h`](include/types/bfloat16.h) contain sections copied from `c10/util/Half-inl.h` and `c10/util/BFloat16-inl.h` (BSD-3-Clause), and IEEE 754 conversion routines in `half.h` are copied from Marat Dukhan's FP16 library (MIT). See [NOTICE](NOTICE) for the full attributions and license text.
 
 ## Build
 
@@ -19,7 +19,7 @@ cmake --install build --prefix /your/install/prefix
 Consumers can use `find_package(Scalars CONFIG REQUIRED)` and link `Scalars::Scalars`.
 
 Headers live directly under `include/`: use `<scalars.h>` for the full library,
-or individual headers such as `<types/half.h>` and `<core/scalar_type.h>`.
+or individual headers such as `<types/half.h>` and `<common/scalar_type.h>`.
 
 The default standalone build produces a shared library. Use
 `-DBUILD_SHARED_LIBS=OFF` for a static library. `add_subdirectory()` consumers
@@ -149,6 +149,19 @@ Include `<backend/simd.h>` for `simd<float>`, `simd<double>`,
 `-DSCALARS_CPU_BACKEND=sse|avx|avx2|avx512|neon|sve`; `no` leaves the host SIMD
 interface unavailable. The existing SVE path requires a fixed 128-bit vector
 length and reuses NEON packets.
+
+**ISA requirement.** `SCALARS_CPU_BACKEND` selects a fixed instruction-set
+baseline (for example `-mavx2 -mf16c -mfma` for `avx2`, Scalars' x86_64
+default) at configure time, with no runtime dispatch between backends. Those
+compiler flags are `PUBLIC` on the `Scalars` target, so every consumer's own
+translation units are compiled for that same baseline too -- the library and
+an ordinary CMake consumer cannot disagree. The risk is distributing the
+resulting binary (library plus any consumer built against it) to a machine
+that lacks that instruction set, where it will crash with an illegal
+instruction rather than falling back to a narrower implementation, as e.g.
+PyTorch's `CPU_CAPABILITY`-namespaced runtime dispatch does. Build with
+`-DSCALARS_CPU_BACKEND=no`, or the narrowest backend your deployment targets
+guarantee, for a binary meant to run on hardware you do not control.
 
 Transcendental math (`exp`, `log`, `sin`, `pow`, ...) is provided by whichever
 vector math library is enabled, in priority order per architecture: on x86, Intel

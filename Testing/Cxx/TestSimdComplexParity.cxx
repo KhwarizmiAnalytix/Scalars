@@ -14,6 +14,9 @@
 #include <type_traits>
 
 #if SCALARS_VECTORIZED
+
+using scalars::simd;
+
 namespace
 {
 template <class S>
@@ -72,7 +75,7 @@ concept complex_packet_api = requires(typename S::simd_t a,
     S::store(m, flags);
     S::storeu(m, flags);
     S::set_mask(true);
-    S::set(typename S::int_t(1));
+    S::set_mask(typename S::int_t(1));
     S::prefetch(in);
     S::copy(in, out);
     S::broadcast(in, a, a, a, a);
@@ -245,7 +248,7 @@ template <class T> void check_masks()
         }
     }
     s::storeu(s::loadu(static_cast<const bits*>(nullptr), 0), static_cast<bits*>(nullptr), 0);
-    s::storeu(s::set(bits(1)), flags.data());
+    s::storeu(s::set_mask(bits(1)), flags.data());
     for (const auto flag : flags)
     {
         EXPECT_EQ(flag, ~bits(0));

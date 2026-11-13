@@ -6,6 +6,7 @@
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
+#include <limits>
 #include <type_traits>
 
 #include "backend/cpu/neon/svml.h"
@@ -25,8 +26,45 @@ SCALARS_FORCE_INLINE float64x2_t map1_f64(float64x2_t v, double (*fn)(double))
     b[1] = fn(b[1]);
     return vld1q_f64(b);
 }
+
+// See hypot_f32 in the float NEON header for the rationale: scale by the
+// larger magnitude to avoid premature overflow/underflow, and resolve
+// inf/NaN explicitly to match std::hypot (inf beats NaN; otherwise NaN
+// propagates).
+SCALARS_FORCE_INLINE float64x2_t hypot_f64(float64x2_t x, float64x2_t y)
+{
+    const uint64x2_t abs_mask = vdupq_n_u64(0x7FFFFFFFFFFFFFFFULL);
+    const uint64x2_t inf_bits = vdupq_n_u64(0x7FF0000000000000ULL);
+    const float64x2_t zero    = vdupq_n_f64(0.);
+    const float64x2_t one     = vdupq_n_f64(1.);
+
+    const uint64x2_t ax_bits = vandq_u64(vreinterpretq_u64_f64(x), abs_mask);
+    const uint64x2_t ay_bits = vandq_u64(vreinterpretq_u64_f64(y), abs_mask);
+    const float64x2_t ax     = vreinterpretq_f64_u64(ax_bits);
+    const float64x2_t ay     = vreinterpretq_f64_u64(ay_bits);
+
+    const float64x2_t m = vmaxq_f64(ax, ay);
+    const float64x2_t n = vminq_f64(ax, ay);
+
+    const uint64x2_t m_is_zero = vceqq_f64(m, zero);
+    const float64x2_t safe_m   = vbslq_f64(m_is_zero, one, m);
+    const float64x2_t t        = vdivq_f64(n, safe_m);
+    const float64x2_t scaled   = vmulq_f64(m, vsqrtq_f64(vfmaq_f64(one, t, t)));
+    float64x2_t result         = vbslq_f64(m_is_zero, zero, scaled);
+
+    const uint64x2_t any_inf =
+        vorrq_u64(vceqq_u64(ax_bits, inf_bits), vceqq_u64(ay_bits, inf_bits));
+    const uint64x2_t not_mask = vdupq_n_u64(~0ULL);
+    const uint64x2_t any_nan  = vorrq_u64(
+        veorq_u64(vceqq_f64(x, x), not_mask), veorq_u64(vceqq_f64(y, y), not_mask));
+    const float64x2_t nan = vdupq_n_f64(std::numeric_limits<double>::quiet_NaN());
+    const float64x2_t inf = vdupq_n_f64(std::numeric_limits<double>::infinity());
+
+    result = vbslq_f64(vbicq_u64(any_nan, any_inf), nan, result);
+    result = vbslq_f64(any_inf, inf, result);
+    return result;
+}
 }  // namespace detail_neon
-}  // namespace scalars
 
 template <> struct simd<double>
 {
@@ -60,7 +98,11 @@ template <> struct simd<double>
         return vdupq_n_f64(static_cast<value_t>(alpha));
     }
 
-    SCALARS_SIMD_METHOD mask_t set(int_t const from)
+    // Same fix as backend/cpu/detail/complex_simd.h::set_mask: a distinct
+    // name instead of overloading set(), since the non-template set(int_t)
+    // won ties against the set(scalar_t) template for an exact int_t
+    // argument, silently returning a mask instead of a broadcast packet.
+    SCALARS_SIMD_METHOD mask_t set_mask(int_t const from)
     {
         return vdupq_n_u64(from != 0 ? ~0ULL : 0ULL);
     }
@@ -81,7 +123,7 @@ template <> struct simd<double>
 
     SCALARS_SIMD_METHOD simd_t hypot(simd_t x, simd_t y)
     {
-        return vsqrtq_f64(vaddq_f64(vmulq_f64(x, x), vmulq_f64(y, y)));
+        return scalars::detail_neon::hypot_f64(x, y);
     }
 
     SCALARS_SIMD_METHOD simd_t min(simd_t x, simd_t y) { return vminq_f64(x, y); }
@@ -371,3 +413,5 @@ template <> struct simd<double>
         return vdupq_n_f64(from[0]);
     }
 };
+
+}  // namespace scalars

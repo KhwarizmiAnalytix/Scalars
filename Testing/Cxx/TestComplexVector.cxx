@@ -12,6 +12,8 @@
 #include <type_traits>
 #include <vector>
 
+using scalars::simd;
+
 namespace
 {
 template <class T> std::complex<T> standard(scalars::complex<T> x)

@@ -11,6 +11,9 @@
 #include <type_traits>
 
 #if SCALARS_VECTORIZED
+
+using scalars::simd;
+
 namespace
 {
 template <class T, class U>

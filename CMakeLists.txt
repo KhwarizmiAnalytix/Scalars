@@ -148,7 +148,7 @@ endfunction()
 # One library, matching Vectorization: headers and the compiled sources live on
 # Scalars, and in-tree consumers link the Scalars::Scalars alias.
 set(CMAKE_CXX_STANDARD ${SCALARS_CXX_STANDARD})
-add_library(Scalars src/core/scalar_type.cpp src/math/complex_math.cpp src/math/normal_cdf.cpp)
+add_library(Scalars src/core/scalar_type.cpp src/math/normal_cdf.cpp)
 add_library(Scalars::Scalars ALIAS Scalars)
 target_compile_features(Scalars PUBLIC cxx_std_${SCALARS_CXX_STANDARD})
 target_include_directories(

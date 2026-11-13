@@ -13,7 +13,7 @@
 
 namespace scalars::detail_reduced
 {
-using float_backend = ::simd<float>;
+using float_backend = simd<float>;
 using float_packet  = float_backend::simd_t;
 
 #if SCALARS_HAS_SSE || SCALARS_HAS_AVX || SCALARS_HAS_AVX2 || SCALARS_HAS_AVX512

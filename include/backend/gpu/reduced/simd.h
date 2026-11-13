@@ -174,9 +174,12 @@ template <class T> struct reduced_simd
 };
 }  // namespace scalars::detail_gpu
 
+namespace scalars
+{
 template <> struct simd<scalars::half> : scalars::detail_gpu::reduced_simd<scalars::half>
 {
 };
 template <> struct simd<scalars::bfloat16> : scalars::detail_gpu::reduced_simd<scalars::bfloat16>
 {
 };
+}  // namespace scalars

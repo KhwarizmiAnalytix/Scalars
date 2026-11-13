@@ -3,8 +3,6 @@
     "math/complex_math.h is not meant to be individually included. Include types/complex.h instead."
 #endif
 
-#include "common/scalars_export.h"
-
 namespace scalars::complex_math
 {
 
@@ -46,12 +44,79 @@ template <typename T> SCALARS_HOST_DEVICE inline scalars::complex<T> log2(const 
 // Power functions
 //
 #if defined(_LIBCPP_VERSION) || (defined(__GLIBCXX__) && !defined(_GLIBCXX11_USE_C99_COMPLEX))
+// Note [ Complex Square root in libc++]
+// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+// In libc++ complex square root is computed using polar form. This is a
+// reasonably fast algorithm, but can result in significant numerical errors
+// when arg is close to 0, pi/2, pi, or 3pi/4. In that case provide a more
+// conservative implementation which is slower but less prone to those kinds
+// of errors. In libstdc++ complex square root yields invalid results for
+// -x-0.0j unless C99 csqrt/csqrtf fallbacks are used.
+//
+// These were previously compiled into src/math/complex_math.cpp and declared
+// here as SCALARS_API, exported from libScalars itself. That made the
+// installed library's standard-library choice (libc++ vs. libstdc++, and
+// libstdc++'s C99 complex support) part of its ABI: a consumer built against
+// a different standard library than Scalars was built with could get a link
+// error for scalars::complex_math::_detail::sqrt/acos. These are ordinary
+// portable math on scalars::complex<T>, with no standard-library-specific
+// dependency of their own, so they are inline templates here instead.
 namespace _detail
 {
-SCALARS_API scalars::complex<float> sqrt(const scalars::complex<float>& in);
-SCALARS_API scalars::complex<double> sqrt(const scalars::complex<double>& in);
-SCALARS_API scalars::complex<float> acos(const scalars::complex<float>& in);
-SCALARS_API scalars::complex<double> acos(const scalars::complex<double>& in);
+template <typename T> inline scalars::complex<T> sqrt(const scalars::complex<T>& z)
+{
+    constexpr auto half = T(.5);
+
+    // Trust standard library to correctly handle infs and NaNs
+    if (std::isinf(z.real()) || std::isinf(z.imag()) || std::isnan(z.real()) ||
+        std::isnan(z.imag()))
+    {
+        return static_cast<scalars::complex<T>>(std::sqrt(static_cast<std::complex<T>>(z)));
+    }
+
+    const T scale = std::fmax(std::abs(z.real()), std::abs(z.imag()));
+    if (scale == T(0))
+    {
+        return {T(0), z.imag()};
+    }
+
+    // An even power-of-two normalization keeps hypot and the subsequent sum
+    // finite, and avoids halving a subnormal input down to zero.
+    int exponent = 0;
+    std::frexp(scale, &exponent);
+    if (exponent % 2 != 0)
+    {
+        --exponent;
+    }
+    const T real         = std::scalbn(z.real(), -exponent);
+    const T imag         = std::scalbn(z.imag(), -exponent);
+    const T t            = std::sqrt((std::hypot(real, imag) + std::abs(real)) * half);
+    const T result_real  = real >= T(0) ? t : half * std::abs(imag / t);
+    const T result_imag  = real >= T(0) ? half * (imag / t) : std::copysign(t, imag);
+    return {std::scalbn(result_real, exponent / 2), std::scalbn(result_imag, exponent / 2)};
+}
+
+// Compute complex arccosine using formula from W. Kahan
+// "Branch Cuts for Complex Elementary Functions" 1986 paper:
+// cacos(z).re = 2*atan2(sqrt(1-z).re(), sqrt(1+z).re())
+// cacos(z).im = asinh((sqrt(conj(1+z))*sqrt(1-z)).im())
+template <typename T> inline scalars::complex<T> acos(const scalars::complex<T>& z)
+{
+    auto constexpr one = T(1);
+    // Trust standard library to correctly handle infs and NaNs
+    if (std::isinf(z.real()) || std::isinf(z.imag()) || std::isnan(z.real()) ||
+        std::isnan(z.imag()))
+    {
+        return static_cast<scalars::complex<T>>(std::acos(static_cast<std::complex<T>>(z)));
+    }
+    auto a = _detail::sqrt(scalars::complex<T>(one - z.real(), -z.imag()));
+    auto b = _detail::sqrt(scalars::complex<T>(one + z.real(), z.imag()));
+    auto c = _detail::sqrt(scalars::complex<T>(one + z.real(), -z.imag()));
+    auto r = T(2) * std::atan2(a.real(), b.real());
+    // Explicitly unroll (a*c).imag()
+    auto i = std::asinh(a.real() * c.imag() + a.imag() * c.real());
+    return scalars::complex<T>(r, i);
+}
 }  // namespace _detail
 #endif
 
@@ -138,12 +203,13 @@ template <typename T, typename U>
 SCALARS_HOST_DEVICE inline scalars::complex<decltype(T() * U())> pow(
     const scalars::complex<T>& x, const scalars::complex<U>& y)
 {
+    using P = decltype(T() * U());
 #if defined(__CUDACC__) || defined(__HIPCC__)
-    return static_cast<scalars::complex<T>>(
-        thrust::pow(static_cast<thrust::complex<T>>(x), static_cast<thrust::complex<T>>(y)));
+    return static_cast<scalars::complex<P>>(
+        thrust::pow(static_cast<thrust::complex<P>>(x), static_cast<thrust::complex<P>>(y)));
 #else
-    return static_cast<scalars::complex<T>>(
-        std::pow(static_cast<std::complex<T>>(x), static_cast<std::complex<T>>(y)));
+    return static_cast<scalars::complex<P>>(
+        std::pow(static_cast<std::complex<P>>(x), static_cast<std::complex<P>>(y)));
 #endif
 }
 
@@ -151,10 +217,12 @@ template <typename T, typename U>
 SCALARS_HOST_DEVICE inline scalars::complex<decltype(T() * U())> pow(
     const scalars::complex<T>& x, const U& y)
 {
+    using P = decltype(T() * U());
 #if defined(__CUDACC__) || defined(__HIPCC__)
-    return static_cast<scalars::complex<T>>(thrust::pow(static_cast<thrust::complex<T>>(x), y));
+    return static_cast<scalars::complex<P>>(
+        thrust::pow(static_cast<thrust::complex<P>>(x), static_cast<P>(y)));
 #else
-    return static_cast<scalars::complex<T>>(std::pow(static_cast<std::complex<T>>(x), y));
+    return static_cast<scalars::complex<P>>(std::pow(static_cast<std::complex<P>>(x), static_cast<P>(y)));
 #endif
 }
 
@@ -162,10 +230,13 @@ template <typename T, typename U>
 SCALARS_HOST_DEVICE inline scalars::complex<decltype(T() * U())> pow(
     const T& x, const scalars::complex<U>& y)
 {
+    using P = decltype(T() * U());
 #if defined(__CUDACC__) || defined(__HIPCC__)
-    return static_cast<scalars::complex<T>>(thrust::pow(x, static_cast<thrust::complex<T>>(y)));
+    return static_cast<scalars::complex<P>>(
+        thrust::pow(static_cast<P>(x), static_cast<thrust::complex<P>>(y)));
 #else
-    return static_cast<scalars::complex<T>>(std::pow(x, static_cast<std::complex<T>>(y)));
+    return static_cast<scalars::complex<P>>(
+        std::pow(static_cast<P>(x), static_cast<std::complex<P>>(y)));
 #endif
 }
 
@@ -357,8 +428,15 @@ template <typename T> SCALARS_HOST_DEVICE inline scalars::complex<T> expm1(const
     //   = (e ^ x * cos(y) - 1) + i * (e ^ x * sin(y))
     //   = (e ^ x - 1) * cos(y) - (1 - cos(y)) + i * e ^ x * sin(y)
     //   = expm1(x) * cos(y) - 2 * sin(y / 2) ^ 2 + i * e ^ x * sin(y)
-    T x  = z.real();
-    T y  = z.imag();
+    T x = z.real();
+    T y = z.imag();
+    // y == 0 would otherwise compute exp(x) * sin(y) == inf * 0 == NaN when
+    // x is +inf; the imaginary part of expm1(x + 0i) is exactly y, matching
+    // C99 Annex G and the SIMD implementation in complex_simd.h.
+    if (y == T(0))
+    {
+        return {std::expm1(x), y};
+    }
     T a  = std::sin(y / 2);
     T er = std::expm1(x) * std::cos(y) - T(2) * a * a;
     T ei = std::exp(x) * std::sin(y);
@@ -366,27 +444,6 @@ template <typename T> SCALARS_HOST_DEVICE inline scalars::complex<T> expm1(const
 }
 
 }  // namespace scalars::complex_math
-
-using scalars::complex_math::acos;
-using scalars::complex_math::acosh;
-using scalars::complex_math::asin;
-using scalars::complex_math::asinh;
-using scalars::complex_math::atan;
-using scalars::complex_math::atanh;
-using scalars::complex_math::cos;
-using scalars::complex_math::cosh;
-using scalars::complex_math::exp;
-using scalars::complex_math::expm1;
-using scalars::complex_math::log;
-using scalars::complex_math::log10;
-using scalars::complex_math::log1p;
-using scalars::complex_math::log2;
-using scalars::complex_math::pow;
-using scalars::complex_math::sin;
-using scalars::complex_math::sinh;
-using scalars::complex_math::sqrt;
-using scalars::complex_math::tan;
-using scalars::complex_math::tanh;
 
 namespace std
 {

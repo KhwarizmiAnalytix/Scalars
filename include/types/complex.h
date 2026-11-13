@@ -5,6 +5,7 @@
 #include <type_traits>
 
 #include "scalars_macros.h"
+#include "types/bfloat16.h"
 #include "types/half.h"
 
 #if defined(__CUDACC__) || defined(__HIPCC__)
@@ -32,6 +33,17 @@ template <class T> inline bool division_component_is_bounded(T value)
     constexpr T upper     = std::is_same_v<T, float> ? T(0x1p31) : T(0x1p251);
     const T     magnitude = std::fabs(value);
     return value == T(0) || (magnitude >= lower && magnitude < upper);
+}
+
+// A constexpr-safe absolute value, correct for signed zero (-0 maps to +0).
+// std::abs/std::fabs are not guaranteed constexpr for floating-point types
+// before C++23 (libstdc++ accepts it as an extension, libc++ historically
+// does not), and this helper is used from a constexpr operator/=. NaN must
+// pass through unchanged: mapping it to 0 would send a NaN divisor down
+// operator/='s divide-by-zero branch and produce inf instead of NaN.
+template <class T> constexpr T division_abs(T value)
+{
+    return value < T(0) ? -value : (value == T(0) ? T(0) : value);
 }
 
 // Evaluate (x*u + y*v) / denominator * 2^exponent without overflowing
@@ -172,7 +184,7 @@ template <class T> inline T scaled_sum_products(T x, T u, T y, T v, T denominato
 //
 //
 //
-// TODO(@zasdfgbnm): scalars::complex<scalars::half> is not currently supported,
+// TODO: scalars::complex<scalars::half> is not currently supported,
 // because:
 //  - lots of members and functions of scalars::half are not constexpr
 //  - thrust::complex only support float and double
@@ -332,14 +344,10 @@ template <typename T> struct alignas(sizeof(T) * 2) complex
         }
 #endif
 
-#if defined(__GNUC__) && !defined(__clang__)
-        // std::abs is already constexpr by gcc
-        auto abs_c = std::abs(c);
-        auto abs_d = std::abs(d);
-#else
-        auto abs_c = c < 0 ? -c : c;
-        auto abs_d = d < 0 ? -d : d;
-#endif
+        // detail_complex::division_abs, not std::abs: correctly normalizes a
+        // signed zero to +0 and is constexpr on every supported compiler.
+        auto abs_c = detail_complex::division_abs(c);
+        auto abs_d = detail_complex::division_abs(d);
 
         if (abs_c >= abs_d)
         {
@@ -647,7 +655,9 @@ template <> struct alignas(4) complex<half>
     inline SCALARS_HOST_DEVICE operator scalars::complex<float>() const { return {real_, imag_}; }
 
     constexpr SCALARS_HOST_DEVICE half real() const { return real_; }
+    constexpr SCALARS_HOST_DEVICE void real(half value) { real_ = value; }
     constexpr SCALARS_HOST_DEVICE half imag() const { return imag_; }
+    constexpr SCALARS_HOST_DEVICE void imag(half value) { imag_ = value; }
 
     SCALARS_HOST_DEVICE complex<half>& operator+=(const complex<half>& other)
     {
@@ -671,6 +681,123 @@ template <> struct alignas(4) complex<half>
         auto d = static_cast<float>(other.imag());
         real_  = a * c - b * d;
         imag_  = a * d + b * c;
+        return *this;
+    }
+
+    // Reduced-precision complex division computes in complex<float> and
+    // narrows the result once, as PyTorch does for c10::complex<c10::Half>.
+    // This avoids the signed-zero and overflow pitfalls of dividing directly
+    // in half precision.
+    SCALARS_HOST_DEVICE complex<half>& operator/=(const complex<half>& other)
+    {
+        const scalars::complex<float> result =
+            scalars::complex<float>(*this) / scalars::complex<float>(other);
+        real_ = result.real();
+        imag_ = result.imag();
+        return *this;
+    }
+};
+
+// scalars::complex<bfloat16> mirrors scalars::complex<half> above: arithmetic
+// is computed in complex<float> and narrowed once, rather than instantiating
+// the generic complex<T> template directly with T = bfloat16 (which would
+// compute each component operation in bfloat16, double-rounding, and whose
+// division has no reduced-precision fast path).
+template <> struct alignas(4) complex<bfloat16>
+{
+    // Zero-initialized, as the generic complex<T> this specialization
+    // replaced was: `complex<bfloat16> acc; acc += x;` must start from 0.
+    bfloat16 real_{};
+    bfloat16 imag_{};
+
+    complex() = default;
+    // bfloat16's constructor is not constexpr, so this constructor can't be either.
+    SCALARS_HOST_DEVICE explicit inline complex(const bfloat16& real, const bfloat16& imag)
+        : real_(real), imag_(imag)
+    {
+    }
+    // Implicit real -> complex conversion with a zero imaginary part, as the
+    // generic complex<T> provides. Constrained to exactly bfloat16: an
+    // unconstrained complex(const bfloat16&) would make complex<bfloat16>(1.0f)
+    // ambiguous with the complex<float> converting constructor below.
+    template <typename U, std::enable_if_t<std::is_same_v<U, bfloat16>, int> = 0>
+    // cppcheck-suppress noExplicitConstructor -- deliberate, matches std::complex.
+    SCALARS_HOST_DEVICE inline complex(const U& real) : real_(real), imag_()
+    {
+    }
+    // cppcheck-suppress noExplicitConstructor -- deliberate, matches bfloat16's own implicit
+    // narrowing conversion from float used throughout the reduced-precision types.
+    SCALARS_HOST_DEVICE inline complex(const scalars::complex<float>& value)
+        : real_(value.real()), imag_(value.imag())
+    {
+    }
+
+    inline SCALARS_HOST_DEVICE operator scalars::complex<float>() const { return {real_, imag_}; }
+
+    constexpr SCALARS_HOST_DEVICE bfloat16 real() const { return real_; }
+    constexpr SCALARS_HOST_DEVICE void     real(bfloat16 value) { real_ = value; }
+    constexpr SCALARS_HOST_DEVICE bfloat16 imag() const { return imag_; }
+    constexpr SCALARS_HOST_DEVICE void     imag(bfloat16 value) { imag_ = value; }
+
+    SCALARS_HOST_DEVICE complex<bfloat16>& operator+=(const complex<bfloat16>& other)
+    {
+        real_ = static_cast<float>(real_) + static_cast<float>(other.real_);
+        imag_ = static_cast<float>(imag_) + static_cast<float>(other.imag_);
+        return *this;
+    }
+
+    SCALARS_HOST_DEVICE complex<bfloat16>& operator-=(const complex<bfloat16>& other)
+    {
+        real_ = static_cast<float>(real_) - static_cast<float>(other.real_);
+        imag_ = static_cast<float>(imag_) - static_cast<float>(other.imag_);
+        return *this;
+    }
+
+    // Scalar compound operators, as the generic complex<T> provides; the
+    // non-member complex<T> (op) T operators are implemented through these.
+    SCALARS_HOST_DEVICE complex<bfloat16>& operator+=(const bfloat16& re)
+    {
+        real_ = static_cast<float>(real_) + static_cast<float>(re);
+        return *this;
+    }
+
+    SCALARS_HOST_DEVICE complex<bfloat16>& operator-=(const bfloat16& re)
+    {
+        real_ = static_cast<float>(real_) - static_cast<float>(re);
+        return *this;
+    }
+
+    SCALARS_HOST_DEVICE complex<bfloat16>& operator*=(const bfloat16& re)
+    {
+        real_ = static_cast<float>(real_) * static_cast<float>(re);
+        imag_ = static_cast<float>(imag_) * static_cast<float>(re);
+        return *this;
+    }
+
+    SCALARS_HOST_DEVICE complex<bfloat16>& operator/=(const bfloat16& re)
+    {
+        real_ = static_cast<float>(real_) / static_cast<float>(re);
+        imag_ = static_cast<float>(imag_) / static_cast<float>(re);
+        return *this;
+    }
+
+    SCALARS_HOST_DEVICE complex<bfloat16>& operator*=(const complex<bfloat16>& other)
+    {
+        auto a = static_cast<float>(real_);
+        auto b = static_cast<float>(imag_);
+        auto c = static_cast<float>(other.real());
+        auto d = static_cast<float>(other.imag());
+        real_  = a * c - b * d;
+        imag_  = a * d + b * c;
+        return *this;
+    }
+
+    SCALARS_HOST_DEVICE complex<bfloat16>& operator/=(const complex<bfloat16>& other)
+    {
+        const scalars::complex<float> result =
+            scalars::complex<float>(*this) / scalars::complex<float>(other);
+        real_ = result.real();
+        imag_ = result.imag();
         return *this;
     }
 };
@@ -732,15 +859,15 @@ template <typename T> constexpr T norm(const scalars::complex<T>& z)
 //   constexpr std::complex<double> conj( DoubleOrInteger z );
 //   constexpr std::complex<long double> conj( long double z );
 // These are not implemented
-// TODO(@zasdfgbnm): implement them as scalars::conj
+// TODO: implement them as scalars::conj
 template <typename T> constexpr scalars::complex<T> conj(const scalars::complex<T>& z)
 {
     return scalars::complex<T>(z.real(), -z.imag());
 }
 
 // Thrust does not have complex --> complex version of thrust::proj,
-// so this function is not implemented at c10 right now.
-// TODO(@zasdfgbnm): implement it by ourselves
+// so this function is not implemented here.
+// TODO: implement it by ourselves
 
 // There is no c10 version of std::polar, because std::polar always
 // returns std::complex. Use scalars::polar instead;
@@ -754,8 +881,6 @@ template <typename T> constexpr scalars::complex<T> conj(const scalars::complex<
 // utilities for complex types
 #include "math/complex_utils.h"  // IWYU pragma: keep
 #undef SCALARS_INTERNAL_INCLUDE_COMPLEX_REMAINING_H
-
-#include "types/bfloat16.h"
 
 namespace scalars
 {

@@ -9,6 +9,7 @@
 #include <string_view>
 
 using namespace scalars;
+using namespace scalars::complex_math;
 
 namespace
 {
@@ -56,6 +57,70 @@ TEST(ComplexMath, ElementaryFloatAndDouble)
     EXPECT_NEAR(mixed_pow.real(), 8.0, 1e-5);
     EXPECT_NEAR(mixed_real.real(), 8.0, 1e-5);
     EXPECT_NEAR(mixed_base.real(), 8.0, 1e-5);
+}
+
+TEST(ComplexMath, MixedPrecisionPowComputesInPromotedType)
+{
+    // Confirmed bug: pow(complex<float>, complex<double>) advertises a
+    // complex<double> return type but used to compute internally in
+    // float, e.g. returning 1.04880881 where the double-precision value
+    // is 1.04880886. All four mixed-type pow() overloads must compute in
+    // the promoted type before narrowing.
+    const complex<float>  base(1.1f, 0.05f);
+    const complex<double> exponent(0.37, 0.0);
+    const std::complex<double> double_base(static_cast<double>(base.real()),
+        static_cast<double>(base.imag()));
+    const std::complex<double> double_exponent(exponent.real(), exponent.imag());
+    const std::complex<double> reference = std::pow(double_base, double_exponent);
+
+    // A tolerance tighter than float epsilon (~1.19e-7): computing in float
+    // internally and narrowing back would fail this.
+    constexpr double tolerance = 1e-10;
+
+    const auto complex_complex = pow(base, exponent);
+    EXPECT_NEAR(complex_complex.real(), reference.real(), tolerance);
+    EXPECT_NEAR(complex_complex.imag(), reference.imag(), tolerance);
+
+    const auto complex_real = pow(base, exponent.real());
+    const std::complex<double> real_reference = std::pow(double_base, exponent.real());
+    EXPECT_NEAR(complex_real.real(), real_reference.real(), tolerance);
+    EXPECT_NEAR(complex_real.imag(), real_reference.imag(), tolerance);
+
+    const auto real_complex = pow(static_cast<double>(base.real()), exponent);
+    const std::complex<double> base_reference =
+        std::pow(static_cast<double>(base.real()), double_exponent);
+    EXPECT_NEAR(real_complex.real(), base_reference.real(), tolerance);
+    EXPECT_NEAR(real_complex.imag(), base_reference.imag(), tolerance);
+}
+
+TEST(ComplexMath, Expm1AnnexGSpecialValues)
+{
+    // Confirmed bug: expm1(x + 0i) with x == +inf computed
+    // exp(x) * sin(0) == inf * 0 == NaN for the imaginary part; C99 Annex G
+    // (and the SIMD implementation) requires the imaginary part to be
+    // exactly the input's imaginary part whenever it is zero.
+    const double inf = std::numeric_limits<double>::infinity();
+    const double nan = std::numeric_limits<double>::quiet_NaN();
+
+    for (double y : {0.0, -0.0})
+    {
+        const auto result = expm1(complex<double>{inf, y});
+        EXPECT_TRUE(std::isinf(result.real()));
+        EXPECT_GT(result.real(), 0.0);
+        EXPECT_EQ(std::signbit(result.imag()), std::signbit(y));
+        EXPECT_EQ(result.imag(), y);
+    }
+
+    const auto finite_zero_imag = expm1(complex<double>{1.0, 0.0});
+    EXPECT_NEAR(finite_zero_imag.real(), std::expm1(1.0), 1e-12);
+    EXPECT_EQ(finite_zero_imag.imag(), 0.0);
+
+    const auto neg_inf = expm1(complex<double>{-inf, 0.0});
+    EXPECT_NEAR(neg_inf.real(), -1.0, 1e-12);
+    EXPECT_EQ(neg_inf.imag(), 0.0);
+
+    const auto with_nan = expm1(complex<double>{nan, 0.0});
+    EXPECT_TRUE(std::isnan(with_nan.real()));
 }
 
 TEST(ComplexMath, SquareRootAndArcCosineEdges)
