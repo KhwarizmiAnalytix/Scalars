@@ -457,7 +457,10 @@ float reduce_buffer(
             [enc setBuffer:in offset:0 atIndex:0];
             [enc setBuffer:out offset:0 atIndex:1];
             [enc setBytes:&n32 length:sizeof(n32) atIndex:2];
-            [enc setThreadgroupMemoryLength:(tg_size * sizeof(float)) atIndex:0];
+            // Metal requires threadgroup memory lengths in multiples of 16 bytes;
+            // small final passes (tg_size < 4) would otherwise request 4 or 8.
+            std::size_t const tg_bytes = ((tg_size * sizeof(float)) + 15U) & ~std::size_t{15U};
+            [enc setThreadgroupMemoryLength:static_cast<NSUInteger>(tg_bytes) atIndex:0];
             [enc dispatchThreadgroups:MTLSizeMake(static_cast<NSUInteger>(n_groups), 1, 1)
                 threadsPerThreadgroup:MTLSizeMake(static_cast<NSUInteger>(tg_size), 1, 1)];
             [enc endEncoding];
