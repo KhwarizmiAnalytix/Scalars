@@ -1,119 +1,482 @@
 # Scalars
 
-Standalone C++20 scalar library for **half**, **bfloat16**, and **complex<T>**, with dtype metadata, traits, promotion rules, casts, and standard-library-backed math functions. Most of the design follows the *architecture* of PyTorch `c10` and is independently implemented, but [`include/types/half.h`](include/types/half.h) and [`include/types/bfloat16.h`](include/types/bfloat16.h) contain sections copied from `c10/util/Half-inl.h` and `c10/util/BFloat16-inl.h` (BSD-3-Clause), and IEEE 754 conversion routines in `half.h` are copied from Marat Dukhan's FP16 library (MIT). See [NOTICE](NOTICE) for the full attributions and license text.
+Scalars is a C++20 library for **half**, **bfloat16**, and **complex numbers**, with
+scalar math, type traits, promotion, explicit casts, dtype metadata, and CPU/GPU
+kernel primitives. Use it as the scalar and SIMD foundation of numerical code,
+including linear algebra and custom compute kernels.
 
-## Build
+The main entry points are **`<scalars.h>`**, **namespace `scalars`**, and the CMake
+target **`Scalars::Scalars`**. SIMD, vector algorithms, and GPU dispatch have
+separate headers described below.
 
-Requires CMake 3.24 or newer and a C++20 compiler. The build and lint setup
-follows the sibling LinearAlgebra repository, with `SCALARS_` options and
-the configuration summary in `cmake/summary.cmake`.
+[Quick start](#quick-start) · [Public API](#public-headers-and-api) ·
+[CPU SIMD](#cpu-simd-and-vector-algorithms) · [GPU](#gpu-entry-points) ·
+[Build and tests](#build-test-and-development-options)
 
-```bash
-git submodule update --init ThirdParty/googletest ThirdParty/benchmark
+## Why use Scalars?
+
+| Capability | Practical benefit |
+| --- | --- |
+| Compact real types | `half` and `bfloat16` occupy two bytes each, reducing storage and memory traffic compared with `float`. |
+| Explicit compute precision | Reduced arithmetic uses float intermediates; accumulation traits let kernels choose wider intermediate types. |
+| Shared scalar vocabulary | Real/complex types, casts, promotion, and runtime dtype metadata can be reused across numerical components. |
+| CPU SIMD | The same `scalars::simd<T>` interface selects SSE, AVX, AVX2, AVX-512, NEON, or the fixed-width SVE compatibility backend. |
+| GPU building blocks | CUDA/HIP device operations and Metal dispatch support custom kernels and reduced-precision storage. |
+| CMake integration | An installed package or `add_subdirectory()` exposes the same target, including required compiler flags and linked math providers. |
+
+Scalars builds independently of PyTorch. Some implementations derive from
+PyTorch c10 and FP16; see [License and provenance](#license-and-provenance).
+Performance depends on the operation, backend, math provider, and workload;
+[complex SIMD measurements](docs/complex_simd_performance.md) describe the
+benchmark methodology and measured results.
+
+## Quick start
+
+Requires **CMake 3.24+** and a **C++20 compiler**; C++23 is also supported.
+Run these commands from the repository root:
+
+```sh
+git submodule update --init ThirdParty/googletest ThirdParty/sleef
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build --parallel
 ctest --test-dir build --output-on-failure
 cmake --install build --prefix /your/install/prefix
 ```
 
-Consumers can use `find_package(Scalars CONFIG REQUIRED)` and link `Scalars::Scalars`.
+The standalone build defaults to a shared library. Set `-DBUILD_SHARED_LIBS=OFF`
+for a static library, or `-DSCALARS_ENABLE_TESTING=OFF` for a library-only build.
+GoogleTest is needed for the C++ tests; SLEEF is used when that math provider is
+selected. Google Benchmark is optional.
 
-Headers live directly under `include/`: use `<scalars.h>` for the full library,
-or individual headers such as `<types/half.h>` and `<common/scalar_type.h>`.
+### Link from your application
 
-The default standalone build produces a shared library. Use
-`-DBUILD_SHARED_LIBS=OFF` for a static library. `add_subdirectory()` consumers
-inherit the host's shared/static choice and do not build tests by default.
+```cmake
+cmake_minimum_required(VERSION 3.24)
+project(scalars_example LANGUAGES CXX)
 
-Common build options follow LinearAlgebra's naming and defaults:
+find_package(Scalars CONFIG REQUIRED)
+add_executable(scalars_example main.cpp)
+target_link_libraries(scalars_example PRIVATE Scalars::Scalars)
+```
+
+Configure your application with the installation prefix:
+
+```sh
+cmake -S . -B build -DCMAKE_PREFIX_PATH=/your/install/prefix
+cmake --build build --parallel
+```
+
+For a source checkout inside your project, replace `find_package(...)` with
+`add_subdirectory(path/to/Scalars)`. Link the same `Scalars::Scalars` target.
+Subdirectory builds inherit the parent's shared/static choice and normally leave
+Scalars tests disabled; `BUILD_TESTING` can override that default.
+
+### First program
+
+Save this as `main.cpp` for the application above:
+
+```cpp
+#include <scalars.h>
+#include <iostream>
+
+int main()
+{
+    scalars::half h{1.5f};
+    scalars::bfloat16 b{2.0f};
+    scalars::complex_float z{1.0f, 2.0f};
+
+    const auto sum = h + scalars::half{0.5f};
+    const auto root = scalars::sqrt(h);
+    const auto w = scalars::exp(z);
+
+    std::cout << static_cast<float>(sum) << '\n';  // 2
+    std::cout << static_cast<float>(b) << '\n';    // 2
+    std::cout << static_cast<float>(root) << '\n';
+    std::cout << w.real() << ", " << w.imag() << '\n';
+    std::cout << scalars::scalar_type_name(scalars::scalar_type::complex_float)
+              << '\n';  // complex64
+}
+```
+
+## Public headers and API
+
+Headers are installed directly under `include/`, so use `<types/half.h>` rather
+than a `Scalars/` prefix. Prefer the dispatcher headers over ISA-specific files.
+
+| Include | Public entry points | Included by `<scalars.h>`? |
+| --- | --- | --- |
+| [`<scalars.h>`](include/scalars.h) | Scalar umbrella: types, scalar math, traits, casts, promotion, metadata | — |
+| [`<types/half.h>`](include/types/half.h) | `half`, conversions, arithmetic, comparisons, `std::numeric_limits` | Yes |
+| [`<types/bfloat16.h>`](include/types/bfloat16.h) | `bfloat16`, conversions, arithmetic, comparisons, `std::numeric_limits` | Yes |
+| [`<types/complex.h>`](include/types/complex.h) | `complex<T>`, aliases, component access, arithmetic, complex math | Yes |
+| [`<math/scalar_math.h>`](include/math/scalar_math.h) | Real math overloads for `half` and `bfloat16` | Yes |
+| [`<common/scalar_type.h>`](include/common/scalar_type.h) | `scalar_type`, `scalar_type_name`, `scalar_type_size` | Yes |
+| [`<common/scalar_traits.h>`](include/common/scalar_traits.h) | `is_complex_v`, `real_type_t`, `accumulation_type_t` | Yes |
+| [`<common/type_promotion.h>`](include/common/type_promotion.h) | `promote_t<A, B>` | Yes |
+| [`<common/type_cast.h>`](include/common/type_cast.h) | `scalar_cast<To>(value)` | Yes |
+| [`<common/accumulate_type.h>`](include/common/accumulate_type.h) | `acc_type`, `acc_type_device`, `device_type`, `to_accumulate_type` | Yes |
+| [`<math/normal_cdf.h>`](include/math/normal_cdf.h) | `normalcdf`, `inv_normalcdf` | No |
+| [`<backend/simd.h>`](include/backend/simd.h) | `simd<T>` and backend selection | No |
+| [`<math/complex_vector.h>`](include/math/complex_vector.h) | `complex_dot`, `complex_axpy`, `complex_scale`, `complex_rotate` | No |
+| [`<backend/gpu/metal/metal_dispatch.h>`](include/backend/gpu/metal/metal_dispatch.h) | `metal_backend::dispatch`, reductions, `execution_context`, fused-pipeline cache controls | No |
+
+All listed library names live in `scalars`; Metal names live in
+`scalars::metal_backend`. Use `scalars::simd<T>` explicitly. The
+`math/complex_math.h` and `math/complex_utils.h` headers are implementation
+companions included through `<types/complex.h>` and reject direct inclusion.
+
+### Scalar types and math
+
+| Type | Storage | Use |
+| --- | --- | --- |
+| `half` | 2 bytes | IEEE binary16: 11 significant binary digits, including the implicit leading bit |
+| `bfloat16` | 2 bytes | 8 significant binary digits with float's exponent range |
+| `complex_half` / `complex<half>` | 4 bytes | Reduced-precision real and imaginary components |
+| `complex_bf16` / `complex<bfloat16>` | 4 bytes | Bfloat16 real and imaginary components |
+| `complex_float` / `complex<float>` | 8 bytes | Float real and imaginary components |
+| `complex_double` / `complex<double>` | 16 bytes | Double real and imaginary components |
+
+Reduced real arithmetic computes in float and rounds back to the stored format.
+Use `static_cast<float>(value)` to widen explicitly. Both reduced real types
+provide `std::numeric_limits` specializations, including infinities, NaNs,
+epsilon, and subnormal limits.
+
+`scalars::exp`, `log`, `sqrt`, `sin`, `cos`, `tan`, `sinh`, `cosh`, `tanh`,
+`floor`, `ceil`, `round`, and `trunc` accept reduced real values. Use the
+standard `<cmath>` functions for native `float` and `double` values.
+
+For `complex<float>` and `complex<double>`, Scalars supplies arithmetic,
+`real()`/`imag()` getters and setters, `polar`, and the exponential, logarithmic,
+power, trigonometric, inverse-trigonometric, and hyperbolic families, plus
+`log1p` and `expm1`. Component helpers include `abs`, `arg`, `conj`, `real`,
+`imag`, `norm`, and `isfinite`. Host transcendental math uses the standard
+library with custom square-root/arc-cosine handling where needed; CUDA/HIP
+complex math uses Thrust. Reduced complex types support arithmetic; explicitly
+widen to `complex<float>` for scalar transcendental operations.
+
+The normal-distribution functions have a separate entry point:
+
+```cpp
+#include <math/normal_cdf.h>
+
+const double probability = scalars::normalcdf(0.0);     // 0.5
+const double quantile = scalars::inv_normalcdf(0.975);  // approximately 1.96
+```
+
+### Traits, promotion, casts, and metadata
+
+```cpp
+#include <scalars.h>
+#include <type_traits>
+
+static_assert(scalars::is_complex_v<scalars::complex_float>);
+static_assert(std::is_same_v<
+    scalars::real_type_t<scalars::complex_double>, double>);
+static_assert(std::is_same_v<
+    scalars::promote_t<scalars::half, scalars::bfloat16>, float>);
+static_assert(std::is_same_v<
+    scalars::promote_t<scalars::complex_float, double>, scalars::complex_double>);
+
+const auto z = scalars::scalar_cast<scalars::complex_double>(2.0);
+const double real_part = scalars::scalar_cast<double>(
+    scalars::complex_double{3.0, 4.0});  // 3: discards the imaginary component
+
+const auto type = scalars::scalar_type::complex_double;
+const auto name = scalars::scalar_type_name(type);  // "complex128"
+const auto bytes = scalars::scalar_type_size(type);  // 16
+```
+
+`promote_t` selects a result type for generic code; it does not insert casts into
+an expression. Real promotion favors `long double`, then `double`, then `float`;
+a half/bfloat16 pair promotes to float. A complex operand makes the promoted
+result complex. Casts follow the requested destination type and provide no
+range checking; complex-to-real casts explicitly discard the imaginary part.
+
+The dtype enum covers `float16`, `bfloat16`, `float32`, `float64`,
+`complex_half`, `complex_bf16`, `complex_float`, and `complex_double`.
+It describes types at runtime; it does not own storage or dispatch arbitrary
+algorithms automatically.
+
+Choose accumulation precision independently of storage:
+
+| Input `T` | CPU `acc_type<T, false>` | GPU `acc_type<T, true>` |
+| --- | --- | --- |
+| `half`, `bfloat16` | `float` | `float` |
+| `float` | `double` | `float` |
+| `double` | `double` | `double` |
+| `complex<half>`, `complex<bfloat16>` | `complex<float>` | `complex<float>` |
+| `complex<float>` | `complex<double>` | `complex<float>` |
+| `complex<double>` | `complex<double>` | `complex<double>` |
+
+`accumulation_type_t<T>` is the CPU alias. The equivalent device-enum form is
+`acc_type_device<T, device_type::cpu>` or `device_type::gpu`; use
+`to_accumulate_type(dtype, device)` for runtime metadata. Only types with an
+explicit accumulation-table entry are supported. These traits select types;
+callers choose where to widen their intermediate calculations.
+
+## CPU SIMD and vector algorithms
+
+Include `<backend/simd.h>` and link `Scalars::Scalars`. The `simd<T>` API covers
+`float`, `double`, `half`, `bfloat16`, and their supported complex forms.
+Packet types and lane counts are backend-dependent: query `simd_t`, `value_t`,
+`mask_t`, and `size` instead of hard-coding register widths.
+
+```cpp
+#include <backend/simd.h>
+#include <array>
+
+#if SCALARS_VECTORIZED
+void packet_example()
+{
+    using packet = scalars::simd<scalars::complex<double>>;
+    using value = packet::value_t;
+    std::array<value, packet::size> input{};
+    std::array<value, packet::size> output{};
+    input.fill(value{1.0, 2.0});
+
+    const auto a = packet::loadu(input.data());
+    const auto b = packet::fma(
+        a, packet::set(value{2.0, -1.0}), packet::setzero());
+    packet::storeu(b, output.data());  // every element is 4 + 3i
+}
+#endif
+```
+
+The common surface includes load/store, broadcast, arithmetic, FMA, math,
+comparisons, masks, selection, gather/scatter, and reductions. Complex packets
+add conjugation, magnitude, argument, components, and classification. Complex
+ordering, min/max, `hypot`, `cbrt`, `signcopy`, and normal-CDF operations are
+deliberately unavailable. Some complex transcendental operations map scalar
+math lane by lane; see the [operation audit](docs/complex_simd_operation_audit.md).
+
+Reduced real packets store 8 lanes on SSE/NEON, 16 on AVX/AVX2, and 32 on
+AVX-512. They widen into two float packets, compute, and narrow. For a chain
+that retains float intermediates, use `to_float_pair`/`from_float_pair` or
+`load_float_pair`/`store_float_pair`. Reduced complex packets widen the whole
+operation through the complex-float backend before narrowing once.
+
+### Strided complex algorithms
+
+Use `<math/complex_vector.h>` for host loops that handle packets and scalar tails:
+
+| Function | Operation |
+| --- | --- |
+| `complex_dot(x, sx, y, sy, count, conjugate_x)` | Sum of `x*y`, optionally conjugating `x` |
+| `complex_axpy(y, sy, x, sx, count, alpha, conjugate_x)` | `y += alpha*x`, optionally conjugating `x` |
+| `complex_scale(x, stride, count, scale)` | Scale complex values by a real factor |
+| `complex_rotate(x, sx, y, sy, count, c, s)` | `x' = c*x + s*y`, `y' = c*y - conj(s)*x` |
+
+```cpp
+#include <math/complex_vector.h>
+#include <array>
+
+void vector_example()
+{
+    using value = scalars::complex<double>;
+    std::array<value, 3> x{value{1, 0}, value{2, 0}, value{3, 0}};
+    std::array<value, 3> y{value{4, 0}, value{5, 0}, value{6, 0}};
+
+    const auto dot = scalars::complex_dot(x.data(), 1, y.data(), 1, 3);
+    // dot == 32 + 0i; passing true below selects a conjugated dot product.
+    const auto hermitian_dot = scalars::complex_dot(
+        x.data(), 1, y.data(), 1, 3, true);
+    scalars::complex_axpy(y.data(), 1, x.data(), 1, 3, value{2, 0});
+}
+```
+
+Strides count complex objects and may be negative; pass the first logical
+element. Counts must be nonnegative. Output strides must be nonzero for multiple
+elements. Keep output ranges disjoint; AXPY permits exact in-place `x == y` with
+matching strides. Empty ranges accept null pointers. These algorithms use scalar
+loops when CPU SIMD is disabled. Accumulation order and FMA rounding can differ
+between scalar and SIMD execution.
+
+### Backend selection and numerical contracts
+
+| CMake option | Selection |
+| --- | --- |
+| `SCALARS_CPU_BACKEND` | `no`, `sse`, `avx`, `avx2`, `avx512`, `neon`, `sve` |
+| `SCALARS_ENABLE_SVML` | Bundled Intel SVML on supported x86 platforms |
+| `SCALARS_ENABLE_MKL` | Intel MKL VML on x86 |
+| `SCALARS_ENABLE_SLEEF` | SLEEF from `ThirdParty/sleef` |
+| `SCALARS_ENABLE_ACCELERATE` | Apple Accelerate vForce on AArch64 |
+
+The default CPU backend is AVX2 on x86, NEON on AArch64, and `no` elsewhere,
+subject to compiler support. SVE currently reuses NEON packets and requires
+`SCALARS_SVE_VECTOR_BITS=128`. With `SCALARS_CPU_BACKEND=no`, host `simd<T>`
+specializations are unavailable; scalar APIs and complex vector loops remain usable.
+
+Backend selection fixes the CPU instruction-set baseline at build time. There
+is **no runtime ISA dispatch**. The CMake target propagates matching ISA flags to
+consumers. Select the narrowest backend supported by your deployment machines;
+use `-DSCALARS_CPU_BACKEND=no` to disable CPU packet code.
+
+On x86, math uses SVML or MKL, then SLEEF when selected. On AArch64, it uses
+Accelerate or SLEEF. Configuration may auto-enable SVML on x86, Accelerate on
+Apple AArch64, or SLEEF on other AArch64 hosts. Inspect the configuration summary
+for the actual provider. Without a vector math provider, transcendental functions
+map standard-library calls over individual lanes.
+
+<details>
+<summary>Packet memory, precision, and packing details</summary>
+
+- Counted `loadu(ptr, count)` zero-fills inactive lanes; counted
+  `storeu(packet, ptr, count)` writes only active lanes, with `0 <= count <= size`.
+  Reduced and complex counted memory operations accept scalar-aligned pointers.
+- Reduced real `accumulate` returns float. Reduced min/max propagate NaNs and
+  choose negative zero for minimum ties and positive zero for maximum ties.
+  Reduced masks hold one `uint16_t` per lane, all bits set for true and zero for
+  false. Bitwise sign, selection, memory, and permutation preserve stored payloads.
+- Reduced conversions use round-to-nearest-even; narrowed bfloat16 NaNs are
+  canonicalized to `0x7fc0`. Hardware half conversion is used where available.
+- CPU complex packets keep separate real and imaginary registers and load/store
+  interleaved complex objects. Ordinary division stays vectorized; extreme,
+  nonfinite, and zero-divisor lanes use scalar repair. SSE, AVX, AVX-512, and
+  AArch64 NEON use hardware division for their complex reciprocal step.
+- Reduced `ploadquad` repeats each input four times. Four-wide real SSE/NEON float
+  `ploadquad` duplicates pairs; wider AVX float and AVX-512 double repeat each
+  input four times. Narrow double packets broadcast one value. AVX-512 float
+  `ploadquad` is unavailable.
+- `ptranspose<N>` repacks a rectangular transpose; supported dimensions depend on
+  the packet type. Reduced packets require one dimension to divide the other.
+  The legacy `predux_downto4` combines packet halves. FMA returns a result that
+  callers must assign, including in half-width operations.
+- Math accuracy and fused/nonfused behavior follow the chosen provider and
+  backend. The numerical contract assumes the default rounding environment.
+
+</details>
+
+## GPU entry points
+
+Select `-DSCALARS_GPU_BACKEND=cuda`, `hip`, or `metal` independently of the CPU
+backend. The default is `none`.
+
+### CUDA and HIP
+
+Compile device kernels with the corresponding toolchain and include
+`<backend/simd.h>`. Device `simd<T>` packets have `size == 1`, one logical lane
+per thread. The device interface covers float/double, reduced real values, and
+complex float/double. The dispatcher selects the GPU implementation during the
+device pass and the configured CPU implementation during the host pass.
+
+Reduced device packets compute through float, support 16-bit comparison masks,
+and offer `to_float`/`from_float` and `load_float`/`store_float` for explicit FP32
+intermediates. Gather/scatter's integer argument is the absolute element index.
+Counted loads/stores accept zero or one; CPU transpose and half-width utilities
+have no device counterpart. HIP complex math requires ROCm's rocThrust
+headers, commonly provided by `rocthrust-dev`.
+
+### Metal
+
+Include `<backend/gpu/metal/metal_dispatch.h>` and use
+`scalars::metal_backend`. Supported buffer types are `dtype::float32`,
+`dtype::half`, `dtype::bfloat16`, and `dtype::complex64`. Metal has no double or
+complex128 support; complex64 reductions are unavailable.
+
+Free dispatch functions are synchronous. For preallocated, page-aligned shared
+buffers `a`, `b`, and `out` covering `n` half elements:
+
+```cpp
+#include <backend/gpu/metal/metal_dispatch.h>
+
+void add_half_buffers(void* a, void* b, void* out, std::size_t n)
+{
+    namespace mb = scalars::metal_backend;
+    const void* inputs[] = {a, b};
+    mb::execution_context batch;
+    batch.dispatch_fill(a, 2.0f, n, mb::dtype::half);
+    batch.dispatch_fill(b, 3.0f, n, mb::dtype::half);
+    batch.dispatch("add", inputs, 2, out, n, mb::dtype::half);
+    batch.submit();  // asynchronous submission
+    batch.wait();    // wait before accessing shared buffers from the CPU
+    const float sum = mb::reduce_sum(out, n, mb::dtype::half);
+}
+```
+
+Each backing allocation must be page-aligned, have a page-multiple length, and
+cover all elements. Keep it alive until `wait()` completes. Execution contexts
+are confined to one thread; destruction drains outstanding work without
+throwing, so call `wait()` to observe errors.
+
+Reduced Metal operations include fill, arithmetic/FMA, min/max, sqrt/exp/log,
+sin/cos/tanh, fabs/neg, and sum/min/max reductions. Reduction partials and results
+use float; empty sum/min/max return zero/positive infinity/negative infinity.
+Bfloat16 conversions are implemented in software. Fused sources define
+`fused_float`, `fused_half`, or `fused_bfloat16` for the selected type and handle
+their storage conversions. Compiled fused pipelines use an LRU cache with a
+default capacity of 256; `set_fused_pipeline_cache_capacity`,
+`fused_pipeline_cache_capacity`, and `fused_pipeline_cache_size` control or inspect it.
+
+## Build, test, and development options
+
+Common options, in addition to the CPU/GPU selections above:
 
 | Option | Default | Purpose |
 | --- | --- | --- |
 | `SCALARS_CXX_STANDARD` | `20` | C++20 or C++23 |
-| `SCALARS_ENABLE_TESTING` | `ON` standalone | Build the scalar test suite |
-| `SCALARS_ENABLE_GTEST` | `ON` | Build GoogleTest C++ unit tests |
+| `SCALARS_ENABLE_TESTING` | `ON` standalone | Build tests; `BUILD_TESTING=OFF` disables them globally |
+| `SCALARS_ENABLE_GTEST` | `ON` | Enable the C++ GoogleTest suite |
 | `SCALARS_ENABLE_BENCHMARK` | `OFF` | Build Google Benchmark micro-benchmarks |
-| `SCALARS_ENABLE_CACHE` | `ON` | Enable the selected compiler cache |
-| `SCALARS_CACHE_BACKEND` | `none` | `none`, `ccache`, `sccache`, or `buildcache` |
+| `SCALARS_ENABLE_CACHE` / `SCALARS_CACHE_BACKEND` | `ON` / `none` | Select `none`, `ccache`, `sccache`, or `buildcache` |
 | `SCALARS_LTO_MODE` | `off` | `off`, `thin`, `full`, `ipo`, or `auto` |
 | `SCALARS_LINKER_CHOICE` | `default` | `default`, `lld`, `mold`, `gold`, or `lld-link` |
-| `SCALARS_ENABLE_SANITIZER` | `OFF` | Instrument the library and tests |
-| `SCALARS_SANITIZER_TYPE` | `address` | Sanitizer name or comma-separated combination |
-| `SCALARS_ENABLE_COVERAGE` | `OFF` | Instrument the library and tests for coverage |
-| `SCALARS_ENABLE_CLANGTIDY` | `OFF` | Run clang-tidy during compilation |
-| `SCALARS_ENABLE_FIX` | `OFF` | Allow clang-tidy to apply fixes |
-| `SCALARS_ENABLE_IWYU` | `OFF` | Run include-what-you-use |
-| `SCALARS_ENABLE_SPELL` | `OFF` | Run codespell during the build |
-| `SCALARS_ENABLE_VALGRIND` | `OFF` | Configure CTest memcheck and test timeouts |
-| `SCALARS_ENABLE_ICECC` | `OFF` | Use Icecream distributed compilation |
+| `SCALARS_ENABLE_SANITIZER` / `SCALARS_SANITIZER_TYPE` | `OFF` / `address` | Instrument with one sanitizer or a comma-separated combination |
+| `SCALARS_ENABLE_COVERAGE` | `OFF` | Coverage instrumentation |
+| `SCALARS_ENABLE_CLANGTIDY` / `SCALARS_ENABLE_FIX` | `OFF` / `OFF` | Build-integrated analysis; the second option allows source edits |
+| `SCALARS_ENABLE_IWYU` / `SCALARS_ENABLE_SPELL` | `OFF` / `OFF` | Include analysis / spell checking |
+| `SCALARS_ENABLE_VALGRIND` / `SCALARS_ENABLE_ICECC` | `OFF` / `OFF` | CTest memcheck / distributed compilation |
 
-`BUILD_TESTING=OFF` disables tests globally. The original
-`SCALARS_BUILD_TESTS` switch still supplies the default for
-`SCALARS_ENABLE_TESTING` when configuring an existing consumer.
-Coverage and sanitizers skip LTO, as in LinearAlgebra.
+Coverage and sanitizers skip LTO. The legacy `SCALARS_BUILD_TESTS` option still
+supplies the testing default. GoogleTest, Google Benchmark, and SLEEF are
+submodules under `ThirdParty/`; initialize Benchmark before enabling benchmarks.
+Missing GoogleTest or Benchmark checkouts can fall back to FetchContent.
 
-The Python build helper uses the same dotted commands as LinearAlgebra:
+The optional Python helper provides the same build actions from the repository
+root, or through `python3 setup.py` from `Scripts/`:
 
-```bash
+```sh
 python3 Scripts/setup.py --help
 python3 Scripts/setup.py config.build.test
 python3 Scripts/setup.py config.build.test.static.cxx23
 python3 Scripts/setup.py config.build.test --sanitizer.address
+python3 Scripts/setup.py config.build.test --cpu-backend=neon --gpu-backend=metal
 python3 Scripts/setup.py config.build.test --lto.ipo
-python3 Scripts/setup.py config.build.test.cppcheck
 python3 Scripts/setup.py config.build.test.coverage
 ```
 
-Run it from the repository root, or use `python3 setup.py ...` from `Scripts/`.
-It defaults to Ninja, Clang, C++20, and Release, and creates `build_ninja/`
-with suffixes for selected options. `config` reuses the existing build directory;
-`build.test` reruns an already configured build. Compiler/generator tokens such
-as `gcc`, `clang-18`, `xcode`, and `vs22` follow the reference CLI.
-Sanitizer, coverage, and Valgrind builds use Debug. Optional analysis tools must
-be installed separately; coverage reporting requires `coverage-tool` and uses
-`coverage.toml`. `colorama` and `psutil` are optional.
+It defaults to Ninja, Clang, C++20, and Release, creating `build_ninja/` with
+option suffixes. `config` reuses a build directory; `build.test` reruns an
+existing configuration. Sanitizer, coverage, and Valgrind helper builds select
+Debug. Use named options from `--help` for paths, toolchains, architectures,
+backends, filters, and installation settings. Raw build-system arguments and
+`--` passthrough are rejected. Windows Ninja builds require a Visual Studio
+developer environment. Coverage reporting requires `coverage-tool` and
+`coverage.toml`; optional analysis tools and cache backends are installed separately.
 
-Tests follow LinearAlgebra's structure, with CamelCase source filenames:
+| Location | Purpose |
+| --- | --- |
+| `Testing/Cxx/Test*.cxx` | C++ unit tests, built as `ScalarsCxxTests` |
+| `Testing/Cxx/Test*.cu` | CUDA/HIP device tests when the corresponding backend is enabled |
+| `Testing/CMake/test_setup.py` | Python helper checks, registered as `ScalarsSetupTests` |
+| `Testing/Benchmark/Benchmark*.cxx` | Optional native micro-benchmarks |
+| `Testing/InstallConsumer/` | Standalone installed-package integration checks |
 
-- `Testing/Cxx/Test*.cxx`: GoogleTest cases grouped by scalar type, math,
-  traits, promotion, conversion, and metadata, built as `ScalarsCxxTests`.
-- `Testing/Benchmark/Benchmark*.cxx`: Google Benchmark micro-benchmarks, built
-  when `SCALARS_ENABLE_BENCHMARK=ON` (setup helper token `benchmark`).
-- `Testing/scalars_test.h.in`: the shared test header configured by CMake.
-- `Testing/CMake/test_setup.py`: Python build-helper regression checks,
-  registered as `ScalarsSetupTests` when Python is available.
-- `Testing/InstallConsumer/`: standalone consumers for the installed
-  `Scalars::Scalars` target.
+Run the Python checks alone with
+`python3 -m unittest discover -s Testing/CMake -p test_setup.py`.
+Use Release without coverage or sanitizers for benchmarks. GPU runtime tests
+require a compatible device and toolchain.
 
-`ctest --test-dir build --output-on-failure` runs the C++ and Python suites.
-For performance measurements, use a Release build without coverage or sanitizers.
-The native benchmarks use bounded input arrays, report element throughput, and
-cover SIMD arithmetic chains, dot products, tails, strides, and mixed exceptional
-division packets at several working-set sizes. Metal benchmarks compare eight
-synchronous launches with an explicit batch and exercise repeated reductions.
-GoogleTest and Google Benchmark are the `ThirdParty/googletest` and
-`ThirdParty/benchmark` submodules, pinned to the same commits as LinearAlgebra.
-Initialize them with `git submodule update --init`. A missing checkout falls
-back to FetchContent. Library-only builds with `SCALARS_ENABLE_TESTING=OFF`
-need no GoogleTest. Use `-DSCALARS_ENABLE_GTEST=OFF` (or the setup helper's
-`gtest` token) to disable only the C++ suite. Run the Python checks directly
-with `python3 -m unittest discover -s Testing/CMake -p test_setup.py`.
+Verify an installation independently with:
 
-After installation, verify the exported package with:
-
-```bash
+```sh
 cmake -S Testing/InstallConsumer -B build_consumer -DCMAKE_PREFIX_PATH=/your/install/prefix
 cmake --build build_consumer --parallel
 ctest --test-dir build_consumer --output-on-failure
 ```
 
-## Lint
+Lint uses `.lintrunner.toml` and the shared `lint-tool` adapters:
 
-`.lintrunner.toml` and the formatter/analyzer configurations are copied from
-LinearAlgebra, with paths adapted for `cmake/`, `Testing/`, and `examples/`.
-The adapters come from the shared `lint-tool` package:
-
-```bash
+```sh
 python3 -m venv .venv
 source .venv/bin/activate
 python3 -m pip install lintrunner -e ../lint-tool
@@ -121,317 +484,39 @@ lintrunner init
 lintrunner --all-files
 ```
 
-Install `clang-tidy` separately for C++ analysis. Configure CMake first to
-generate `build/compile_commands.json`. Optional CMake analysis tools and
-compiler cache backends must also be installed before enabling their options.
+The `../lint-tool` path assumes that sibling checkout is available. Install
+`clang-tidy` separately and configure CMake to generate `compile_commands.json`
+before C++ analysis.
 
-## Example
+## Scope and compatibility
 
-Code filenames and class/type names use `snake_case`, for example
-`types/half.h`, `half`, `bfloat16`, `complex<T>`, and `scalar_type`.
+Scalars supplies numerical building blocks. Array/tensor ownership, expression
+graphs, full matrix algorithms, runtime dtype dispatch, and checked conversions
+belong to the consuming application. It provides no drop-in ABI compatibility
+with c10, `std::complex`, cuComplex, or rocComplex. Host/device math availability
+and accuracy depend on the backend; full PyTorch parity is not claimed.
 
-```cpp
-#include <scalars.h>
-using namespace scalars;
-int main() {
-  half h{1.5f};
-  bfloat16 b{2.0f};
-  complex_float z{1.f, 2.f};
-  auto w = scalars::exp(z);
-  return float(h) + float(b) + w.real() > 0 ? 0 : 1;
-}
-```
+Source changes relevant to existing consumers:
 
-## CPU SIMD
+- SIMD lives in `scalars::simd<T>`; update uses of the former global name.
+- `accumulation_type_t<float>` is now `double`, and complex-float CPU
+  accumulation is complex-double. Types without an accumulation-table entry,
+  including `long double` and `uint32_t`, fail to instantiate that trait.
+- Half comparisons accept half and arithmetic operands and resolve alongside
+  CUDA/HIP's native half operators.
+- Reduced complex types share an implementation, default to zero, and support
+  scalar compound arithmetic using their component type.
+- Complex-packet `set_mask` accepts Boolean and integral arguments; nonzero
+  enables every lane.
+- Complex arithmetic/component helpers and `bit_cast` carry host/device
+  annotations for CUDA/HIP compilation.
 
-Include `<backend/simd.h>` for `simd<float>`, `simd<double>`,
-`simd<scalars::half>`, and `simd<scalars::bfloat16>`. Select a CPU backend with
-`-DSCALARS_CPU_BACKEND=sse|avx|avx2|avx512|neon|sve`; `no` leaves the host SIMD
-interface unavailable. The existing SVE path requires a fixed 128-bit vector
-length and reuses NEON packets.
+## License and provenance
 
-**ISA requirement.** `SCALARS_CPU_BACKEND` selects a fixed instruction-set
-baseline (for example `-mavx2 -mf16c -mfma` for `avx2`, Scalars' x86_64
-default) at configure time, with no runtime dispatch between backends. Those
-compiler flags are `PUBLIC` on the `Scalars` target, so every consumer's own
-translation units are compiled for that same baseline too -- the library and
-an ordinary CMake consumer cannot disagree. The risk is distributing the
-resulting binary (library plus any consumer built against it) to a machine
-that lacks that instruction set, where it will crash with an illegal
-instruction rather than falling back to a narrower implementation, as e.g.
-PyTorch's `CPU_CAPABILITY`-namespaced runtime dispatch does. Build with
-`-DSCALARS_CPU_BACKEND=no`, or the narrowest backend your deployment targets
-guarantee, for a binary meant to run on hardware you do not control.
-
-Transcendental math (`exp`, `log`, `sin`, `pow`, ...) is provided by whichever
-vector math library is enabled, in priority order per architecture: on x86, Intel
-SVML (`-DSCALARS_ENABLE_SVML=ON`) or Intel MKL VML (`-DSCALARS_ENABLE_MKL=ON`),
-then the bundled [SLEEF](https://sleef.org) (`-DSCALARS_ENABLE_SLEEF=ON`, built
-from the `ThirdParty/sleef` submodule); on AArch64 NEON/SVE, Apple Accelerate
-vForce (`-DSCALARS_ENABLE_ACCELERATE=ON`) then SLEEF. When Apple Accelerate is
-unavailable on a NEON/SVE host and SLEEF has not been explicitly requested, or
-when a non-Apple AArch64 host is detected, SLEEF is auto-enabled so the library
-never falls further back than it needs to. Without any of these, transcendental
-functions fall back to scalar `std::` calls applied per lane.
-
-half and bfloat16 use dense 16-bit storage: 8 lanes on SSE/NEON, 16 on AVX/AVX2,
-and 32 on AVX-512. Following the architecture of PyTorch's CPU reduced-precision
-vectors, each packet widens into two float packets, computes in float, then
-rounds back to the stored format. half uses hardware conversion where available
-and an SSE2 software SIMD conversion otherwise. Bfloat16 conversion uses
-round-to-nearest-even and canonicalizes narrowed NaNs to `0x7fc0`.
-
-The reduced types provide the float backend's real arithmetic/math surface,
-comparisons, masks, selection, gather/scatter, horizontal reductions, broadcast,
-transpose, and half-width packet utilities. `accumulate` returns float and keeps
-float intermediates. Reduced `min`/`max` and their horizontal variants propagate
-NaNs and choose `-0` for minimum zero ties, `+0` for maximum zero ties. Masks use
-one `uint16_t` per lane: all bits set for true, zero for false. Bitwise sign,
-memory, selection, and permutation operations preserve stored NaN payloads.
-`ploadquad` repeats each input four times. `ptranspose<N>` transposes an
-`N * size` block and repacks the result into `N` packets; one dimension must
-divide the other. The legacy `predux_downto4` helper adds the lower and upper
-halves, returning `half_size` reduced lanes.
-
-`loadu(ptr, count)` zero-fills inactive lanes, and `storeu(packet, ptr, count)`
-writes only active lanes, for `0 <= count <= size`. The full-packet and
-half-width memory operations accept scalar-aligned addresses. For kernels that
-explicitly retain float intermediates across several operations, use
-`to_float_pair` / `from_float_pair` or `load_float_pair` / `store_float_pair`;
-the returned pair has `low` and `high` float packets. These helpers round only
-when narrowing, so their results can differ from chaining reduced operations.
-
-Math functions reuse the selected float backend/provider, including its accuracy
-limits and scalar mappings. X86 builds without SVML/SLEEF use standard-library
-scalar mappings for transcendental functions. FMA follows the float backend's
-fused/nonfused behavior and narrows once. The numerical contract assumes the
-default floating-point rounding environment. Complex SIMD is described below.
-
-Reference architecture:
-[PyTorch reduced CPU packets](https://github.com/pytorch/pytorch/blob/main/aten/src/ATen/cpu/vec/vec256/vec256_16bit_float.h)
-and [widened functional helpers](https://github.com/pytorch/pytorch/blob/main/aten/src/ATen/cpu/vec/functional_bfloat16.h).
-
-## SIMD and complex primitives for LinearAlgebra
-
-LinearAlgebra can use the existing `<backend/simd.h>` interface directly.
-`simd<scalars::complex<float>>` and `simd<scalars::complex<double>>` extend
-that interface at parity with the real float/double operation set: load/store,
-counted load/store, set/setzero, arithmetic/FMA/division, negation,
-conjugation, roots/powers, the exponential/logarithmic/trigonometric/
-hyperbolic functions, equality and mask selection, magnitude/argument/
-real/imag, classification (`isnan`/`isinf`/`isfinite`), rounding, half-width
-utilities, and strided or indexed gather/scatter. Real-only ordering
-(`gt`/`lt`/`min`/`max`/`hmin`/`hmax`) and `hypot`/`cbrt`/`signcopy`/`cdf`/
-`inv_cdf` are deliberately `= delete`d rather than silently applied
-componentwise -- complex numbers have no total order and those others have no
-agreed complex contract. See
-[the operation audit](docs/complex_simd_operation_audit.md) for the full
-table and what still maps the scalar complex implementation lane-by-lane
-instead of using native vector transcendentals.
-
-Complex specializations live beside the real types in
-`backend/cpu/{sse,avx,avx512,neon,sve}/complex/simd.h` and are selected by the same
-dispatcher. AVX and AVX2 share the `avx` folder. SVE follows the real types' fixed
-128-bit NEON compatibility path. Backend headers implement their own native
-register shuffles, division checks, and reciprocals; common packet operations
-live in `backend/cpu/detail/complex_simd.h` without ISA conditionals.
-`simd<scalars::complex<half>>`/`simd<scalars::complex<bfloat16>>`
-(`backend/cpu/reduced/complex_simd.h`) widen the whole operand to a
-`complex<float>` pair, run the operation through `simd<complex<float>>`, and
-narrow once, rather than narrowing after every intermediate op the way the
-real reduced backend does -- narrowing a squared term for a division
-denominator would overflow half's range far sooner than a real division ever
-would. `simd<scalars::complex<float>>`/`simd<scalars::complex<double>>` also
-exist for CUDA/HIP device code (`backend/gpu/complex/simd.h`, scalar,
-`size == 1`, same interface as `backend/gpu/{float,double}/simd.h`), and
-Metal has a `complex64` kernel set at parity with its `float32` kernels
-(`backend/gpu/metal/kernels.metal`; no `complex128`, since Metal has no
-`double` either).
-
-All CPU backends use contiguous interleaved memory operations and bounded vector
-division. SSE, AVX/AVX2, and AVX-512 use hardware vector division for the reciprocal;
-NEON uses Newton-refined reciprocal estimates. Extreme or nonfinite lanes, or
-lanes with a zero divisor, use scalar repair while ordinary lanes stay vectorized.
-Scalar division also has a bounded fast path and retains power-of-two scaling
-outside its safe range. Each complex
-SIMD value holds separate real and imaginary registers, with `size` complex elements.
-No packet adapter or additional public abstraction is needed.
-
-Link `Scalars::Scalars` to inherit the ISA, compiler flags, and math provider.
-CPU complex SIMD (including the reduced-precision packets above) requires a
-configured CPU backend, like the existing real SIMD types.
-
-```cpp
-#include <backend/simd.h>
-using S = simd<scalars::complex<double>>;
-auto a = S::loadu(input);
-auto b = S::fma(a, S::set({2.0, -1.0}), S::setzero());
-S::storeu(b, output);
-```
-
-`<math/complex_vector.h>` supplies `scalars::complex_dot`, `complex_axpy`,
-`complex_scale`, and `complex_rotate` using this same SIMD API directly.
-They handle tails with scalar arithmetic and use scalar loops when CPU SIMD
-is disabled. Strides count complex objects and may be negative. Dot and AXPY
-optionally conjugate x. Rotation computes `x' = c*x + s*y` and
-`y' = c*y - conj(s)*x` without scratch storage. Output strides must be nonzero;
-output ranges must be disjoint except for AXPY's exact in-place x/y case.
-Empty ranges accept null pointers. Complex counted loads zero-fill inactive
-lanes; counted stores write only active lanes (`0 <= count <= size`).
-Dot uses four independent packet accumulators, reduces each to the accumulation
-type, then combines them. SIMD accumulation order and FMA semantics follow the
-selected backend and can differ from scalar accumulation.
-The division fast path follows the real backend's FMA behavior and has ordinary
-floating-point rounding differences from scalar division. See the
-[complex SIMD performance notes](docs/complex_simd_performance.md) for measured
-PyTorch comparisons and the standalone benchmark command.
-
-Real SIMD `ploadquad` uses PRETORIAN's implementation for each ISA:
-four-wide SSE/NEON float loads duplicate pairs; AVX float and AVX-512 double
-loads repeat each input four times; narrower double loads broadcast one value.
-PRETORIAN does not provide AVX-512 float `ploadquad`, so that operation remains
-unavailable. `ptranspose<4>` on wider float/double SIMD registers follows PRETORIAN's
-rectangular transpose: a `4 x size` input becomes a contiguous `size x 4`
-output repacked into four registers. Store those registers consecutively to
-produce a packed RHS block. Existing square transposes and half-width helpers remain
-on `simd<T>` itself. FMA returns its result; consumers must assign that result,
-including in half-width remainder kernels.
-
-Scalar helpers `scalars::abs`, `arg`, `conj`, `real`, `imag`, `norm`, and
-`isfinite` are available for complex values. Finite host complex division and
-the custom complex square root use power-of-two scaling at extreme magnitudes.
-Only Scalars is changed; LinearAlgebra can consume these operations directly
-when its local scalar/SIMD implementations are replaced.
-
-## GPU backends
-
-Select `-DSCALARS_GPU_BACKEND=cuda|hip|metal` independently of the CPU backend.
-HIP builds also require ROCm's rocThrust development headers (`rocthrust-dev`),
-which provide the `thrust/complex.h` dependency used by GPU complex operations.
-CUDA/HIP device compilation of `<backend/simd.h>` provides `simd<float>`,
-`simd<double>`, `simd<scalars::half>`, and `simd<scalars::bfloat16>`. Each packet
-has `size == 1`, with one logical lane per GPU thread. Reduced packets retain
-their distinct two-byte storage, compute through the float GPU backend, and
-round once per operation. FMA uses a float fused operation before narrowing;
-`accumulate` returns float. This follows PyTorch's
-[operation-math policy](https://github.com/pytorch/pytorch/blob/main/aten/src/ATen/OpMathType.h).
-
-Reduced device packets support the float backend's math surface, 16-bit
-comparison masks, bitwise selection/sign operations, gather/scatter, and
-counted load/store with counts zero or one. `min`/`max` propagate NaNs and use
-the CPU reduced packets' signed-zero policy. `to_float` / `from_float` and
-`load_float` / `store_float` let kernels retain FP32 intermediates explicitly.
-Gather/scatter's integer argument is the thread's absolute element index.
-CPU packet transpose and half-width utilities have no one-lane GPU counterpart.
-
-Metal uses `<backend/gpu/metal/metal_dispatch.h>` rather than the C++ device
-dispatcher. Pass `metal_backend::dtype::half` or `dtype::bfloat16` as the final
-argument to `dispatch`, `dispatch_fill`, `dispatch_fused`, and reductions;
-existing calls continue to use float. All buffers in an element-wise launch
-use the selected storage type. Fill values and fused scalar arguments remain
-float. Each pointer must address page-aligned shared storage. The allocation
-length must be a multiple of the system page size and cover `n * sizeof(T)`.
-For example, with half buffers `a`, `b`, and `out`:
-
-```cpp
-namespace mb = scalars::metal_backend;
-const void* inputs[] = {a, b};
-mb::dispatch("add", inputs, 2, out, n, mb::dtype::half);
-float sum = mb::reduce_sum(out, n, mb::dtype::half);
-```
-
-The free dispatch functions remain synchronous. To batch dependent operations,
-use a thread-confined `execution_context`:
-
-```cpp
-mb::execution_context batch;
-batch.dispatch_fill(a, 2.f, n, mb::dtype::half);
-batch.dispatch_fill(b, 3.f, n, mb::dtype::half);
-batch.dispatch("add", inputs, 2, out, n, mb::dtype::half);
-batch.submit();  // Submit asynchronously; further launches start another batch.
-batch.wait();    // Also submits pending work and reports GPU errors.
-```
-
-Wait before reading, modifying, or releasing shared buffers from the CPU.
-Encoded command buffers retain the Metal buffer objects they bind. Context
-destruction submits and drains remaining work without throwing; call `wait()`
-to observe errors. Reductions remain synchronous, encode all passes in one
-submission, and reuse per-thread FP32 scratch buffers.
-
-Metal supplies reduced fill, add/sub/mul/div, min/max, FMA, sqrt/exp/log,
-sin/cos/tanh, fabs/neg, and sum/min/max reductions. All reduction passes use
-FP32 partials; empty reductions return zero, positive infinity, or negative
-infinity respectively. BF16 uses software bit conversion with round-to-nearest-even
-and canonical narrowed NaNs, without requiring native MSL bfloat support.
-Fused sources define `fused_float`, `fused_half`, or `fused_bfloat16` for the
-selected type and are responsible for their own storage conversions.
-
-## Scope and limitations
-
-- CUDA/HIP device tests require the corresponding compiler and GPU. Metal tests run on a Mac with a Metal device. This release does not claim full host/device parity with PyTorch.
-- Arithmetic for half/bfloat16 uses float intermediates and rounds the result to the stored format.
-- Scalar casts from complex to real discard the imaginary component by explicit request; review this policy for strict applications.
-- Complex division uses bounded direct arithmetic and scaled host fallbacks for float/double operands;
-  transcendental functions use standard-library math and the existing custom
-  square-root/arc-cosine implementation where required by the standard library.
-- Type promotion supports the four defined real component types; broader integral promotion and checked casts remain future work.
-- Numerical limits currently specialize half only; add complete bfloat16 limits and edge-case exhaustive tests before production use.
-- complex_math.h is CPU-only because of the `std::complex` backend.
-- Not a drop-in ABI replacement for c10, std::complex, cuComplex, or rocComplex.
-
-## Upgrade notes
-
-Source-level changes that can affect existing callers:
-
-- `accumulation_type_t<T>` is now an alias for `acc_type<T, false>`, so
-  `accumulation_type_t<float>` is `double` (it was `float`), and
-  `complex<float>` accumulates in `complex<double>`. Code such as
-  `simd<accumulation_type_t<float>>` now names `simd<double>`. Types with no
-  `acc_type` entry, such as `long double` and `uint32_t`, no longer have an
-  accumulation type and fail to compile instead of accumulating in
-  themselves. Use `float` explicitly where single-precision accumulation was
-  intended.
-- `half` comparisons are function templates over `half` and arithmetic
-  operands. Results are unchanged (operands compare in the usual arithmetic
-  common type, with `half` as `float`), but the comparisons now also resolve
-  in CUDA/HIP code that includes `cuda_fp16.h`/`hip_fp16.h`.
-- `complex<half>` shares `complex<bfloat16>`'s implementation: it is
-  zero-initialized by default, converts implicitly from `half`, and has scalar
-  compound operators (`z += h`, `z * h`).
-- The complex packets' `set_mask(int_t)` is now `set_mask(I)` for any integer
-  type `I`, so `set_mask(1)` and `set_mask(0)` compile; nonzero still selects
-  every lane, and `set_mask(bool)` is unchanged.
-- The `scalars::complex` operators, `std::real`/`std::imag`/`std::norm`/
-  `std::conj` overloads, and `bit_cast` are now `__host__ __device__`. Device
-  code that used them previously compiled with only a warning and produced
-  wrong results.
-
-## Reference code investigated
-
-- https://github.com/pytorch/pytorch/blob/main/torch/headeronly/util/half.h
-- https://github.com/pytorch/pytorch/blob/main/torch/headeronly/util/bfloat16.h
-- https://github.com/pytorch/pytorch/blob/main/torch/headeronly/util/complex.h
-- https://github.com/pytorch/pytorch/blob/main/c10/util/complex_math.h
-- https://github.com/pytorch/pytorch/blob/main/c10/util/TypeCast.h
-- https://github.com/pytorch/pytorch/blob/main/c10/core/ScalarType.h
-
-This project is an independent implementation, not a verbatim port of PyTorch.
-
-### Reproducing CI with the setup helper
-
-CI and local builds use the documented dotted actions and named options from
-`python Scripts/setup.py --help`:
-
-```sh
-python Scripts/setup.py config.build.test.release.ninja.clang --build-dir build
-python Scripts/setup.py install.release --build-dir build --install-prefix install
-python Scripts/setup.py config.build.test --build-dir build-debug --compiler clang-cl --build-type Debug --testing on --benchmark off
-```
-
-Only declared options are accepted. Tool commands, raw build-system arguments,
-and a `--` argument separator are rejected. Paths, backend selections, GPU
-architectures, test filters, and installation settings have named options in
-the usage text. `--source-dir` selects a dependency or installed-package consumer
-project. `verifycache --build-dir build --target TARGET` checks the launcher and
-clean-rebuild cache hits. `verifytoolchain` checks the compiler selected by Ninja.
-Run Windows Ninja builds in a Visual Studio developer environment.
+The project license is [MIT](LICENSE). Sections of
+[`types/half.h`](include/types/half.h) and
+[`types/bfloat16.h`](include/types/bfloat16.h) derive from PyTorch c10
+`Half-inl.h` and `BFloat16-inl.h` under BSD-3-Clause. Half conversion routines
+also derive from Marat Dukhan's FP16 library under MIT. [NOTICE](NOTICE)
+contains the attributions and license text; vendored dependencies retain their
+own notices, including [Intel SVML's license](ThirdParty/svml/LICENSE).
