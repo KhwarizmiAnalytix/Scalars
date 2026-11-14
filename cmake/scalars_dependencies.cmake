@@ -139,6 +139,23 @@ function(scalars_setup_sleef)
                 target_link_directories(sleef INTERFACE "$<BUILD_INTERFACE:${_dir}>")
             endforeach()
         endif()
+
+        # SLEEF's src/libm attaches each generated include/rename<SIMD>.h to two unrelated
+        # targets: rename<SIMD>.h_generated and the aggregate "headers" target. Xcode's new
+        # build system rejects a custom command shared by targets where neither depends on
+        # the other. Make "headers" depend on every rename<SIMD>.h_generated so CMake attaches
+        # each command only to that dependency. (The SIMD tags are uppercase; the lowercase
+        # renamed<simd>.h_generated dispatcher targets are not part of "headers".)
+        if(TARGET headers)
+            get_directory_property(
+                _sleef_libm_targets DIRECTORY "${_sleef_src}/src/libm" BUILDSYSTEM_TARGETS
+            )
+            set(_sleef_rename_targets "${_sleef_libm_targets}")
+            list(FILTER _sleef_rename_targets INCLUDE REGEX "^rename[A-Z0-9_]+\\.h_generated$")
+            if(_sleef_rename_targets)
+                add_dependencies(headers ${_sleef_rename_targets})
+            endif()
+        endif()
     endif()
 
     if(TARGET sleef AND NOT TARGET Sleef::sleef)
