@@ -368,7 +368,10 @@ function(scalars_apply_simd_compile_definitions target)
         message(STATUS "Scalars: linked Apple Accelerate framework (vForce).")
     endif()
     if(SCALARS_SIMD_COMPILER_FLAGS)
-        if(MSVC)
+        # Branch on the C++ compiler's flag syntax, which is what utils.cmake
+        # probed with, not on MSVC: enable_language(CUDA) with nvcc on Windows
+        # sets MSVC even when the C++ compiler is the GNU-style clang driver.
+        if(CMAKE_CXX_COMPILER_FRONTEND_VARIANT STREQUAL "MSVC")
             separate_arguments(
                 _scalars_simd_flags_list WINDOWS_COMMAND "${SCALARS_SIMD_COMPILER_FLAGS}"
             )
@@ -382,14 +385,53 @@ function(scalars_apply_simd_compile_definitions target)
                 )
             endforeach()
             unset(_flag)
+            set(_scalars_cuda_host_simd_flags "${_scalars_simd_flags_list}")
+        elseif(WIN32 AND CMAKE_CUDA_COMPILER_ID STREQUAL "NVIDIA")
+            # GNU-style C++ compiler (clang) with nvcc on Windows: nvcc's host
+            # compiler is always cl.exe, which ignores -mavx2/-mf16c/-mfma
+            # (warning D9002), so __AVX2__ stays undefined in the host pass and
+            # scalars_macros.h rejects the translation unit. Give the CUDA host
+            # pass the cl.exe spelling of the same ISA level instead.
+            separate_arguments(
+                _scalars_simd_flags_list UNIX_COMMAND "${SCALARS_SIMD_COMPILER_FLAGS}"
+            )
+            set(_scalars_simd_cuda_host_flags "")
+            if(SCALARS_CPU_BACKEND STREQUAL "sse")
+                list(APPEND _scalars_simd_cuda_host_flags /arch:SSE2)
+            elseif(SCALARS_CPU_BACKEND STREQUAL "avx")
+                list(APPEND _scalars_simd_cuda_host_flags /arch:AVX /D__F16C__)
+            elseif(SCALARS_CPU_BACKEND STREQUAL "avx2")
+                list(APPEND _scalars_simd_cuda_host_flags /arch:AVX2 /D__F16C__)
+            elseif(SCALARS_CPU_BACKEND STREQUAL "avx512")
+                list(APPEND _scalars_simd_cuda_host_flags /arch:AVX512 /D__F16C__)
+            endif()
+            if("-mfma" IN_LIST _scalars_simd_flags_list)
+                list(APPEND _scalars_simd_cuda_host_flags /D__FMA__)
+            endif()
+            foreach(_flag IN LISTS _scalars_simd_flags_list)
+                target_compile_options(
+                    ${target} PUBLIC "$<$<NOT:$<COMPILE_LANGUAGE:CUDA>>:${_flag}>"
+                )
+            endforeach()
+            foreach(_flag IN LISTS _scalars_simd_cuda_host_flags)
+                target_compile_options(
+                    ${target} PUBLIC "$<$<COMPILE_LANGUAGE:CUDA>:-Xcompiler=${_flag}>"
+                )
+            endforeach()
+            unset(_flag)
+            set(_scalars_cuda_host_simd_flags "${_scalars_simd_cuda_host_flags}")
+            unset(_scalars_simd_cuda_host_flags)
         else()
             separate_arguments(
                 _scalars_simd_flags_list UNIX_COMMAND "${SCALARS_SIMD_COMPILER_FLAGS}"
             )
             target_compile_options(${target} PUBLIC ${_scalars_simd_flags_list})
+            set(_scalars_cuda_host_simd_flags "${_scalars_simd_flags_list}")
         endif()
         unset(_scalars_simd_flags_list)
     endif()
+    # Host-pass SIMD flags as the CUDA compiler sees them, for summary.cmake.
+    set(SCALARS_CUDA_HOST_SIMD_FLAGS "${_scalars_cuda_host_simd_flags}" PARENT_SCOPE)
 endfunction()
 
 if(NOT DEFINED SCALARS_PACKET_SIZE)
