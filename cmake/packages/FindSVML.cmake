@@ -153,6 +153,18 @@ if(SVML_FOUND)
         IMPORTED_LINK_INTERFACE_LANGUAGES "C"
         IMPORTED_LOCATION "${SVML_LIBRARY_INTLC}"
       )
+      if(NOT APPLE AND NOT SVML_LIBRARY_INTLC MATCHES ",")
+        # libsvml needs libintlc.so.5 but has no RUNPATH, and ld.so does not
+        # use an executable's RUNPATH for a library's own dependencies. The
+        # linker's --as-needed drops libintlc from any target that does not
+        # call it directly. With a static Scalars, that target is the
+        # consumer's executable, so libintlc.so.5 fails to load at startup.
+        # Force it into DT_NEEDED so it resolves through the linking target's
+        # RUNPATH. Keep it as one -Wl token so CMake cannot reorder or drop
+        # the push/pop-state bracket.
+        set_property(TARGET SVML::INTLC APPEND PROPERTY INTERFACE_LINK_LIBRARIES
+          "-Wl,--push-state,--no-as-needed,${SVML_LIBRARY_INTLC},--pop-state")
+      endif()
     endif()
   endif()
 endif()

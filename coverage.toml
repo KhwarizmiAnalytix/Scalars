@@ -13,4 +13,6 @@ patterns = ["*ThirdParty*", "*Testing*", "/usr/*"]
 llvm_ignore_regex = [".*Testing[/\\\\].*", ".*ThirdParty[/\\\\].*"]
 
 [coverage.gcc]
-lcov_ignore_errors = ["mismatch", "negative", "gcov", "unused"]
+# "inconsistent": GCC 13+ gives gtest's TEST() bodies two end lines, which
+# lcov 2.x rejects at capture time. Testing/ is excluded from the report.
+lcov_ignore_errors = ["mismatch", "negative", "gcov", "unused", "inconsistent"]

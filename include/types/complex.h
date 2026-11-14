@@ -357,8 +357,13 @@ template <typename T> struct alignas(sizeof(T) * 2) complex
             if (abs_c == U(0) && abs_d == U(0))
             {
                 /* divide by zeros should yield a complex inf or nan */
-                real_ = a / abs_c;
-                imag_ = b / abs_d;
+                // Divide by c*c + d*d, which is +0 for any signed zeros, not
+                // by abs_c/abs_d: MSVC 14.51 (VS 18) folds division_abs's
+                // `value == 0 ? 0 : value` to `value` in Release, keeping a
+                // -0 divisor and flipping the sign of the infinite quotient.
+                const auto zero = c * c + d * d;
+                real_           = a / zero;
+                imag_           = b / zero;
             }
             else
             {

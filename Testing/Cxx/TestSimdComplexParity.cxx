@@ -168,6 +168,27 @@ void expect_value(
     expect_component(actual.real(), expected.real(), check_zero_sign, scale);
     expect_component(actual.imag(), expected.imag(), check_zero_sign, scale);
 }
+// Reference square root that stays accurate for subnormal inputs. libc++
+// computes std::sqrt(z) as polar(sqrt(abs(z)), arg(z) / 2), and abs(z)
+// rounds to the subnormal grid first: |denorm_min * (1 - i)| becomes
+// denorm_min instead of sqrt(2) * denorm_min, a 2^(1/4) error in the result.
+// Scaling by an even power of two, 2^(2k), is exact here and divides out as
+// 2^k after the square root.
+template <class T> std::complex<T> reference_sqrt(scalars::complex<T> value)
+{
+    const std::complex<T> z(value.real(), value.imag());
+    if (!std::isfinite(z.real()) || !std::isfinite(z.imag()) ||
+        std::fabs(z.real()) >= std::numeric_limits<T>::min() ||
+        std::fabs(z.imag()) >= std::numeric_limits<T>::min() ||
+        (z.real() == T(0) && z.imag() == T(0)))
+    {
+        return std::sqrt(z);
+    }
+    constexpr int k = std::numeric_limits<T>::digits;
+    const auto    r =
+        std::sqrt(std::complex<T>(std::ldexp(z.real(), 2 * k), std::ldexp(z.imag(), 2 * k)));
+    return {std::ldexp(r.real(), -k), std::ldexp(r.imag(), -k)};
+}
 template <class T> void expect_bits(scalars::complex<T> actual, scalars::complex<T> expected)
 {
     using bits = typename simd<scalars::complex<T>>::int_t;
@@ -676,7 +697,7 @@ template <class T> void check_magnitude_and_edges()
             }
             else
             {
-                expect_value(value, std::sqrt(std::complex<T>(edge.real(), edge.imag())), true);
+                expect_value(value, reference_sqrt(edge), true);
             }
         }
         s::storeu(s::log(a), output.data());

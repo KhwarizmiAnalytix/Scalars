@@ -1057,7 +1057,7 @@ been compiled. Three defects turned up, besides confirming 7.6.
   older build from before this plan failed 2. An earlier workaround for
   Debug `pow`/`hypot` hid the same cause.
 - Fix: under Clang on Windows, declare each entry point `__vectorcall` with
-  an asm label giving its undecorated DLL symbol (`"__svml_logf8"`), and
+  an asm label giving its undecorated DLL symbol (`"\01__svml_logf8"`), and
   drop the default-convention prototypes there, which Clang would otherwise
   merge with the new declarations. The Debug `pow`/`hypot` fallback now
   applies to cl.exe only.
