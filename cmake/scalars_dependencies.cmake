@@ -85,14 +85,15 @@ function(scalars_setup_sleef)
     if(NOT TARGET sleef AND NOT TARGET Sleef::sleef)
         set(_sleef_src "${SCALARS_THIRD_PARTY_DIR}/sleef")
         if(NOT EXISTS "${_sleef_src}/CMakeLists.txt")
-            message(WARNING
-                "SCALARS_ENABLE_SLEEF=ON but ${_sleef_src} is missing (run "
-                "'git submodule update --init -- ThirdParty/sleef'). Disabling SLEEF."
+            message(WARNING "SCALARS_ENABLE_SLEEF=ON but ${_sleef_src} is missing (run "
+                            "'git submodule update --init -- ThirdParty/sleef'). Disabling SLEEF."
             )
-            set(SCALARS_ENABLE_SLEEF OFF
-                CACHE BOOL
-                "Enable SLEEF SIMD math library (SSE/AVX/AVX2/AVX512/NEON); mutually exclusive with SVML"
-                FORCE
+            set(SCALARS_ENABLE_SLEEF
+                OFF
+                CACHE
+                    BOOL
+                    "Enable SLEEF SIMD math library (SSE/AVX/AVX2/AVX512/NEON); mutually exclusive with SVML"
+                    FORCE
             )
             return()
         endif()
@@ -115,17 +116,29 @@ function(scalars_setup_sleef)
         set(SLEEF_BUILD_INLINE_HEADERS OFF CACHE BOOL "Disable SLEEF inline headers" FORCE)
         set(SLEEF_ENABLE_TESTER OFF CACHE BOOL "Disable SLEEF tester binaries" FORCE)
         set(SLEEF_ENABLE_TESTER4 OFF CACHE BOOL "Disable SLEEF tester4 binaries" FORCE)
-        # SLEEF 3.x gates OpenSSL behind SLEEF_DISABLE_SSL (the old SLEEF_ENABLE_SSL name no
-        # longer exists). Without this, a system OpenSSL makes src/common register
+        # The pinned SLEEF gates OpenSSL detection behind SLEEF_ENABLE_SSL (default ON).
+        # Without this, a system OpenSSL makes src/common register
         # test_psha/test_psha_capi in CTest even though SLEEF_BUILD_TESTS is OFF -- those
         # phantom third-party tests then fail as "Not Run" in Scalars' own ctest run.
-        set(SLEEF_DISABLE_SSL ON CACHE BOOL "Disable SLEEF SSL-backed tester checks" FORCE)
+        set(SLEEF_ENABLE_SSL OFF CACHE BOOL "Disable SLEEF SSL-backed tester checks" FORCE)
         set(SLEEF_SHOW_CONFIG OFF CACHE BOOL "Suppress SLEEF config output" FORCE)
         set(SLEEF_BUILD_SHARED_LIBS OFF CACHE BOOL "Build SLEEF as a static library" FORCE)
 
         scalars_add_dependency_subdirectory(
             "${_sleef_src}" "${SCALARS_BINARY_DIR}/ThirdParty/sleef_build" EXCLUDE_FROM_ALL
         )
+
+        # Static libsleef links TLFloat by the bare name "tlfloat" (its pure-C scalar
+        # variants include tlfloat.h), but SLEEF publishes the search path only through
+        # directory-scoped link_directories(). Consumers in other directories (libScalars,
+        # ScalarsCxxTests) then fail with "library 'tlfloat' not found". Forward SLEEF's
+        # link directories on the target so the path travels with it.
+        if(TARGET sleef)
+            get_directory_property(_sleef_link_dirs DIRECTORY "${_sleef_src}" LINK_DIRECTORIES)
+            foreach(_dir IN LISTS _sleef_link_dirs)
+                target_link_directories(sleef INTERFACE "$<BUILD_INTERFACE:${_dir}>")
+            endforeach()
+        endif()
     endif()
 
     if(TARGET sleef AND NOT TARGET Sleef::sleef)
@@ -139,7 +152,9 @@ function(scalars_setup_sleef)
         # Wrapped in $<BUILD_INTERFACE:...> because SLEEF's own CMakeLists.txt installs
         # and exports the "sleef" target; CMake rejects a raw build-tree absolute path in
         # an exported target's INTERFACE_INCLUDE_DIRECTORIES.
-        target_include_directories(sleef INTERFACE "$<BUILD_INTERFACE:${SCALARS_BINARY_DIR}/include>")
+        target_include_directories(
+            sleef INTERFACE "$<BUILD_INTERFACE:${SCALARS_BINARY_DIR}/include>"
+        )
         target_compile_definitions(sleef INTERFACE SLEEF_STATIC_LIBS)
     endif()
     if(NOT TARGET Sleef::sleef)

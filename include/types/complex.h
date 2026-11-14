@@ -413,9 +413,9 @@ template <typename T> struct alignas(sizeof(T) * 2) complex
     // consistent with NumPy behavior
     explicit SCALARS_HOST_DEVICE constexpr operator bool() const { return real() || imag(); }
 
-    SCALARS_HOST_DEVICE constexpr T real() const { return real_; }
+    SCALARS_HOST_DEVICE constexpr T    real() const { return real_; }
     SCALARS_HOST_DEVICE constexpr void real(T value) { real_ = value; }
-    SCALARS_HOST_DEVICE constexpr T imag() const { return imag_; }
+    SCALARS_HOST_DEVICE constexpr T    imag() const { return imag_; }
     SCALARS_HOST_DEVICE constexpr void imag(T value) { imag_ = value; }
 };
 

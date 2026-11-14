@@ -252,39 +252,39 @@ template <typename value_t> void test_pow(value_t tolerance)
 // std::hypot across every CPU backend.
 template <typename value_t> void test_hypot_special_values()
 {
-    using simd_t  = typename simd<value_t>::simd_t;
-    using limits  = std::numeric_limits<value_t>;
-    const value_t huge    = limits::max() / static_cast<value_t>(4);
-    const value_t tiny    = limits::denorm_min() * static_cast<value_t>(4);
-    const value_t inf     = limits::infinity();
-    const value_t nan     = limits::quiet_NaN();
-    const value_t one     = static_cast<value_t>(1);
-    const value_t zero    = static_cast<value_t>(0);
+    using simd_t       = typename simd<value_t>::simd_t;
+    using limits       = std::numeric_limits<value_t>;
+    const value_t huge = limits::max() / static_cast<value_t>(4);
+    const value_t tiny = limits::denorm_min() * static_cast<value_t>(4);
+    const value_t inf  = limits::infinity();
+    const value_t nan  = limits::quiet_NaN();
+    const value_t one  = static_cast<value_t>(1);
+    const value_t zero = static_cast<value_t>(0);
 
-    struct Case
+    struct hypot_case
     {
         value_t x;
         value_t y;
     };
-    const std::array<Case, 11> cases{Case{huge, huge},
-        Case{tiny, tiny * static_cast<value_t>(2)},
-        Case{zero, zero},
-        Case{-zero, -zero},
-        Case{inf, one},
-        Case{one, inf},
-        Case{inf, nan},
-        Case{nan, inf},
-        Case{nan, one},
-        Case{static_cast<value_t>(3), static_cast<value_t>(4)},
-        Case{-static_cast<value_t>(3), static_cast<value_t>(4)}};
+    const std::array<hypot_case, 11> cases{hypot_case{huge, huge},
+        hypot_case{tiny, tiny * static_cast<value_t>(2)},
+        hypot_case{zero, zero},
+        hypot_case{-zero, -zero},
+        hypot_case{inf, one},
+        hypot_case{one, inf},
+        hypot_case{inf, nan},
+        hypot_case{nan, inf},
+        hypot_case{nan, one},
+        hypot_case{static_cast<value_t>(3), static_cast<value_t>(4)},
+        hypot_case{-static_cast<value_t>(3), static_cast<value_t>(4)}};
 
     for (const auto& c : cases)
     {
         SCOPED_TRACE(::testing::Message() << "x=" << c.x << " y=" << c.y);
-        const simd_t                              a = simd<value_t>::set(c.x);
-        const simd_t                              b = simd<value_t>::set(c.y);
-        const simd_t                              r = simd<value_t>::hypot(a, b);
-        std::array<value_t, simd<value_t>::size>  out{};
+        const simd_t                             a = simd<value_t>::set(c.x);
+        const simd_t                             b = simd<value_t>::set(c.y);
+        const simd_t                             r = simd<value_t>::hypot(a, b);
+        std::array<value_t, simd<value_t>::size> out{};
         simd<value_t>::storeu(r, out.data());
         const value_t expected = std::hypot(c.x, c.y);
 

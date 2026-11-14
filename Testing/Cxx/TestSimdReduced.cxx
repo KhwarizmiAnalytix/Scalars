@@ -1,3 +1,5 @@
+// SIMD tests: float/double horizontal reductions (accumulate, hmin, hmax) and
+// reduced-precision (half, bfloat16) packets.
 #include "backend/simd.h"
 #include "math/normal_cdf.h"
 
@@ -6,6 +8,7 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
+#include <cstddef>
 #include <cstdint>
 #include <limits>
 #include <random>
@@ -18,6 +21,118 @@ using scalars::simd;
 
 namespace
 {
+inline constexpr int kRandomTrials = 256;
+
+// Arithmetic type used to generate inputs and compute references: the value
+// type itself for float/double, and float for half/bfloat16 (whose SIMD
+// reductions widen to float).
+template <typename value_t>
+using reference_t = std::conditional_t<std::is_floating_point_v<value_t>, value_t, float>;
+
+template <typename value_t, std::size_t N>
+void fill_uniform(
+    std::array<value_t, N>& xs, std::mt19937& gen, reference_t<value_t> lo, reference_t<value_t> hi)
+{
+    std::uniform_real_distribution<reference_t<value_t>> dist(lo, hi);
+    for (auto& x : xs)
+    {
+        x = static_cast<value_t>(dist(gen));
+    }
+}
+
+template <typename value_t> void test_accumulate(reference_t<value_t> tolerance)
+{
+    using real_t            = reference_t<value_t>;
+    constexpr std::size_t n = simd<value_t>::size;
+    using simd_t            = typename simd<value_t>::simd_t;
+
+    std::array<value_t, n> xs{};
+    // NOLINTNEXTLINE(bugprone-random-generator-seed): fixed seed for reproducibility
+    std::mt19937 gen(5489u);
+    real_t const scaled_tol = tolerance * static_cast<real_t>(std::max<std::size_t>(4, n));
+
+    for (int trial = 0; trial < kRandomTrials; ++trial)
+    {
+        fill_uniform(xs, gen, static_cast<real_t>(-6), static_cast<real_t>(6));
+        simd_t     a   = simd<value_t>::loadu(xs.data());
+        auto const e   = static_cast<real_t>(simd<value_t>::accumulate(a));
+        real_t     sum = 0;
+        for (std::size_t i = 0; i < n; ++i)
+        {
+            sum += static_cast<real_t>(xs[i]);
+        }
+        EXPECT_LE(std::fabs(e - sum), scaled_tol);
+    }
+}
+
+template <typename value_t> void test_hmin(reference_t<value_t> tolerance)
+{
+    using real_t            = reference_t<value_t>;
+    constexpr std::size_t n = simd<value_t>::size;
+    using simd_t            = typename simd<value_t>::simd_t;
+
+    std::array<value_t, n> xs{};
+    // NOLINTNEXTLINE(bugprone-random-generator-seed): fixed seed for reproducibility
+    std::mt19937 gen(5489u);
+
+    for (int trial = 0; trial < kRandomTrials; ++trial)
+    {
+        fill_uniform(xs, gen, static_cast<real_t>(-40), static_cast<real_t>(40));
+        simd_t     a   = simd<value_t>::loadu(xs.data());
+        auto const e   = static_cast<real_t>(simd<value_t>::hmin(a));
+        real_t     ref = static_cast<real_t>(xs[0]);
+        for (std::size_t i = 1; i < n; ++i)
+        {
+            ref = std::min(ref, static_cast<real_t>(xs[i]));
+        }
+        EXPECT_LE(std::fabs(e - ref), tolerance);
+    }
+}
+
+template <typename value_t> void test_hmax(reference_t<value_t> tolerance)
+{
+    using real_t            = reference_t<value_t>;
+    constexpr std::size_t n = simd<value_t>::size;
+    using simd_t            = typename simd<value_t>::simd_t;
+
+    std::array<value_t, n> xs{};
+    // NOLINTNEXTLINE(bugprone-random-generator-seed): fixed seed for reproducibility
+    std::mt19937 gen(5489u);
+
+    for (int trial = 0; trial < kRandomTrials; ++trial)
+    {
+        fill_uniform(xs, gen, static_cast<real_t>(-40), static_cast<real_t>(40));
+        simd_t     a   = simd<value_t>::loadu(xs.data());
+        auto const e   = static_cast<real_t>(simd<value_t>::hmax(a));
+        real_t     ref = static_cast<real_t>(xs[0]);
+        for (std::size_t i = 1; i < n; ++i)
+        {
+            ref = std::max(ref, static_cast<real_t>(xs[i]));
+        }
+        EXPECT_LE(std::fabs(e - ref), tolerance);
+    }
+}
+
+template <typename value_t> void test_all_simd_horizontal(reference_t<value_t> tolerance)
+{
+    SCOPED_TRACE(::testing::internal::GetTypeName<value_t>());
+    test_accumulate<value_t>(tolerance);
+    test_hmax<value_t>(tolerance);
+    test_hmin<value_t>(tolerance);
+}
+
+TEST(Simd, Horizontal)
+{
+    constexpr float  kSimdTolF = 0.0007f;
+    constexpr double kSimdTolD = 5.e-12;
+    test_all_simd_horizontal<float>(kSimdTolF);
+    test_all_simd_horizontal<double>(kSimdTolD);
+    // half/bfloat16 inputs are exact in float and hmin/hmax return a lane, so
+    // only accumulate (float summation order) uses the tolerance.
+    test_all_simd_horizontal<scalars::half>(kSimdTolF);
+    test_all_simd_horizontal<scalars::bfloat16>(kSimdTolF);
+}
+
 template <class T> class simd_reduced : public ::testing::Test
 {
 };
