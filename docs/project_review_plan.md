@@ -814,7 +814,7 @@ matching Phase 1 fix above, just never checked off here.
       `TestComplex.cxx` (1.4).
 - [x] Annex G special values for the scalar complex math functions. Covered
       by `TestComplexMath.cxx` (1.5, 1.6).
-- [x] `hypot` range across all CPU backends. Covered by `TestSimdF2.cxx`
+- [x] `hypot` range across all CPU backends. Covered by `TestSimdReal.cxx`
       (1.7).
 - [x] `normalcdf` tails and the `inv_normalcdf` domain. Covered by
       `TestNormalCdf.cxx` (1.8, 1.9).
@@ -825,8 +825,8 @@ matching Phase 1 fix above, just never checked off here.
       ~1e-16 component next to one near 1) but no longer lets small results
       pass with an absolute error of 64 eps. A normwise bound still cannot
       see 4.1, because `Im(log z) = arg z` dominates the scale there, so
-      `SimdComplexParity.LogRealPartRelativeAccuracyNearUnitCircle` checks
-      `Re(log z)` componentwise (16 eps relative) for `|z| = 1 ± 2^-k`
+      `simd_complex_native.LogRealPartNearUnitCircle` checks
+      `Re(log z)` componentwise (relative to itself) for `|z| = 1 ± 2^-k`
       against a cancellation-free reference. It fails on both the original
       formula (696 lanes) and the first 4.1 fix (628 lanes); see 8.4. A
       purely componentwise relative bound was tried first and reverted: it
@@ -971,10 +971,10 @@ build, clang-tidy, and any x86, CUDA, HIP, or SVML build.
 - Fix: `set_mask(int_t)` became `set_mask(I)` constrained to integral,
   non-`bool` `I`, in both complex packet templates. It is an exact match for
   every integer type, and `set_mask(true)` still picks the `bool` overload.
-- Test: `SimdComplexParity.MasksAndSelection` stores
+- Test: `simd_complex_native.MasksAndSelection` stores
   `set_mask(1)`, `set_mask(0)`, `set_mask(int64_t(7))`, `set_mask(0u)`;
-  `SimdComplexParity.ReducedSetMaskAcceptsIntegerLiterals` covers the
-  `complex<half>`/`complex<bfloat16>` packets through `if_else`.
+  `simd_complex.SetMaskAndSelect` covers every complex packet, including
+  `complex<half>`/`complex<bfloat16>`, through `if_else`.
 
 ### 7.9 `log_fast` computes two transcendentals per packet -- Fixed
 
@@ -1073,8 +1073,8 @@ been compiled. Three defects turned up, besides confirming 7.6.
   `P + p` with Fast2Sum, and subtract 1 from that sum, which is exact by
   Sterbenz's lemma because it is close to `|z|^2`. Two extra `fma` per lane
   in the band; without hardware `fma` the error terms are 0.
-- Test: `SimdComplexParity.LogRealPartRelativeAccuracyNearUnitCircle` (see
-  6.2); runs when SVML, MKL, SLEEF, or Accelerate enables `log_fast`.
+- Test: `simd_complex_native.LogRealPartNearUnitCircle` (see 6.2); runs
+  when SVML, MKL, SLEEF, or Accelerate enables `log_fast`.
 
 ### 8.5 Verification
 

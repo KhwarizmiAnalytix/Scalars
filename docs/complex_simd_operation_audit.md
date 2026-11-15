@@ -62,12 +62,15 @@ shuffles can cancel. Add/subtract preserve split registers for composed kernels,
 and division repairs only exceptional lanes. Arithmetic, FMA, and bounded division also use native vectors (see
 [`complex_simd_performance.md`](complex_simd_performance.md)).
 
-`Testing/Cxx/TestSimdComplexParity.cxx` now checks the applicable API and
-return types with C++20 `requires` expressions, and verifies masks,
-selection, packing, indexed memory, transpose, half-width helpers, math,
-signed zeros, special values, square-root range boundaries, and widened
-accumulation. The focused complex suites run on NEON and on SSE2,
-AVX without AVX2/FMA, and AVX2/FMA under Rosetta. AVX-512 executables and
+`Testing/Cxx/TestSimdComplex.cxx` now checks the applicable API and
+return types with C++20 `requires` expressions, holds every one-, two-, and
+three-argument math function of the `complex<float>`, `complex<double>`,
+`complex<half>`, and `complex<bfloat16>` packets to a measured per-type ULP
+budget against a wider reference, and verifies masks, selection, packing,
+indexed memory, transpose, half-width helpers, signed zeros, special values,
+square-root range boundaries, and widened accumulation. The focused complex
+suites run on NEON and on SSE2, AVX without AVX2/FMA, and AVX2/FMA under
+Rosetta. AVX-512 executables and
 fixed-width SVE objects compile; those targets have not run on matching
 hardware. See the performance document for fresh measurements.
 

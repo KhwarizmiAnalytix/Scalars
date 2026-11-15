@@ -1,5 +1,6 @@
 // SIMD utility tests: fma, if_else, prefetch/copy/broadcast/set, ptranspose,
-// half-width fma/add/gather, predux_downto4, full-width gather/scatter, masks.
+// half-width fma/add/gather, predux_downto4, full-width gather/scatter, masks,
+// and the ploadquad/ptranspose<4> layouts used for matrix packing.
 #include "backend/simd.h"
 
 #if SCALARS_VECTORIZED
@@ -555,12 +556,68 @@ template <> struct simd_tolerance<double>
     static constexpr double tolerance = 5.e-12;
 };
 
+template <class T> void check_matrix_packing()
+{
+    using s            = simd<T>;
+    constexpr int    W = s::size;
+    std::array<T, W> output;
+    if constexpr (requires(const T* p) { s::ploadquad(p); })
+    {
+        // PRETORIAN's four-wide float load duplicates pairs; wider loads
+        // repeat each input four times. AVX-512 float has no ploadquad.
+        constexpr int repeats = std::is_same_v<T, float> && W == 4 ? 2 : 4;
+        std::array<T, (W + repeats - 1) / repeats> scalars;
+        for (int i = 0; i < static_cast<int>(scalars.size()); ++i)
+        {
+            scalars[i] = T(i + 1);
+        }
+        s::storeu(s::ploadquad(scalars.data()), output.data());
+        for (int i = 0; i < W; ++i)
+        {
+            EXPECT_EQ(output[i], scalars[i / repeats]);
+        }
+    }
+    if constexpr (W >= 4)
+    {
+        typename s::simd_t rows[4];
+        for (int r = 0; r < 4; ++r)
+        {
+            for (int c = 0; c < W; ++c)
+            {
+                output[c] = T(100 * r + c);
+            }
+            rows[r] = s::loadu(output.data());
+        }
+        s::template ptranspose<4>(rows);
+        // PRETORIAN transposes the complete 4 x W rectangle and repacks
+        // its contiguous output into four registers, ready for RHS packing.
+        std::array<T, 4 * static_cast<std::size_t>(W)> packed;
+        for (int r = 0; r < 4; ++r)
+        {
+            s::storeu(rows[r], packed.data() + r * W);
+        }
+        for (int k = 0; k < W; ++k)
+        {
+            for (int c = 0; c < 4; ++c)
+            {
+                EXPECT_EQ(packed[4 * k + c], T(100 * c + k));
+            }
+        }
+    }
+}
+
 }  // namespace
 
 TEST(Simd, Utility)
 {
     test_simd_misc_all<float>(simd_tolerance<float>::tolerance);
     test_simd_misc_all<double>(simd_tolerance<double>::tolerance);
+}
+
+TEST(Simd, MatrixPacking)
+{
+    check_matrix_packing<float>();
+    check_matrix_packing<double>();
 }
 
 #endif  // SCALARS_VECTORIZED
