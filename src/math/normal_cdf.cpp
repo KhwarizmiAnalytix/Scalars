@@ -10,7 +10,6 @@ namespace
 {
 // 1 / sqrt(2 * pi).
 inline constexpr double k_inverse_sqrt_2pi = 0.3989422804014326779399460599343818684758576;
-}  // namespace
 
 //-----------------------------------------------------------------------------
 template <typename T1, typename T2>
@@ -41,6 +40,7 @@ constexpr auto POLYNOM_7(T1 coefficients, T2 X)
              X) *
             X);
 }
+}  // namespace
 
 //-----------------------------------------------------------------------------
 // Based upon
