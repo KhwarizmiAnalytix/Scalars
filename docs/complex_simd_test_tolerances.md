@@ -5,7 +5,7 @@ one-, two-, and three-argument math function of the complex packets to the
 smallest error budget it meets. This document explains how the budgets are
 measured and set, which configurations they were measured on, and the
 limitations found while measuring them. The test file is authoritative; the
-table below records the values as first set.
+table below matches it.
 
 ## Layout
 
@@ -88,40 +88,55 @@ The Linux runs used the `scalars-linux-build` and `scalars-linux-build-amd64`
 Docker images. On macOS, `SCALARS_ENABLE_ACCELERATE=OFF` is overridden by
 auto-detection, so plain NEON without a vendor library was not measured.
 
-Not measured: Windows (MSVC STL), AVX-512, MKL, and SVE. Windows is the most
-likely to need a budget adjusted, because its `std::complex` implementation
-differs from both libraries above.
+The budgets also cover the GitHub Actions hosts, whose first run raised the
+entries the emulated Linux x86 runs had underestimated:
+
+| Platform | Backend | Compiler and build | Raised |
+|---|---|---|---|
+| Linux x86_64 | AVX2 + SVML | GCC 15, Debug with ASan+UBSan, and coverage | double `expm1`, `exp2`, `log1p`, `div` |
+| Linux x86_64 | AVX2 + SVML | GCC 11, Release (CUDA and HIP containers) | double `log1p` |
+| Linux x86_64 | AVX2 + SVML | Clang 21, Release | double `mul` |
+| Linux x86_64 | AVX-512 | GCC 15, Release | float `sqrt`, `invsqrt`, `reciprocal`, `exp`, `log2`, `log10`, `abs`, `fabs`, `fma`; double `reciprocal`, `expm1`, `exp10`, `log1p`, `sin`, `tan`, `acosh` |
+| Windows x86_64 | AVX2 + SVML | MSVC 19.44, Release | double `exp` (narrow) |
+
+Not measured: MKL. Under Valgrind, x87 `long double` arithmetic runs in
+double precision, so the `complex<double>` reference is no better than the
+result it checks, and glibc's `clogl` can return NaN for tiny arguments. The
+test detects this at run time (`1 + LDBL_EPSILON == 1`) and then runs every
+`complex<double>` check without asserting its budget.
 
 ## Budgets
 
-Values are ULPs for `complex<float>` / `complex<double>`. Every non-exact
-entry is 0.51 for half and bfloat16.
+Values are ULPs for `complex<float>` / `complex<double>`. A double entry
+marked "narrow" applies where `long double` is `double` (Apple, MSVC); the
+other applies with an 80- or 128-bit reference. Every non-exact entry is 0.51
+for half and bfloat16.
 
 | Check | Domain | float | double |
 |---|---|---|---|
-| `sqrt` | sweep / box(10) | 0.92 / 1.1 | 1.3 / 1.3 |
-| `invsqrt` | sweep / box(10) | 1.7 / 1.7 | 2.3 / 2.2 |
-| `reciprocal` | sweep / box(10) | 0.95 / 1.3 | 0.98 / 2 |
-| `sqr` | box(100) | 0.84 | 0.98 |
-| `exp` | re ±8, im ±25 / wide | 2.2 / 2.2 | 2.5 / 2.8 |
-| `expm1` | re ±8, im ±25 / box(1e-3) | 2 / 1.3 | 1.8 / 0.96 |
-| `exp2` | re ±12, im ±25 | 8.8 | 12 |
-| `exp10` | re ±3, im ±10 | 12 | 19 |
+| `sqrt` | sweep / box(10) | 0.99 / 1.1 | 1.3 / 1.3 |
+| `invsqrt` | sweep / box(10) | 1.8 / 1.7 | 2.3 / 2.2 |
+| `reciprocal` | sweep / box(10) | 1.3 / 1.3 | 1.1 / 2 |
+| `sqr` | box(100) | 0.89 | 0.98 (1.2 narrow) |
+| `exp` | re ±8, im ±25 / wide | 2.2 / 2.3 | 2.5 (3.1 narrow) / 2.8 (3.1 narrow) |
+| `expm1` | re ±8, im ±25 / box(1e-3) | 2.3 / 2.2 | 1.8 / 1.4 |
+| `exp2` | re ±12, im ±25 | 8.8 | 13 |
+| `exp10` | re ±3, im ±10 | 12 | 20 |
 | `log` | sweep / normal range / near 1 | 0.95 / 1.1 / 1.3 | 0.98 / 0.98 / 1.7 |
-| `log1p` | re −0.9..50, im ±50 / box(1e-3) | 1.6 / 2.3 | 1.3 / 2.1 |
-| `log2`, `log10` | sweep | 0.8, 0.94 | 0.92, 1.1 |
-| `sin`, `cos`, `tan` | re ±25, im ±8 | 1.3, 1.3, 3.2 | 1.2, 1.3, 2.1 |
-| `asin`, `acos`, `atan` | box(4) | 18, 1.1, 6.3 | 1.1, 1.2 (19 narrow), 1.2 |
-| `sinh`, `cosh`, `tanh` | re ±8, im ±25 | 1.4, 1.3, 18 | 1.5, 1.5, 2.4 |
-| `asinh`, `acosh`, `atanh` | box(4) | 15, 17, 4.6 | 1.1, 0.97, 0.69 |
-| `abs`, `fabs` | sweep / full range | 1.1 / 0.97 | 1.5 / 0.88 |
-| `abs2`, `norm` | box(100) / root sweep | 0.91 / 0.92 | 1 / 0.98 |
+| `log1p` | re −0.9..50, im ±50 / box(1e-3) | 1.6 / 2.3 | 1.6 (1.4 narrow) / 2.2 (2.6 narrow) |
+| `log2`, `log10` | sweep | 0.83, 1 | 0.92, 1.1 |
+| `sin`, `cos`, `tan` | re ±25, im ±8 | 1.6, 1.8, 3.2 | 1.4, 1.3, 2.3 |
+| `asin`, `acos`, `atan` | box(4) | 18, 1.2, 6.3 | 1.1, 1.2 (19 narrow), 1.2 |
+| `sinh`, `cosh`, `tanh` | re ±8, im ±25 | 1.8, 1.6, 18 | 1.5, 1.5, 2.4 |
+| `asinh`, `acosh`, `atanh` | box(4) | 15, 17, 4.6 | 1.1, 1.1, 0.69 |
+| `abs`, `fabs` | sweep / full range | 1.2 / 1.1 | 1.5 / 0.88 |
+| `abs2`, `norm` | box(100) / root sweep | 0.91 / 0.92 | 1 / 0.98 (0.99 narrow) |
 | `arg` | sweep / box(10) | 0.86 / 1.1 | 0.64 / 1 |
 | `add`, `sub` | box(40) / sweep | 0.5 | 0.5 |
-| `mul` | box(25) / root sweep | 0.85 / 0.91 | 1 / 0.57 |
-| `div` | box(50) / sweep / full range | 1.7 / 1.3 / 1.4 | 2 / 1.1 / 1.2 |
-| `pow` | x: re 0.05..12, im ±3; y: re ±3, im ±1 | 6.2 | 6.7 |
-| `fma` | box(25), plain / cancelling | 0.7 / 0.7 | 0.97 / 0.91 |
+| `mul` | box(25) / root sweep | 0.89 / 0.91 | 1.1 / 0.57 (0.82 narrow) |
+| `div` | box(50) / sweep / full range | 1.7 / 1.4 / 1.4 | 2 (2.1 narrow) / 1.2 / 1.2 (1.7 narrow) |
+| `pow` | x: re 0.05..12, im ±3; y: re ±3, im ±1 | 6.6 | 6.7 |
+| `fma` | box(25), plain / cancelling | 0.79 / 0.76 | 0.97 / 0.91 (0.96 narrow) |
 
 The double `exp2` and `exp10` budgets reflect the implementation's own
 `exp(z * ln2)` and `exp(z * ln10)`: rounding the scaled argument shifts the

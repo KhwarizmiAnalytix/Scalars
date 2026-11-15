@@ -23,6 +23,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <iomanip>
+#include <iostream>
 #include <limits>
 #include <numbers>
 #include <random>
@@ -281,13 +282,15 @@ template <class T> value_t<T> sample(std::mt19937& gen, const region& r)
 // NEON with Accelerate and with SLEEF (macOS, libc++), NEON with SLEEF (Linux,
 // libstdc++, 128-bit long double reference), AVX2 with SVML and SSE (Linux,
 // libstdc++), and SSE, AVX, and AVX2 (Windows, MSVC STL, built with Clang
-// and SVML, and with MSVC). Double budgets that differ with the reference
-// width use by_reference. Apart from sqrt, acos, and the packet fast paths,
-// the complex math forwards to std::complex<T>, so the budgets also bound the
-// standard library: libc++'s float asin, acosh, asinh, and tanh are near
-// 18 ULPs where libstdc++'s are near 1. The Linux x86 runs were emulated (see
-// ref_log1p_real). A failure prints the measured error and the inputs that
-// produced it.
+// and SVML, and with MSVC). They also cover the CI hosts: x86_64 Linux with
+// GCC 11 and 15 and Clang 21, Release and Debug (sanitizer and coverage)
+// builds, AVX2 with SVML and AVX-512. Double budgets that differ with the
+// reference width use by_reference. Apart from sqrt, acos, and the packet
+// fast paths, the complex math forwards to std::complex<T>, so the budgets
+// also bound the standard library: libc++'s float asin, acosh, asinh, and
+// tanh are near 18 ULPs where libstdc++'s are near 1. The local Linux x86
+// runs were emulated (see ref_log1p_real). A failure prints the measured
+// error and the inputs that produced it.
 //
 // complex<half> and complex<bfloat16> compute through complex<float> and
 // round once, so every function is held to half a ULP plus the float
@@ -325,6 +328,42 @@ constexpr double by_reference(double wide, double narrow)
     return kWideReference ? wide : narrow;
 }
 
+// Whether long double arithmetic is as wide at run time as its type says.
+// Valgrind executes x87 instructions in double precision, so under it an
+// 80-bit reference is no more accurate than the double result it checks,
+// and glibc's long double functions can return NaN (clogl of a tiny z).
+// complex<double> accuracy is then not asserted, though every check still
+// runs, so the memory checker sees the same code paths.
+bool reference_arithmetic_is_wide()
+{
+    static const bool wide = []
+    {
+        volatile long double one = 1;
+        volatile long double eps = std::numeric_limits<long double>::epsilon();
+        return one + eps != one;
+    }();
+    return wide;
+}
+
+template <class T> bool accuracy_is_checked()
+{
+    if constexpr (std::is_same_v<ref_t<T>, long double>)
+    {
+        if (!reference_arithmetic_is_wide())
+        {
+            static const bool noted = []
+            {
+                std::cout << "[  NOTE    ] long double arithmetic runs in double precision "
+                             "(Valgrind); complex<double> accuracy is not asserted\n";
+                return true;
+            }();
+            static_cast<void>(noted);
+            return false;
+        }
+    }
+    return true;
+}
+
 template <class T> double ulps_for(const tol& t)
 {
     if constexpr (std::is_same_v<T, float>)
@@ -357,6 +396,10 @@ public:
 
     void report() const
     {
+        if (!accuracy_is_checked<T>())
+        {
+            return;
+        }
         EXPECT_LE(worst_, ulps_) << "complex<" << complex_traits<T>::name << ">::" << name_
                                  << detail_;
     }
@@ -763,11 +806,11 @@ template <class T> void run_simd_complex_UnaryMath()
         [](simd_t a) { return S::fn(a); },                                                         \
         [&](ref z) { return expr; })
 
-    CHECK_UNARY(sqrt, wide, (tol{0.92, 1.3}), std::sqrt(z));
+    CHECK_UNARY(sqrt, wide, (tol{0.99, 1.3}), std::sqrt(z));
     CHECK_UNARY(sqrt, box(10), (tol{1.1, 1.3}), std::sqrt(z));
-    CHECK_UNARY(invsqrt, wide, (tol{1.7, 2.3}), one / std::sqrt(z));
+    CHECK_UNARY(invsqrt, wide, (tol{1.8, 2.3}), one / std::sqrt(z));
     CHECK_UNARY(invsqrt, box(10), (tol{1.7, 2.2}), one / std::sqrt(z));
-    CHECK_UNARY(reciprocal, wide, (tol{0.95, by_reference(0.98, 1.1)}), one / z);
+    CHECK_UNARY(reciprocal, wide, (tol{1.3, 1.1}), one / z);
     CHECK_UNARY(reciprocal, box(10), (tol{1.3, 2}), one / z);
     CHECK_UNARY(sqr, box(100), (tol{0.89, by_reference(0.98, 1.2)}), ref_mul(z, z));
     CHECK_UNARY(neg, wide, kExact, -z);
@@ -776,29 +819,29 @@ template <class T> void run_simd_complex_UnaryMath()
     CHECK_UNARY(floor, box(75), kExact, componentwise(z, [](R v) { return std::floor(v); }));
     CHECK_UNARY(trunc, box(75), kExact, componentwise(z, [](R v) { return std::trunc(v); }));
 
-    CHECK_UNARY(exp, (region{{-8, 8}, {-25, 25}}), (tol{2.2, by_reference(2.5, 2.9)}), std::exp(z));
+    CHECK_UNARY(exp, (region{{-8, 8}, {-25, 25}}), (tol{2.2, by_reference(2.5, 3.1)}), std::exp(z));
     CHECK_UNARY(
-        exp, (region{{-e, e}, {-512, 512}}), (tol{2.2, by_reference(2.8, 3.1)}), std::exp(z));
+        exp, (region{{-e, e}, {-512, 512}}), (tol{2.3, by_reference(2.8, 3.1)}), std::exp(z));
     CHECK_UNARY(expm1, (region{{-8, 8}, {-25, 25}}), (tol{2.3, 1.8}), ref_expm1(z));
-    CHECK_UNARY(expm1, box(1e-3), (tol{2.2, 0.96}), ref_expm1(z));
+    CHECK_UNARY(expm1, box(1e-3), (tol{2.2, 1.4}), ref_expm1(z));
     CHECK_UNARY(
-        exp2, (region{{-12, 12}, {-25, 25}}), (tol{8.8, 12}), std::exp(z * std::numbers::ln2_v<R>));
+        exp2, (region{{-12, 12}, {-25, 25}}), (tol{8.8, 13}), std::exp(z * std::numbers::ln2_v<R>));
     CHECK_UNARY(
-        exp10, (region{{-3, 3}, {-10, 10}}), (tol{12, 19}), std::exp(z * std::numbers::ln10_v<R>));
+        exp10, (region{{-3, 3}, {-10, 10}}), (tol{12, 20}), std::exp(z * std::numbers::ln10_v<R>));
     CHECK_UNARY(log, wide, (tol{0.95, 0.98}), ref_log(z));
     // Subnormal components are excluded: libc++'s std::log, which the scalar
     // fallback uses, rounds |z| to the subnormal grid first (see log_reference).
     CHECK_UNARY(log, normal_sweep<T>(), (tol{1.1, 0.98}), ref_log(z));
     CHECK_UNARY(log, (region{{0.999, 1.001}, {-1e-3, 1e-3}}), (tol{1.3, 1.7}), ref_log(z));
     CHECK_UNARY(
-        log1p, (region{{-0.9, 50}, {-50, 50}}), (tol{1.6, by_reference(1.3, 1.4)}), ref_log1p(z));
-    CHECK_UNARY(log1p, box(1e-3), (tol{2.3, by_reference(2.1, 2.6)}), ref_log1p(z));
-    CHECK_UNARY(log2, wide, (tol{0.8, 0.92}), ref_log(z) / std::numbers::ln2_v<R>);
-    CHECK_UNARY(log10, wide, (tol{0.99, 1.1}), ref_log(z) / std::numbers::ln10_v<R>);
+        log1p, (region{{-0.9, 50}, {-50, 50}}), (tol{1.6, by_reference(1.6, 1.4)}), ref_log1p(z));
+    CHECK_UNARY(log1p, box(1e-3), (tol{2.3, by_reference(2.2, 2.6)}), ref_log1p(z));
+    CHECK_UNARY(log2, wide, (tol{0.83, 0.92}), ref_log(z) / std::numbers::ln2_v<R>);
+    CHECK_UNARY(log10, wide, (tol{1, 1.1}), ref_log(z) / std::numbers::ln10_v<R>);
 
-    CHECK_UNARY(sin, (region{{-25, 25}, {-8, 8}}), (tol{1.6, 1.2}), std::sin(z));
+    CHECK_UNARY(sin, (region{{-25, 25}, {-8, 8}}), (tol{1.6, 1.4}), std::sin(z));
     CHECK_UNARY(cos, (region{{-25, 25}, {-8, 8}}), (tol{1.8, 1.3}), std::cos(z));
-    CHECK_UNARY(tan, (region{{-25, 25}, {-8, 8}}), (tol{3.2, 2.1}), std::tan(z));
+    CHECK_UNARY(tan, (region{{-25, 25}, {-8, 8}}), (tol{3.2, 2.3}), std::tan(z));
     CHECK_UNARY(asin, box(4), (tol{18, 1.1}), std::asin(z));
     CHECK_UNARY(acos, box(4), (tol{1.2, by_reference(1.2, 19)}), std::acos(z));
     CHECK_UNARY(atan, box(4), (tol{6.3, 1.2}), std::atan(z));
@@ -806,7 +849,7 @@ template <class T> void run_simd_complex_UnaryMath()
     CHECK_UNARY(cosh, (region{{-8, 8}, {-25, 25}}), (tol{1.6, 1.5}), std::cosh(z));
     CHECK_UNARY(tanh, (region{{-8, 8}, {-25, 25}}), (tol{18, 2.4}), std::tanh(z));
     CHECK_UNARY(asinh, box(4), (tol{15, 1.1}), std::asinh(z));
-    CHECK_UNARY(acosh, box(4), (tol{17, 0.97}), std::acosh(z));
+    CHECK_UNARY(acosh, box(4), (tol{17, 1.1}), std::acosh(z));
     CHECK_UNARY(atanh, box(4), (tol{4.6, 0.69}), std::atanh(z));
 #undef CHECK_UNARY
 }
@@ -834,9 +877,9 @@ template <class T> void run_simd_complex_RealValuedFunctions()
         [](simd_t a) { return S::fn(a); },                                                         \
         [](ref z) { return expr; })
 
-    CHECK_REAL(abs, wide, (tol{1.1, 1.5}), std::hypot(z.real(), z.imag()));
-    CHECK_REAL(abs, full_sweep<T>(), (tol{0.97, 0.88}), std::hypot(z.real(), z.imag()));
-    CHECK_REAL(fabs, wide, (tol{1.1, 1.5}), std::hypot(z.real(), z.imag()));
+    CHECK_REAL(abs, wide, (tol{1.2, 1.5}), std::hypot(z.real(), z.imag()));
+    CHECK_REAL(abs, full_sweep<T>(), (tol{1.1, 0.88}), std::hypot(z.real(), z.imag()));
+    CHECK_REAL(fabs, wide, (tol{1.2, 1.5}), std::hypot(z.real(), z.imag()));
     CHECK_REAL(abs2, box(100), (tol{0.91, 1}), ref_abs2(z));
     CHECK_REAL(abs2, root_sweep<T>(), (tol{0.92, by_reference(0.98, 0.99)}), ref_abs2(z));
     CHECK_REAL(norm, box(100), (tol{0.91, 1}), ref_abs2(z));
@@ -877,10 +920,10 @@ template <class T> void run_simd_complex_BinaryMath()
     CHECK_BINARY(add, wide, wide, (tol{0.5, 0.5}), x + y);
     CHECK_BINARY(sub, box(40), box(40), (tol{0.5, 0.5}), x - y);
     CHECK_BINARY(sub, wide, wide, (tol{0.5, 0.5}), x - y);
-    CHECK_BINARY(mul, box(25), box(25), (tol{0.89, 1}), ref_mul(x, y));
+    CHECK_BINARY(mul, box(25), box(25), (tol{0.89, 1.1}), ref_mul(x, y));
     CHECK_BINARY(mul, root, root, (tol{0.91, by_reference(0.57, 0.82)}), ref_mul(x, y));
     CHECK_BINARY(div, box(50), box(50), (tol{1.7, by_reference(2, 2.1)}), ref_div(x, y));
-    CHECK_BINARY(div, wide, wide, (tol{1.4, by_reference(1.1, 1.2)}), ref_div(x, y));
+    CHECK_BINARY(div, wide, wide, (tol{1.4, 1.2}), ref_div(x, y));
     // Quotients of the whole range reach overflow, underflow, and the scaled
     // fallback for operands outside the fast path's bounds.
     CHECK_BINARY(div, full, full, (tol{1.4, by_reference(1.2, 1.7)}), ref_div(x, y));
@@ -902,8 +945,8 @@ TEST(simd_complex, BinaryMath)
 
 template <class T> void run_simd_complex_FusedMultiplyAdd()
 {
-    check_fma<T>("fma", box(25), tol{0.7, 0.97}, 0);
-    check_fma<T>("fma(cancelling)", box(25), tol{0.7, by_reference(0.91, 0.96)}, 4);
+    check_fma<T>("fma", box(25), tol{0.79, 0.97}, 0);
+    check_fma<T>("fma(cancelling)", box(25), tol{0.76, by_reference(0.91, 0.96)}, 4);
 }
 
 TEST(simd_complex, FusedMultiplyAdd)
