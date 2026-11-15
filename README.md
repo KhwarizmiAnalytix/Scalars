@@ -33,6 +33,11 @@ benchmark methodology and measured results.
 ## Quick start
 
 Requires **CMake 3.24+** and a **C++20 compiler**; C++23 is also supported.
+Native standalone macOS builds default the deployment target to the running OS
+release, so a newer Xcode SDK can still build runnable local tests. Override it
+with `-DCMAKE_OSX_DEPLOYMENT_TARGET=<version>` or `MACOSX_DEPLOYMENT_TARGET`;
+toolchain and parent-project settings remain in control.
+
 Run these commands from the repository root:
 
 ```sh

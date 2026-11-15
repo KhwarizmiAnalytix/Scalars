@@ -2,6 +2,36 @@ cmake_minimum_required(VERSION 3.24)
 
 # Standalone package and add_subdirectory() dependency, following LinearAlgebra.
 if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
+    # A newer Xcode SDK can otherwise become the deployment minimum, preventing
+    # locally built tests from launching. Set the native default before project()
+    # so compiler probes and dependencies inherit it; keep toolchains in control.
+    if(CMAKE_HOST_APPLE AND NOT CMAKE_TOOLCHAIN_FILE AND NOT CMAKE_OSX_DEPLOYMENT_TARGET)
+        if(NOT CMAKE_SYSTEM_NAME OR CMAKE_SYSTEM_NAME STREQUAL "Darwin")
+            set(_scalars_deployment_target "$ENV{MACOSX_DEPLOYMENT_TARGET}")
+            if(NOT _scalars_deployment_target)
+                execute_process(
+                    COMMAND /usr/bin/sw_vers -productVersion
+                    OUTPUT_VARIABLE _scalars_macos_version
+                    OUTPUT_STRIP_TRAILING_WHITESPACE
+                    RESULT_VARIABLE _scalars_sw_vers_result
+                    ERROR_QUIET
+                )
+                if(_scalars_sw_vers_result EQUAL 0 AND _scalars_macos_version MATCHES
+                                                       "^([0-9]+\\.[0-9]+)"
+                )
+                    set(_scalars_deployment_target "${CMAKE_MATCH_1}")
+                endif()
+            endif()
+            if(_scalars_deployment_target)
+                set(CMAKE_OSX_DEPLOYMENT_TARGET "${_scalars_deployment_target}"
+                    CACHE STRING "Minimum macOS version to target for deployment" FORCE
+                )
+            endif()
+            unset(_scalars_deployment_target)
+            unset(_scalars_macos_version)
+            unset(_scalars_sw_vers_result)
+        endif()
+    endif()
     project(
         Scalars
         VERSION 0.1.0
