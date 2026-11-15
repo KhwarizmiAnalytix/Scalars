@@ -279,11 +279,13 @@ template <class T> value_t<T> sample(std::mt19937& gen, const region& r)
 // samples, rounded up to two significant digits and never below 0.5 (a
 // correctly rounded result may be off by that much). They were measured on
 // NEON with Accelerate and with SLEEF (macOS, libc++), NEON with SLEEF (Linux,
-// libstdc++, 128-bit long double reference), and AVX2 with SVML and SSE
-// (Linux, libstdc++). Apart from sqrt, acos, and the packet fast paths, the
-// complex math forwards to std::complex<T>, so the budgets also bound the
+// libstdc++, 128-bit long double reference), AVX2 with SVML and SSE (Linux,
+// libstdc++), and SSE, AVX, and AVX2 (Windows, MSVC STL, built with Clang
+// and SVML, and with MSVC). Double budgets that differ with the reference
+// width use by_reference. Apart from sqrt, acos, and the packet fast paths,
+// the complex math forwards to std::complex<T>, so the budgets also bound the
 // standard library: libc++'s float asin, acosh, asinh, and tanh are near
-// 18 ULPs where libstdc++'s are near 1. The x86 runs were emulated (see
+// 18 ULPs where libstdc++'s are near 1. The Linux x86 runs were emulated (see
 // ref_log1p_real). A failure prints the measured error and the inputs that
 // produced it.
 //
@@ -313,6 +315,15 @@ constexpr tol signed_zeros(tol t)
 // double result, and its error is part of what is measured.
 constexpr bool kWideReference =
     std::numeric_limits<long double>::digits > std::numeric_limits<double>::digits;
+
+// A complex<double> budget that depends on the reference width: `wide` holds
+// where long double is 80- or 128-bit, `narrow` where it is double. A double
+// reference is rounded to double, so up to about 1 ULP of its own error is
+// part of what is measured there.
+constexpr double by_reference(double wide, double narrow)
+{
+    return kWideReference ? wide : narrow;
+}
 
 template <class T> double ulps_for(const tol& t)
 {
@@ -484,6 +495,32 @@ template <class R> std::complex<R> ref_mul(std::complex<R> x, std::complex<R> y)
     };
     return {
         diff(x.real(), y.real(), x.imag(), y.imag()), sum(x.real(), y.imag(), x.imag(), y.real())};
+}
+
+// x / y with both operands first scaled into the normal range by powers of
+// two. Where long double is double, the standard library's own quotient is
+// the reference, and MSVC's Smith division underflows c * (c / d) into the
+// subnormal range when the divisor is subnormal, losing about 26 bits
+// (5e7 ULPs). Power-of-two scaling is exact, so wherever nothing under- or
+// overflows the result is the library's quotient bit for bit.
+template <class R> std::complex<R> ref_div(std::complex<R> x, std::complex<R> y)
+{
+    const auto exponent = [](std::complex<R> z)
+    {
+        int e = 0;
+        std::frexp(std::max(std::fabs(z.real()), std::fabs(z.imag())), &e);
+        return e;
+    };
+    const auto scaled = [](std::complex<R> z, int e)
+    { return std::complex<R>(std::ldexp(z.real(), e), std::ldexp(z.imag(), e)); };
+    const bool finite = std::isfinite(x.real()) && std::isfinite(x.imag()) &&
+                        std::isfinite(y.real()) && std::isfinite(y.imag());
+    if (!finite || x == std::complex<R>() || y == std::complex<R>())
+    {
+        return x / y;
+    }
+    const int ex = exponent(x), ey = exponent(y);
+    return scaled(scaled(x, -ex) / scaled(y, -ey), ex - ey);
 }
 
 template <class R> std::complex<R> ref_expm1(std::complex<R> z)
@@ -708,24 +745,8 @@ template <class T> void check_fma(const char* name, const region& d, const tol& 
     check.report();
 }
 
-template <class T> class simd_complex : public ::testing::Test
+template <class T> void run_simd_complex_UnaryMath()
 {
-};
-
-struct complex_type_names
-{
-    template <class T> static std::string GetName(int /*index*/)  // NOLINT
-    {
-        return complex_traits<T>::name;
-    }
-};
-
-using complex_types = ::testing::Types<float, double, scalars::half, scalars::bfloat16>;
-TYPED_TEST_SUITE(simd_complex, complex_types, complex_type_names);
-
-TYPED_TEST(simd_complex, UnaryMath)
-{
-    using T           = TypeParam;  // NOLINT(readability-identifier-naming)
     using S           = packet<T>;  // NOLINT(readability-identifier-naming)
     using R           = ref_t<T>;   // NOLINT(readability-identifier-naming)
     using simd_t      = typename S::simd_t;
@@ -746,19 +767,20 @@ TYPED_TEST(simd_complex, UnaryMath)
     CHECK_UNARY(sqrt, box(10), (tol{1.1, 1.3}), std::sqrt(z));
     CHECK_UNARY(invsqrt, wide, (tol{1.7, 2.3}), one / std::sqrt(z));
     CHECK_UNARY(invsqrt, box(10), (tol{1.7, 2.2}), one / std::sqrt(z));
-    CHECK_UNARY(reciprocal, wide, (tol{0.95, 0.98}), one / z);
+    CHECK_UNARY(reciprocal, wide, (tol{0.95, by_reference(0.98, 1.1)}), one / z);
     CHECK_UNARY(reciprocal, box(10), (tol{1.3, 2}), one / z);
-    CHECK_UNARY(sqr, box(100), (tol{0.84, 0.98}), ref_mul(z, z));
+    CHECK_UNARY(sqr, box(100), (tol{0.89, by_reference(0.98, 1.2)}), ref_mul(z, z));
     CHECK_UNARY(neg, wide, kExact, -z);
     CHECK_UNARY(conj, wide, kExact, std::conj(z));
     CHECK_UNARY(ceil, box(75), kExact, componentwise(z, [](R v) { return std::ceil(v); }));
     CHECK_UNARY(floor, box(75), kExact, componentwise(z, [](R v) { return std::floor(v); }));
     CHECK_UNARY(trunc, box(75), kExact, componentwise(z, [](R v) { return std::trunc(v); }));
 
-    CHECK_UNARY(exp, (region{{-8, 8}, {-25, 25}}), (tol{2.2, 2.5}), std::exp(z));
-    CHECK_UNARY(exp, (region{{-e, e}, {-512, 512}}), (tol{2.2, 2.8}), std::exp(z));
-    CHECK_UNARY(expm1, (region{{-8, 8}, {-25, 25}}), (tol{2, 1.8}), ref_expm1(z));
-    CHECK_UNARY(expm1, box(1e-3), (tol{1.3, 0.96}), ref_expm1(z));
+    CHECK_UNARY(exp, (region{{-8, 8}, {-25, 25}}), (tol{2.2, by_reference(2.5, 2.9)}), std::exp(z));
+    CHECK_UNARY(
+        exp, (region{{-e, e}, {-512, 512}}), (tol{2.2, by_reference(2.8, 3.1)}), std::exp(z));
+    CHECK_UNARY(expm1, (region{{-8, 8}, {-25, 25}}), (tol{2.3, 1.8}), ref_expm1(z));
+    CHECK_UNARY(expm1, box(1e-3), (tol{2.2, 0.96}), ref_expm1(z));
     CHECK_UNARY(
         exp2, (region{{-12, 12}, {-25, 25}}), (tol{8.8, 12}), std::exp(z * std::numbers::ln2_v<R>));
     CHECK_UNARY(
@@ -768,19 +790,20 @@ TYPED_TEST(simd_complex, UnaryMath)
     // fallback uses, rounds |z| to the subnormal grid first (see log_reference).
     CHECK_UNARY(log, normal_sweep<T>(), (tol{1.1, 0.98}), ref_log(z));
     CHECK_UNARY(log, (region{{0.999, 1.001}, {-1e-3, 1e-3}}), (tol{1.3, 1.7}), ref_log(z));
-    CHECK_UNARY(log1p, (region{{-0.9, 50}, {-50, 50}}), (tol{1.6, 1.3}), ref_log1p(z));
-    CHECK_UNARY(log1p, box(1e-3), (tol{2.3, 2.1}), ref_log1p(z));
+    CHECK_UNARY(
+        log1p, (region{{-0.9, 50}, {-50, 50}}), (tol{1.6, by_reference(1.3, 1.4)}), ref_log1p(z));
+    CHECK_UNARY(log1p, box(1e-3), (tol{2.3, by_reference(2.1, 2.6)}), ref_log1p(z));
     CHECK_UNARY(log2, wide, (tol{0.8, 0.92}), ref_log(z) / std::numbers::ln2_v<R>);
-    CHECK_UNARY(log10, wide, (tol{0.94, 1.1}), ref_log(z) / std::numbers::ln10_v<R>);
+    CHECK_UNARY(log10, wide, (tol{0.99, 1.1}), ref_log(z) / std::numbers::ln10_v<R>);
 
-    CHECK_UNARY(sin, (region{{-25, 25}, {-8, 8}}), (tol{1.3, 1.2}), std::sin(z));
-    CHECK_UNARY(cos, (region{{-25, 25}, {-8, 8}}), (tol{1.3, 1.3}), std::cos(z));
+    CHECK_UNARY(sin, (region{{-25, 25}, {-8, 8}}), (tol{1.6, 1.2}), std::sin(z));
+    CHECK_UNARY(cos, (region{{-25, 25}, {-8, 8}}), (tol{1.8, 1.3}), std::cos(z));
     CHECK_UNARY(tan, (region{{-25, 25}, {-8, 8}}), (tol{3.2, 2.1}), std::tan(z));
     CHECK_UNARY(asin, box(4), (tol{18, 1.1}), std::asin(z));
-    CHECK_UNARY(acos, box(4), (tol{1.1, kWideReference ? 1.2 : 19}), std::acos(z));
+    CHECK_UNARY(acos, box(4), (tol{1.2, by_reference(1.2, 19)}), std::acos(z));
     CHECK_UNARY(atan, box(4), (tol{6.3, 1.2}), std::atan(z));
-    CHECK_UNARY(sinh, (region{{-8, 8}, {-25, 25}}), (tol{1.4, 1.5}), std::sinh(z));
-    CHECK_UNARY(cosh, (region{{-8, 8}, {-25, 25}}), (tol{1.3, 1.5}), std::cosh(z));
+    CHECK_UNARY(sinh, (region{{-8, 8}, {-25, 25}}), (tol{1.8, 1.5}), std::sinh(z));
+    CHECK_UNARY(cosh, (region{{-8, 8}, {-25, 25}}), (tol{1.6, 1.5}), std::cosh(z));
     CHECK_UNARY(tanh, (region{{-8, 8}, {-25, 25}}), (tol{18, 2.4}), std::tanh(z));
     CHECK_UNARY(asinh, box(4), (tol{15, 1.1}), std::asinh(z));
     CHECK_UNARY(acosh, box(4), (tol{17, 0.97}), std::acosh(z));
@@ -788,9 +811,16 @@ TYPED_TEST(simd_complex, UnaryMath)
 #undef CHECK_UNARY
 }
 
-TYPED_TEST(simd_complex, RealValuedFunctions)
+TEST(simd_complex, UnaryMath)
 {
-    using T           = TypeParam;  // NOLINT(readability-identifier-naming)
+    run_simd_complex_UnaryMath<float>();
+    run_simd_complex_UnaryMath<double>();
+    run_simd_complex_UnaryMath<scalars::half>();
+    run_simd_complex_UnaryMath<scalars::bfloat16>();
+}
+
+template <class T> void run_simd_complex_RealValuedFunctions()
+{
     using S           = packet<T>;  // NOLINT(readability-identifier-naming)
     using simd_t      = typename S::simd_t;
     using ref         = reference<T>;
@@ -808,7 +838,7 @@ TYPED_TEST(simd_complex, RealValuedFunctions)
     CHECK_REAL(abs, full_sweep<T>(), (tol{0.97, 0.88}), std::hypot(z.real(), z.imag()));
     CHECK_REAL(fabs, wide, (tol{1.1, 1.5}), std::hypot(z.real(), z.imag()));
     CHECK_REAL(abs2, box(100), (tol{0.91, 1}), ref_abs2(z));
-    CHECK_REAL(abs2, root_sweep<T>(), (tol{0.92, 0.98}), ref_abs2(z));
+    CHECK_REAL(abs2, root_sweep<T>(), (tol{0.92, by_reference(0.98, 0.99)}), ref_abs2(z));
     CHECK_REAL(norm, box(100), (tol{0.91, 1}), ref_abs2(z));
     CHECK_REAL(arg, wide, (tol{0.86, 0.64}), std::atan2(z.imag(), z.real()));
     CHECK_REAL(arg, box(10), (tol{1.1, 1}), std::atan2(z.imag(), z.real()));
@@ -817,9 +847,16 @@ TYPED_TEST(simd_complex, RealValuedFunctions)
 #undef CHECK_REAL
 }
 
-TYPED_TEST(simd_complex, BinaryMath)
+TEST(simd_complex, RealValuedFunctions)
 {
-    using T           = TypeParam;  // NOLINT(readability-identifier-naming)
+    run_simd_complex_RealValuedFunctions<float>();
+    run_simd_complex_RealValuedFunctions<double>();
+    run_simd_complex_RealValuedFunctions<scalars::half>();
+    run_simd_complex_RealValuedFunctions<scalars::bfloat16>();
+}
+
+template <class T> void run_simd_complex_BinaryMath()
+{
     using S           = packet<T>;  // NOLINT(readability-identifier-naming)
     using simd_t      = typename S::simd_t;
     using ref         = reference<T>;
@@ -840,33 +877,47 @@ TYPED_TEST(simd_complex, BinaryMath)
     CHECK_BINARY(add, wide, wide, (tol{0.5, 0.5}), x + y);
     CHECK_BINARY(sub, box(40), box(40), (tol{0.5, 0.5}), x - y);
     CHECK_BINARY(sub, wide, wide, (tol{0.5, 0.5}), x - y);
-    CHECK_BINARY(mul, box(25), box(25), (tol{0.85, 1}), ref_mul(x, y));
-    CHECK_BINARY(mul, root, root, (tol{0.91, 0.57}), ref_mul(x, y));
-    CHECK_BINARY(div, box(50), box(50), (tol{1.7, 2}), x / y);
-    CHECK_BINARY(div, wide, wide, (tol{1.3, 1.1}), x / y);
+    CHECK_BINARY(mul, box(25), box(25), (tol{0.89, 1}), ref_mul(x, y));
+    CHECK_BINARY(mul, root, root, (tol{0.91, by_reference(0.57, 0.82)}), ref_mul(x, y));
+    CHECK_BINARY(div, box(50), box(50), (tol{1.7, by_reference(2, 2.1)}), ref_div(x, y));
+    CHECK_BINARY(div, wide, wide, (tol{1.4, by_reference(1.1, 1.2)}), ref_div(x, y));
     // Quotients of the whole range reach overflow, underflow, and the scaled
     // fallback for operands outside the fast path's bounds.
-    CHECK_BINARY(div, full, full, (tol{1.4, 1.2}), x / y);
+    CHECK_BINARY(div, full, full, (tol{1.4, by_reference(1.2, 1.7)}), ref_div(x, y));
     CHECK_BINARY(pow,
         (region{{0.05, 12}, {-3, 3}}),
         (region{{-3, 3}, {-1, 1}}),
-        (tol{6.2, 6.7}),
+        (tol{6.6, 6.7}),
         std::pow(x, y));
 #undef CHECK_BINARY
 }
 
-TYPED_TEST(simd_complex, FusedMultiplyAdd)
+TEST(simd_complex, BinaryMath)
 {
-    using T = TypeParam;  // NOLINT(readability-identifier-naming)
+    run_simd_complex_BinaryMath<float>();
+    run_simd_complex_BinaryMath<double>();
+    run_simd_complex_BinaryMath<scalars::half>();
+    run_simd_complex_BinaryMath<scalars::bfloat16>();
+}
+
+template <class T> void run_simd_complex_FusedMultiplyAdd()
+{
     check_fma<T>("fma", box(25), tol{0.7, 0.97}, 0);
-    check_fma<T>("fma(cancelling)", box(25), tol{0.7, 0.91}, 4);
+    check_fma<T>("fma(cancelling)", box(25), tol{0.7, by_reference(0.91, 0.96)}, 4);
+}
+
+TEST(simd_complex, FusedMultiplyAdd)
+{
+    run_simd_complex_FusedMultiplyAdd<float>();
+    run_simd_complex_FusedMultiplyAdd<double>();
+    run_simd_complex_FusedMultiplyAdd<scalars::half>();
+    run_simd_complex_FusedMultiplyAdd<scalars::bfloat16>();
 }
 
 // set_mask accepts bool and plain integer literals alike (nonzero selects
 // all); the mask is observed through if_else.
-TYPED_TEST(simd_complex, SetMaskAndSelect)
+template <class T> void run_simd_complex_SetMaskAndSelect()
 {
-    using T = TypeParam;  // NOLINT(readability-identifier-naming)
     using S = packet<T>;  // NOLINT(readability-identifier-naming)
     lanes<T> a{}, b{};
     for (std::size_t i = 0; i < a.size(); ++i)
@@ -889,6 +940,14 @@ TYPED_TEST(simd_complex, SetMaskAndSelect)
     expect_selects(S::set_mask(false), b, "set_mask(false)");
     expect_selects(S::set_mask(std::int64_t(-3)), a, "set_mask(int64_t(-3))");
     expect_selects(S::set_mask(typename S::int_t(0)), b, "set_mask(int_t(0))");
+}
+
+TEST(simd_complex, SetMaskAndSelect)
+{
+    run_simd_complex_SetMaskAndSelect<float>();
+    run_simd_complex_SetMaskAndSelect<double>();
+    run_simd_complex_SetMaskAndSelect<scalars::half>();
+    run_simd_complex_SetMaskAndSelect<scalars::bfloat16>();
 }
 
 // ---------------------------------------------------------------------------
@@ -1008,16 +1067,8 @@ template <class T> void expect_bits(scalars::complex<T> actual, scalars::complex
     EXPECT_EQ(std::bit_cast<bits>(actual.imag()), std::bit_cast<bits>(expected.imag()));
 }
 
-template <class T> class simd_complex_native : public ::testing::Test
+template <class T> void run_simd_complex_native_MasksAndSelection()
 {
-};
-
-using native_types = ::testing::Types<float, double>;
-TYPED_TEST_SUITE(simd_complex_native, native_types, complex_type_names);
-
-TYPED_TEST(simd_complex_native, MasksAndSelection)
-{
-    using T    = TypeParam;  // NOLINT(readability-identifier-naming)
     using c    = scalars::complex<T>;
     using s    = simd<c>;
     using bits = typename s::int_t;
@@ -1133,6 +1184,12 @@ TYPED_TEST(simd_complex_native, MasksAndSelection)
     }
 }
 
+TEST(simd_complex_native, MasksAndSelection)
+{
+    run_simd_complex_native_MasksAndSelection<float>();
+    run_simd_complex_native_MasksAndSelection<double>();
+}
+
 template <class T, int N> void check_transpose()
 {
     using c = scalars::complex<T>;
@@ -1159,9 +1216,8 @@ template <class T, int N> void check_transpose()
 }
 
 // Inputs are small dyadic rationals, so every packet result below is exact.
-TYPED_TEST(simd_complex_native, MemoryPackingAndHalfWidth)
+template <class T> void run_simd_complex_native_MemoryPackingAndHalfWidth()
 {
-    using T                    = TypeParam;  // NOLINT(readability-identifier-naming)
     using c                    = scalars::complex<T>;
     using s                    = simd<c>;
     constexpr int            w = s::size;
@@ -1283,9 +1339,14 @@ TYPED_TEST(simd_complex_native, MemoryPackingAndHalfWidth)
     check_transpose<T, s::size>();
 }
 
-TYPED_TEST(simd_complex_native, PartialLoadsStoresAndAccumulate)
+TEST(simd_complex_native, MemoryPackingAndHalfWidth)
 {
-    using T                = TypeParam;  // NOLINT(readability-identifier-naming)
+    run_simd_complex_native_MemoryPackingAndHalfWidth<float>();
+    run_simd_complex_native_MemoryPackingAndHalfWidth<double>();
+}
+
+template <class T> void run_simd_complex_native_PartialLoadsStoresAndAccumulate()
+{
     using c                = scalars::complex<T>;
     using s                = simd<c>;
     constexpr int        w = s::size;
@@ -1351,11 +1412,16 @@ TYPED_TEST(simd_complex_native, PartialLoadsStoresAndAccumulate)
     EXPECT_FALSE(std::signbit(output[0].imag()));
 }
 
+TEST(simd_complex_native, PartialLoadsStoresAndAccumulate)
+{
+    run_simd_complex_native_PartialLoadsStoresAndAccumulate<float>();
+    run_simd_complex_native_PartialLoadsStoresAndAccumulate<double>();
+}
+
 // A column-major matrix product accumulated with packet fma over tails. The
 // entries are multiples of 1/16 below 100, so every product and sum is exact.
-TYPED_TEST(simd_complex_native, MatrixProduct)
+template <class T> void run_simd_complex_native_MatrixProduct()
 {
-    using T            = TypeParam;  // NOLINT(readability-identifier-naming)
     using c            = scalars::complex<T>;
     using s            = simd<c>;
     constexpr int rows = 2 * s::size + 1, depth = 7, cols = 5;
@@ -1404,12 +1470,17 @@ TYPED_TEST(simd_complex_native, MatrixProduct)
     }
 }
 
+TEST(simd_complex_native, MatrixProduct)
+{
+    run_simd_complex_native_MatrixProduct<float>();
+    run_simd_complex_native_MatrixProduct<double>();
+}
+
 // Edge operands at every lane position, around ordinary lanes. The packet
 // quotient must match the scalar library's quotient in class (NaN, infinity,
 // finite) and, where finite, to the budget.
-TYPED_TEST(simd_complex_native, DivisionExceptionalLanes)
+template <class T> void run_simd_complex_native_DivisionExceptionalLanes()
 {
-    using T                         = TypeParam;  // NOLINT(readability-identifier-naming)
     using c                         = scalars::complex<T>;
     using s                         = simd<c>;
     const T                 maximum = std::numeric_limits<T>::max();
@@ -1472,12 +1543,17 @@ TYPED_TEST(simd_complex_native, DivisionExceptionalLanes)
     }
 }
 
+TEST(simd_complex_native, DivisionExceptionalLanes)
+{
+    run_simd_complex_native_DivisionExceptionalLanes<float>();
+    run_simd_complex_native_DivisionExceptionalLanes<double>();
+}
+
 // Square roots at and around the bounds of the packet fast path, against the
 // scalar path, which normalizes first. Components are compared relative to
 // themselves, so small branch-cut parts and the signs of zeros are checked.
-TYPED_TEST(simd_complex_native, SquareRootRangeBoundaries)
+template <class T> void run_simd_complex_native_SquareRootRangeBoundaries()
 {
-    using T                      = TypeParam;  // NOLINT(readability-identifier-naming)
     using c                      = scalars::complex<T>;
     using s                      = simd<c>;
     const T                lower = scalars::detail_complex_simd::division_lower<T>();
@@ -1524,9 +1600,14 @@ TYPED_TEST(simd_complex_native, SquareRootRangeBoundaries)
     }
 }
 
-TYPED_TEST(simd_complex_native, MagnitudeAndSpecialValues)
+TEST(simd_complex_native, SquareRootRangeBoundaries)
 {
-    using T          = TypeParam;  // NOLINT(readability-identifier-naming)
+    run_simd_complex_native_SquareRootRangeBoundaries<float>();
+    run_simd_complex_native_SquareRootRangeBoundaries<double>();
+}
+
+template <class T> void run_simd_complex_native_MagnitudeAndSpecialValues()
+{
     using c          = scalars::complex<T>;
     using s          = simd<c>;
     using R          = ref_t<T>;  // NOLINT(readability-identifier-naming)
@@ -1690,11 +1771,16 @@ TYPED_TEST(simd_complex_native, MagnitudeAndSpecialValues)
     }
 }
 
+TEST(simd_complex_native, MagnitudeAndSpecialValues)
+{
+    run_simd_complex_native_MagnitudeAndSpecialValues<float>();
+    run_simd_complex_native_MagnitudeAndSpecialValues<double>();
+}
+
 // Each edge value in every lane position, next to ordinary lanes, so a lane
 // that leaves the vectorized fast path cannot disturb its neighbours.
-TYPED_TEST(simd_complex_native, MixedLaneEdgesAndBranchCuts)
+template <class T> void run_simd_complex_native_MixedLaneEdgesAndBranchCuts()
 {
-    using T                         = TypeParam;  // NOLINT(readability-identifier-naming)
     using c                         = scalars::complex<T>;
     using s                         = simd<c>;
     const T                 inf     = std::numeric_limits<T>::infinity();
@@ -1756,13 +1842,18 @@ TYPED_TEST(simd_complex_native, MixedLaneEdgesAndBranchCuts)
     }
 }
 
+TEST(simd_complex_native, MixedLaneEdgesAndBranchCuts)
+{
+    run_simd_complex_native_MixedLaneEdgesAndBranchCuts<float>();
+    run_simd_complex_native_MixedLaneEdgesAndBranchCuts<double>();
+}
+
 #if SCALARS_HAS_SVML || SCALARS_HAS_MKL || SCALARS_HAS_SLEEF || SCALARS_HAS_ACCELERATE
 // Re(log z) must be accurate relative to itself, not just to |log z|: near
 // |z| = 1 it is tiny while Im(log z) = arg z is not, so the normwise budget
 // cannot see errors in it (plan items 4.1 and 6.2).
-TYPED_TEST(simd_complex_native, LogRealPartNearUnitCircle)
+template <class T> void run_simd_complex_native_LogRealPartNearUnitCircle()
 {
-    using T = TypeParam;  // NOLINT(readability-identifier-naming)
     using c = scalars::complex<T>;
     using s = simd<c>;
     std::vector<c> inputs;
@@ -1796,6 +1887,12 @@ TYPED_TEST(simd_complex_native, LogRealPartNearUnitCircle)
         check.check(c(outputs[i].real(), T(0)), reference<T>(expected, 0), inputs[i]);
     }
     check.report();
+}
+
+TEST(simd_complex_native, LogRealPartNearUnitCircle)
+{
+    run_simd_complex_native_LogRealPartNearUnitCircle<float>();
+    run_simd_complex_native_LogRealPartNearUnitCircle<double>();
 }
 #endif
 }  // namespace

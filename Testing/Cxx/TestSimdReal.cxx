@@ -304,24 +304,8 @@ template <class T> constexpr double invsqrt_ulps()
     return std::is_floating_point_v<T> ? real_traits<T>::math_ulps : 1;
 }
 
-template <class T> class simd_real : public ::testing::Test
+template <class T> void run_simd_real_UnaryMath()
 {
-};
-
-struct real_type_names
-{
-    template <class T> static std::string GetName(int /*index*/)  // NOLINT
-    {
-        return real_traits<T>::name;
-    }
-};
-
-using real_types = ::testing::Types<float, double, scalars::half, scalars::bfloat16>;
-TYPED_TEST_SUITE(simd_real, real_types, real_type_names);
-
-TYPED_TEST(simd_real, UnaryMath)
-{
-    using T           = TypeParam;  // NOLINT(readability-identifier-naming)
     using S           = simd<T>;    // NOLINT(readability-identifier-naming)
     using simd_t      = typename S::simd_t;
     const double math = real_traits<T>::math_ulps;
@@ -372,9 +356,13 @@ TYPED_TEST(simd_real, UnaryMath)
 #undef CHECK_UNARY
 }
 
-TYPED_TEST(simd_real, BinaryMath)
+TEST(simd_real, UnaryMath_float)    { run_simd_real_UnaryMath<float>(); }
+TEST(simd_real, UnaryMath_double)   { run_simd_real_UnaryMath<double>(); }
+TEST(simd_real, UnaryMath_half)     { run_simd_real_UnaryMath<scalars::half>(); }
+TEST(simd_real, UnaryMath_bfloat16) { run_simd_real_UnaryMath<scalars::bfloat16>(); }
+
+template <class T> void run_simd_real_BinaryMath()
 {
-    using T      = TypeParam;  // NOLINT(readability-identifier-naming)
     using S      = simd<T>;    // NOLINT(readability-identifier-naming)
     using simd_t = typename S::simd_t;
     const budget exact{0};
@@ -407,6 +395,11 @@ TYPED_TEST(simd_real, BinaryMath)
     CHECK_BINARY(pow, (domain{0.05, 12}), (domain{-3, 3}), lib, std::pow(x, y));
 #undef CHECK_BINARY
 }
+
+TEST(simd_real, BinaryMath_float)    { run_simd_real_BinaryMath<float>(); }
+TEST(simd_real, BinaryMath_double)   { run_simd_real_BinaryMath<double>(); }
+TEST(simd_real, BinaryMath_half)     { run_simd_real_BinaryMath<scalars::half>(); }
+TEST(simd_real, BinaryMath_bfloat16) { run_simd_real_BinaryMath<scalars::bfloat16>(); }
 
 // A runtime probe of whether simd<T>::fma rounds once. x86 SSE/AVX builds
 // without -mfma fall back to mul+add; reduced types widen to float, where the
@@ -442,9 +435,8 @@ template <class T> double fma_reference(bool fused, double a, double b, double c
     return std::fma(a, b, c);
 }
 
-TYPED_TEST(simd_real, FusedMultiplyAdd)
+template <class T> void run_simd_real_FusedMultiplyAdd()
 {
-    using T          = TypeParam;  // NOLINT(readability-identifier-naming)
     using S          = simd<T>;    // NOLINT(readability-identifier-naming)
     const bool fused = fma_is_fused<T>();
     SCOPED_TRACE(fused ? "fused" : "unfused mul+add");
@@ -480,6 +472,11 @@ TYPED_TEST(simd_real, FusedMultiplyAdd)
     }
 }
 
+TEST(simd_real, FusedMultiplyAdd_float)    { run_simd_real_FusedMultiplyAdd<float>(); }
+TEST(simd_real, FusedMultiplyAdd_double)   { run_simd_real_FusedMultiplyAdd<double>(); }
+TEST(simd_real, FusedMultiplyAdd_half)     { run_simd_real_FusedMultiplyAdd<scalars::half>(); }
+TEST(simd_real, FusedMultiplyAdd_bfloat16) { run_simd_real_FusedMultiplyAdd<scalars::bfloat16>(); }
+
 // Special values every comparison must order like the C++ scalar operators:
 // signed zeros compare equal, NaN is unordered (only neq is true).
 template <class T> std::array<T, 9> comparison_values()
@@ -511,9 +508,8 @@ std::array<bool, static_cast<std::size_t>(simd<T>::size)> mask_lanes(typename si
     return out;
 }
 
-TYPED_TEST(simd_real, Comparisons)
+template <class T> void run_simd_real_Comparisons()
 {
-    using T                  = TypeParam;  // NOLINT(readability-identifier-naming)
     using S                  = simd<T>;    // NOLINT(readability-identifier-naming)
     const auto        values = comparison_values<T>();
     const std::size_t n      = values.size();
@@ -549,9 +545,13 @@ TYPED_TEST(simd_real, Comparisons)
     }
 }
 
-TYPED_TEST(simd_real, IfElseAndMaskLogic)
+TEST(simd_real, Comparisons_float)    { run_simd_real_Comparisons<float>(); }
+TEST(simd_real, Comparisons_double)   { run_simd_real_Comparisons<double>(); }
+TEST(simd_real, Comparisons_half)     { run_simd_real_Comparisons<scalars::half>(); }
+TEST(simd_real, Comparisons_bfloat16) { run_simd_real_Comparisons<scalars::bfloat16>(); }
+
+template <class T> void run_simd_real_IfElseAndMaskLogic()
 {
-    using T = TypeParam;  // NOLINT(readability-identifier-naming)
     using S = simd<T>;    // NOLINT(readability-identifier-naming)
     // Selected values must come through bit-for-bit, including NaN payloads
     // and the sign of zero, so select operands are built from raw bits.
@@ -589,14 +589,18 @@ TYPED_TEST(simd_real, IfElseAndMaskLogic)
         "xor(lt,not(eq))");
 }
 
+TEST(simd_real, IfElseAndMaskLogic_float)    { run_simd_real_IfElseAndMaskLogic<float>(); }
+TEST(simd_real, IfElseAndMaskLogic_double)   { run_simd_real_IfElseAndMaskLogic<double>(); }
+TEST(simd_real, IfElseAndMaskLogic_half)     { run_simd_real_IfElseAndMaskLogic<scalars::half>(); }
+TEST(simd_real, IfElseAndMaskLogic_bfloat16) { run_simd_real_IfElseAndMaskLogic<scalars::bfloat16>(); }
+
 // Confirmed bug: the NEON hypot implementation computed sqrt(x*x + y*y)
 // directly, which overflows for huge components (hypot(1e20, 1e20) == inf)
 // and underflows to zero for tiny/subnormal components before the square
 // root even runs. Sweep huge, tiny, subnormal, inf, and NaN inputs against
 // std::hypot across every CPU backend and real type.
-TYPED_TEST(simd_real, HypotSpecialValues)
+template <class T> void run_simd_real_HypotSpecialValues()
 {
-    using T      = TypeParam;  // NOLINT(readability-identifier-naming)
     using S      = simd<T>;    // NOLINT(readability-identifier-naming)
     using limits = std::numeric_limits<T>;
     const double                                huge = to_double(limits::max()) / 4;
@@ -628,9 +632,13 @@ TYPED_TEST(simd_real, HypotSpecialValues)
     }
 }
 
-TYPED_TEST(simd_real, NaNPropagatesThroughArithmetic)
+TEST(simd_real, HypotSpecialValues_float)    { run_simd_real_HypotSpecialValues<float>(); }
+TEST(simd_real, HypotSpecialValues_double)   { run_simd_real_HypotSpecialValues<double>(); }
+TEST(simd_real, HypotSpecialValues_half)     { run_simd_real_HypotSpecialValues<scalars::half>(); }
+TEST(simd_real, HypotSpecialValues_bfloat16) { run_simd_real_HypotSpecialValues<scalars::bfloat16>(); }
+
+template <class T> void run_simd_real_NaNPropagatesThroughArithmetic()
 {
-    using T               = TypeParam;  // NOLINT(readability-identifier-naming)
     using S               = simd<T>;    // NOLINT(readability-identifier-naming)
     const auto nan        = S::set(std::numeric_limits<T>::quiet_NaN());
     const auto two        = S::set(from_double<T>(2));
@@ -651,6 +659,12 @@ TYPED_TEST(simd_real, NaNPropagatesThroughArithmetic)
     expect_nan(S::fabs(nan), "fabs");
     expect_nan(S::neg(nan), "neg");
 }
+
+TEST(simd_real, NaNPropagatesThroughArithmetic_float)    { run_simd_real_NaNPropagatesThroughArithmetic<float>(); }
+TEST(simd_real, NaNPropagatesThroughArithmetic_double)   { run_simd_real_NaNPropagatesThroughArithmetic<double>(); }
+TEST(simd_real, NaNPropagatesThroughArithmetic_half)     { run_simd_real_NaNPropagatesThroughArithmetic<scalars::half>(); }
+TEST(simd_real, NaNPropagatesThroughArithmetic_bfloat16) { run_simd_real_NaNPropagatesThroughArithmetic<scalars::bfloat16>(); }
+
 }  // namespace
 
 #endif  // SCALARS_VECTORIZED

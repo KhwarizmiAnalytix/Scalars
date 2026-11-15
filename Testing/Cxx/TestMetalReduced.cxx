@@ -35,18 +35,6 @@ template <class T> struct metal_buffer
     metal_buffer& operator=(const metal_buffer&) = delete;
 };
 
-template <class T> class metal_reduced : public ::testing::Test
-{
-    void SetUp() override
-    {
-        if (!mb::device_available()) {
-            GTEST_SKIP() << "No Metal device";
-        }
-    }
-};
-using metal_reduced_types = ::testing::Types<scalars::half, scalars::bfloat16>;
-TYPED_TEST_SUITE(metal_reduced, metal_reduced_types);
-
 template <class T> void expect_bits(T actual, T expected)
 {
     if (std::isnan(float(expected))) {
@@ -56,9 +44,9 @@ template <class T> void expect_bits(T actual, T expected)
     }
 }
 
-TYPED_TEST(metal_reduced, FillArithmeticAndFusedRounding)
+template <class T> void run_metal_reduced_FillArithmeticAndFusedRounding()
 {
-    using t                    = TypeParam;
+    using t                    = T;
     constexpr auto        type = metal_type<t>;
     constexpr std::size_t n    = 519;  // Partial final threadgroup.
     metal_buffer<t>        a(n), b(n), c(n), out(n);
@@ -104,9 +92,20 @@ TYPED_TEST(metal_reduced, FillArithmeticAndFusedRounding)
     }
 }
 
-TYPED_TEST(metal_reduced, UnaryMath)
+TEST(metal_reduced, FillArithmeticAndFusedRounding_half)
 {
-    using t                    = TypeParam;
+    if (!mb::device_available()) { GTEST_SKIP() << "No Metal device"; }
+    run_metal_reduced_FillArithmeticAndFusedRounding<scalars::half>();
+}
+TEST(metal_reduced, FillArithmeticAndFusedRounding_bfloat16)
+{
+    if (!mb::device_available()) { GTEST_SKIP() << "No Metal device"; }
+    run_metal_reduced_FillArithmeticAndFusedRounding<scalars::bfloat16>();
+}
+
+template <class T> void run_metal_reduced_UnaryMath()
+{
+    using t                    = T;
     constexpr auto        type = metal_type<t>;
     constexpr std::size_t n    = 513;
     metal_buffer<t>        input(n), out(n);
@@ -135,9 +134,20 @@ TYPED_TEST(metal_reduced, UnaryMath)
     }
 }
 
-TYPED_TEST(metal_reduced, EveryEncodingPreservesSignAndPayload)
+TEST(metal_reduced, UnaryMath_half)
 {
-    using t                    = TypeParam;
+    if (!mb::device_available()) { GTEST_SKIP() << "No Metal device"; }
+    run_metal_reduced_UnaryMath<scalars::half>();
+}
+TEST(metal_reduced, UnaryMath_bfloat16)
+{
+    if (!mb::device_available()) { GTEST_SKIP() << "No Metal device"; }
+    run_metal_reduced_UnaryMath<scalars::bfloat16>();
+}
+
+template <class T> void run_metal_reduced_EveryEncodingPreservesSignAndPayload()
+{
+    using t                    = T;
     constexpr auto        type = metal_type<t>;
     constexpr std::size_t n    = 65536;
     metal_buffer<t>        input(n), out(n);
@@ -156,9 +166,20 @@ TYPED_TEST(metal_reduced, EveryEncodingPreservesSignAndPayload)
     }
 }
 
-TYPED_TEST(metal_reduced, FloatReductionPartialsAndExceptionalValues)
+TEST(metal_reduced, EveryEncodingPreservesSignAndPayload_half)
 {
-    using t                    = TypeParam;
+    if (!mb::device_available()) { GTEST_SKIP() << "No Metal device"; }
+    run_metal_reduced_EveryEncodingPreservesSignAndPayload<scalars::half>();
+}
+TEST(metal_reduced, EveryEncodingPreservesSignAndPayload_bfloat16)
+{
+    if (!mb::device_available()) { GTEST_SKIP() << "No Metal device"; }
+    run_metal_reduced_EveryEncodingPreservesSignAndPayload<scalars::bfloat16>();
+}
+
+template <class T> void run_metal_reduced_FloatReductionPartialsAndExceptionalValues()
+{
+    using t                    = T;
     constexpr auto        type = metal_type<t>;
     constexpr std::size_t n    = 65537;  // Three passes with 256-thread groups.
     metal_buffer<t>        input(n);
@@ -186,9 +207,20 @@ TYPED_TEST(metal_reduced, FloatReductionPartialsAndExceptionalValues)
     mb::dispatch("add", nullptr, 2, nullptr, 0, type);
 }
 
-TYPED_TEST(metal_reduced, TypedFusedEntryPoints)
+TEST(metal_reduced, FloatReductionPartialsAndExceptionalValues_half)
 {
-    using t             = TypeParam;
+    if (!mb::device_available()) { GTEST_SKIP() << "No Metal device"; }
+    run_metal_reduced_FloatReductionPartialsAndExceptionalValues<scalars::half>();
+}
+TEST(metal_reduced, FloatReductionPartialsAndExceptionalValues_bfloat16)
+{
+    if (!mb::device_available()) { GTEST_SKIP() << "No Metal device"; }
+    run_metal_reduced_FloatReductionPartialsAndExceptionalValues<scalars::bfloat16>();
+}
+
+template <class T> void run_metal_reduced_TypedFusedEntryPoints()
+{
+    using t             = T;
     constexpr auto type = metal_type<t>;
     metal_buffer<t> out(1);
     // One source with both entry points also exercises dtype-aware caching.
@@ -205,5 +237,17 @@ TYPED_TEST(metal_reduced, TypedFusedEntryPoints)
     mb::dispatch_fused(source, nullptr, 0, nullptr, 0, out.data, 1, type);
     expect_bits(out.data[0], t(std::is_same_v<t, scalars::half> ? 1.5f : 2.5f));
 }
+
+TEST(metal_reduced, TypedFusedEntryPoints_half)
+{
+    if (!mb::device_available()) { GTEST_SKIP() << "No Metal device"; }
+    run_metal_reduced_TypedFusedEntryPoints<scalars::half>();
+}
+TEST(metal_reduced, TypedFusedEntryPoints_bfloat16)
+{
+    if (!mb::device_available()) { GTEST_SKIP() << "No Metal device"; }
+    run_metal_reduced_TypedFusedEntryPoints<scalars::bfloat16>();
+}
+
 }  // namespace
 #endif

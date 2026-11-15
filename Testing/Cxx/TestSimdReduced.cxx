@@ -133,12 +133,6 @@ TEST(Simd, Horizontal)
     test_all_simd_horizontal<scalars::bfloat16>(kSimdTolF);
 }
 
-template <class T> class simd_reduced : public ::testing::Test
-{
-};
-using reduced_types = ::testing::Types<scalars::half, scalars::bfloat16>;
-TYPED_TEST_SUITE(simd_reduced, reduced_types);
-
 template <class T> T from_bits(uint16_t bits)
 {
     return T(bits, T::from_bits());
@@ -164,22 +158,24 @@ template <class T> void expect_value(T actual, T expected, float ulps = 0)
     }
 }
 
-TYPED_TEST(simd_reduced, DenseDistinctPackets)
+template <class T> void run_simd_reduced_DenseDistinctPackets()
 {
-    using S = simd<TypeParam>;  // NOLINT(readability-identifier-naming)
+    using S = simd<T>;  // NOLINT(readability-identifier-naming)
     static_assert(S::size == 2 * simd<float>::size);
     static_assert(S::half_size == simd<float>::size);
-    static_assert(sizeof(typename S::simd_t) == S::size * sizeof(TypeParam));
-    static_assert(sizeof(typename S::simd_half_t) == S::half_size * sizeof(TypeParam));
+    static_assert(sizeof(typename S::simd_t) == S::size * sizeof(T));
+    static_assert(sizeof(typename S::simd_half_t) == S::half_size * sizeof(T));
     static_assert(!std::is_same_v<typename S::simd_t, typename S::mask_t>);
     static_assert(!std::is_same_v<simd<scalars::half>::simd_t, simd<scalars::bfloat16>::simd_t>);
     static_assert(std::is_same_v<decltype(S::accumulate(S::setzero())), float>);
 }
 
-TYPED_TEST(simd_reduced, ExhaustiveEncodingWideningAndMemory)
+TEST(simd_reduced, DenseDistinctPackets_half)     { run_simd_reduced_DenseDistinctPackets<scalars::half>(); }
+TEST(simd_reduced, DenseDistinctPackets_bfloat16) { run_simd_reduced_DenseDistinctPackets<scalars::bfloat16>(); }
+
+template <class T> void run_simd_reduced_ExhaustiveEncodingWideningAndMemory()
 {
-    using T = TypeParam;  // NOLINT(readability-identifier-naming)
-    using S = simd<T>;    // NOLINT(readability-identifier-naming)
+    using S = simd<T>;  // NOLINT(readability-identifier-naming)
     std::array<T, S::size>     input, output;
     std::array<float, S::size> widened;
     for (uint32_t first = 0; first < 65536; first += S::size)
@@ -210,10 +206,12 @@ TYPED_TEST(simd_reduced, ExhaustiveEncodingWideningAndMemory)
     }
 }
 
-TYPED_TEST(simd_reduced, NarrowingMidpointsAndExceptionalValues)
+TEST(simd_reduced, ExhaustiveEncodingWideningAndMemory_half)     { run_simd_reduced_ExhaustiveEncodingWideningAndMemory<scalars::half>(); }
+TEST(simd_reduced, ExhaustiveEncodingWideningAndMemory_bfloat16) { run_simd_reduced_ExhaustiveEncodingWideningAndMemory<scalars::bfloat16>(); }
+
+template <class T> void run_simd_reduced_NarrowingMidpointsAndExceptionalValues()
 {
-    using T = TypeParam;  // NOLINT(readability-identifier-naming)
-    using S = simd<T>;    // NOLINT(readability-identifier-naming)
+    using S = simd<T>;  // NOLINT(readability-identifier-naming)
     std::vector<float> cases;
     const uint32_t     max_finite = std::is_same_v<T, scalars::half> ? 0x7bff : 0x7f7f;
     for (uint32_t bits = 0; bits < max_finite; ++bits)
@@ -276,10 +274,12 @@ TYPED_TEST(simd_reduced, NarrowingMidpointsAndExceptionalValues)
     }
 }
 
-TYPED_TEST(simd_reduced, ArithmeticAndFloatAccumulation)
+TEST(simd_reduced, NarrowingMidpointsAndExceptionalValues_half)     { run_simd_reduced_NarrowingMidpointsAndExceptionalValues<scalars::half>(); }
+TEST(simd_reduced, NarrowingMidpointsAndExceptionalValues_bfloat16) { run_simd_reduced_NarrowingMidpointsAndExceptionalValues<scalars::bfloat16>(); }
+
+template <class T> void run_simd_reduced_ArithmeticAndFloatAccumulation()
 {
-    using T = TypeParam;  // NOLINT(readability-identifier-naming)
-    using S = simd<T>;    // NOLINT(readability-identifier-naming)
+    using S = simd<T>;  // NOLINT(readability-identifier-naming)
     // NOLINTNEXTLINE(bugprone-random-generator-seed): fixed seed for reproducibility
     std::mt19937                          rng(87291);
     std::uniform_real_distribution<float> dist(-5, 5);
@@ -337,10 +337,12 @@ TYPED_TEST(simd_reduced, ArithmeticAndFloatAccumulation)
     expect_value(S::hmax(S::loadu(x.data())), x.back());
 }
 
-TYPED_TEST(simd_reduced, MasksComparisonsAndBitPreservingSelect)
+TEST(simd_reduced, ArithmeticAndFloatAccumulation_half)     { run_simd_reduced_ArithmeticAndFloatAccumulation<scalars::half>(); }
+TEST(simd_reduced, ArithmeticAndFloatAccumulation_bfloat16) { run_simd_reduced_ArithmeticAndFloatAccumulation<scalars::bfloat16>(); }
+
+template <class T> void run_simd_reduced_MasksComparisonsAndBitPreservingSelect()
 {
-    using T = TypeParam;  // NOLINT(readability-identifier-naming)
-    using S = simd<T>;    // NOLINT(readability-identifier-naming)
+    using S = simd<T>;  // NOLINT(readability-identifier-naming)
     std::array<T, S::size>                 x, y, out;
     std::array<typename S::int_t, S::size> mask;
     const T nan = from_bits<T>(std::is_same_v<T, scalars::half> ? 0x7e35 : 0x7fc5);
@@ -395,10 +397,12 @@ TYPED_TEST(simd_reduced, MasksComparisonsAndBitPreservingSelect)
     }
 }
 
-TYPED_TEST(simd_reduced, SignedZerosNaNsAndMinMax)
+TEST(simd_reduced, MasksComparisonsAndBitPreservingSelect_half)     { run_simd_reduced_MasksComparisonsAndBitPreservingSelect<scalars::half>(); }
+TEST(simd_reduced, MasksComparisonsAndBitPreservingSelect_bfloat16) { run_simd_reduced_MasksComparisonsAndBitPreservingSelect<scalars::bfloat16>(); }
+
+template <class T> void run_simd_reduced_SignedZerosNaNsAndMinMax()
 {
-    using T = TypeParam;  // NOLINT(readability-identifier-naming)
-    using S = simd<T>;    // NOLINT(readability-identifier-naming)
+    using S = simd<T>;  // NOLINT(readability-identifier-naming)
     std::array<T, S::size> out;
     const auto             plus = S::set(T(0.f)), minus = S::set(from_bits<T>(0x8000));
     S::storeu(S::min(plus, minus), out.data());
@@ -460,10 +464,12 @@ TYPED_TEST(simd_reduced, SignedZerosNaNsAndMinMax)
     }
 }
 
-TYPED_TEST(simd_reduced, MemoryTailsBroadcastAndGatherScatter)
+TEST(simd_reduced, SignedZerosNaNsAndMinMax_half)     { run_simd_reduced_SignedZerosNaNsAndMinMax<scalars::half>(); }
+TEST(simd_reduced, SignedZerosNaNsAndMinMax_bfloat16) { run_simd_reduced_SignedZerosNaNsAndMinMax<scalars::bfloat16>(); }
+
+template <class T> void run_simd_reduced_MemoryTailsBroadcastAndGatherScatter()
 {
-    using T = TypeParam;  // NOLINT(readability-identifier-naming)
-    using S = simd<T>;    // NOLINT(readability-identifier-naming)
+    using S = simd<T>;  // NOLINT(readability-identifier-naming)
     alignas(64) std::array<T, S::size + 2> input, out;
     for (int i = 0; i < S::size + 2; ++i)
     {
@@ -551,6 +557,9 @@ TYPED_TEST(simd_reduced, MemoryTailsBroadcastAndGatherScatter)
     EXPECT_EQ(out[0].x, input[0].x);  // last logical lane wins
 }
 
+TEST(simd_reduced, MemoryTailsBroadcastAndGatherScatter_half)     { run_simd_reduced_MemoryTailsBroadcastAndGatherScatter<scalars::half>(); }
+TEST(simd_reduced, MemoryTailsBroadcastAndGatherScatter_bfloat16) { run_simd_reduced_MemoryTailsBroadcastAndGatherScatter<scalars::bfloat16>(); }
+
 template <class T, int Rows> void check_transpose()
 {
     using S = simd<T>;  // NOLINT(readability-identifier-naming)
@@ -578,10 +587,9 @@ template <class T, int Rows> void check_transpose()
     }
 }
 
-TYPED_TEST(simd_reduced, TransposeAndHalfWidthUtilities)
+template <class T> void run_simd_reduced_TransposeAndHalfWidthUtilities()
 {
-    using T = TypeParam;  // NOLINT(readability-identifier-naming)
-    using S = simd<T>;    // NOLINT(readability-identifier-naming)
+    using S = simd<T>;  // NOLINT(readability-identifier-naming)
     check_transpose<T, S::size>();
     check_transpose<T, 4>();
     check_transpose<T, 2 * S::size>();
@@ -616,6 +624,9 @@ TYPED_TEST(simd_reduced, TransposeAndHalfWidthUtilities)
     }
 }
 
+TEST(simd_reduced, TransposeAndHalfWidthUtilities_half)     { run_simd_reduced_TransposeAndHalfWidthUtilities<scalars::half>(); }
+TEST(simd_reduced, TransposeAndHalfWidthUtilities_bfloat16) { run_simd_reduced_TransposeAndHalfWidthUtilities<scalars::bfloat16>(); }
+
 template <class T, class Op, class Ref>
 void check_math(const char* name, Op op, Ref ref, float lo, float hi)
 {
@@ -636,10 +647,9 @@ void check_math(const char* name, Op op, Ref ref, float lo, float hi)
     }
 }
 
-TYPED_TEST(simd_reduced, CompleteRealMathSurface)
+template <class T> void run_simd_reduced_CompleteRealMathSurface()
 {
-    using T = TypeParam;  // NOLINT(readability-identifier-naming)
-    using S = simd<T>;    // NOLINT(readability-identifier-naming)
+    using S = simd<T>;  // NOLINT(readability-identifier-naming)
 #define CHECK_MATH(name, expression, lo, hi)                                                       \
     check_math<T>(                                                                                 \
         #name, [](auto v) { return S::name(v); }, [](float x) { return expression; }, lo, hi);
@@ -686,5 +696,9 @@ TYPED_TEST(simd_reduced, CompleteRealMathSurface)
         -4.f,
         4.f);
 }
+
+TEST(simd_reduced, CompleteRealMathSurface_half)     { run_simd_reduced_CompleteRealMathSurface<scalars::half>(); }
+TEST(simd_reduced, CompleteRealMathSurface_bfloat16) { run_simd_reduced_CompleteRealMathSurface<scalars::bfloat16>(); }
+
 }  // namespace
 #endif
