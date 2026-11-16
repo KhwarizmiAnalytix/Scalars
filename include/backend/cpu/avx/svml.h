@@ -2,76 +2,90 @@
 
 #if SCALARS_HAS_SVML && (SCALARS_HAS_AVX2 || SCALARS_HAS_AVX)
 
-#define svml_ps(op) __svml_##op##f8
-#define svml_pd(op) __svml_##op##4
-#define svml_ps_ha(op) __svml_##op##f8_ha
-#define svml_pd_ha(op) __svml_##op##4_ha
-#define svml_ps_mask(op) __svml_##op##f8_mask
-#define svml_pd_mask(op) __svml_##op##4_mask
+// Call the SVML variant for the ISA this backend is compiled for instead of the
+// generic entry points (e.g. __svml_sinf8), which route through SVML's runtime
+// CPU dispatcher. The build already guarantees the ISA, so the dispatch is
+// redundant. _l9 = AVX2 + FMA (Haswell+), _e9 = AVX (Sandy Bridge+).
+// Results are bit-identical to the dispatched path on matching hardware.
+#if SCALARS_HAS_AVX2
+#define SCALARS_SVML_ISA _l9
+#define SCALARS_SVML_ISA_STR "_l9"
+#else
+#define SCALARS_SVML_ISA _e9
+#define SCALARS_SVML_ISA_STR "_e9"
+#endif
+#define SCALARS_SVML_CAT_(a, b) a##b
+#define SCALARS_SVML_CAT(a, b) SCALARS_SVML_CAT_(a, b)
+#define svml_ps(op) SCALARS_SVML_CAT(__svml_##op##f8, SCALARS_SVML_ISA)
+#define svml_pd(op) SCALARS_SVML_CAT(__svml_##op##4, SCALARS_SVML_ISA)
+#define svml_ps_ha(op) SCALARS_SVML_CAT(__svml_##op##f8_ha, SCALARS_SVML_ISA)
+#define svml_pd_ha(op) SCALARS_SVML_CAT(__svml_##op##4_ha, SCALARS_SVML_ISA)
+#define svml_ps_mask(op) SCALARS_SVML_CAT(__svml_##op##f8_mask, SCALARS_SVML_ISA)
+#define svml_pd_mask(op) SCALARS_SVML_CAT(__svml_##op##4_mask, SCALARS_SVML_ISA)
 // Under clang on Windows the entry points are redeclared below as __vectorcall
 // under the same symbol names; a default-convention declaration of the same
 // symbol would take precedence and reintroduce the by-pointer call.
 #if !(defined(_MSC_VER) && defined(__clang__))
 extern "C"
 {
-    __m256  __svml_expf8(__m256);
-    __m256d __svml_exp4(__m256d);
-    __m256  __svml_expm1f8(__m256);
-    __m256d __svml_expm14(__m256d);
-    __m256  __svml_exp2f8(__m256);
-    __m256d __svml_exp24(__m256d);
-    __m256  __svml_exp10f8(__m256);
-    __m256d __svml_exp104(__m256d);
-    __m256  __svml_logf8(__m256);
-    __m256d __svml_log4(__m256d);
-    __m256  __svml_log1pf8(__m256);
-    __m256d __svml_log1p4(__m256d);
-    __m256  __svml_log2f8(__m256);
-    __m256d __svml_log24(__m256d);
-    __m256  __svml_log10f8(__m256);
-    __m256d __svml_log104(__m256d);
-    __m256  __svml_sinf8(__m256);
-    __m256d __svml_sin4(__m256d);
-    __m256  __svml_cosf8(__m256);
-    __m256d __svml_cos4(__m256d);
-    __m256  __svml_tanf8(__m256);
-    __m256d __svml_tan4(__m256d);
-    __m256  __svml_asinf8(__m256);
-    __m256d __svml_asin4(__m256d);
-    __m256  __svml_acosf8(__m256);
-    __m256d __svml_acos4(__m256d);
-    __m256  __svml_atanf8(__m256);
-    __m256d __svml_atan4(__m256d);
-    __m256  __svml_sinhf8(__m256);
-    __m256d __svml_sinh4(__m256d);
-    __m256  __svml_coshf8(__m256);
-    __m256d __svml_cosh4(__m256d);
-    __m256  __svml_tanhf8(__m256);
-    __m256d __svml_tanh4(__m256d);
-    __m256  __svml_asinhf8(__m256);
-    __m256d __svml_asinh4(__m256d);
-    __m256  __svml_acoshf8(__m256);
-    __m256d __svml_acosh4(__m256d);
-    __m256  __svml_atanhf8(__m256);
-    __m256d __svml_atanh4(__m256d);
-    __m256  __svml_cbrtf8(__m256);
-    __m256d __svml_cbrt4(__m256d);
-    __m256  __svml_cdfnormf8(__m256);
-    __m256d __svml_cdfnorm4(__m256d);
-    __m256  __svml_cdfnorminvf8(__m256);
-    __m256d __svml_cdfnorminv4(__m256d);
-    __m256  __svml_truncf8(__m256);
-    __m256d __svml_trunc4(__m256d);
-    __m256  __svml_invsqrtf8(__m256);
-    __m256d __svml_invsqrt4(__m256d);
-    __m256  __svml_powf8(__m256, __m256);
-    __m256d __svml_pow4(__m256d, __m256d);
-    __m256  __svml_powf8_ha(__m256, __m256);
-    __m256d __svml_pow4_ha(__m256d, __m256d);
-    __m256  __svml_hypotf8(__m256, __m256);
-    __m256d __svml_hypot4(__m256d, __m256d);
-    __m256  __svml_hypotf8_ha(__m256, __m256);
-    __m256d __svml_hypot4_ha(__m256d, __m256d);
+    __m256  svml_ps(exp)(__m256);
+    __m256d svml_pd(exp)(__m256d);
+    __m256  svml_ps(expm1)(__m256);
+    __m256d svml_pd(expm1)(__m256d);
+    __m256  svml_ps(exp2)(__m256);
+    __m256d svml_pd(exp2)(__m256d);
+    __m256  svml_ps(exp10)(__m256);
+    __m256d svml_pd(exp10)(__m256d);
+    __m256  svml_ps(log)(__m256);
+    __m256d svml_pd(log)(__m256d);
+    __m256  svml_ps(log1p)(__m256);
+    __m256d svml_pd(log1p)(__m256d);
+    __m256  svml_ps(log2)(__m256);
+    __m256d svml_pd(log2)(__m256d);
+    __m256  svml_ps(log10)(__m256);
+    __m256d svml_pd(log10)(__m256d);
+    __m256  svml_ps(sin)(__m256);
+    __m256d svml_pd(sin)(__m256d);
+    __m256  svml_ps(cos)(__m256);
+    __m256d svml_pd(cos)(__m256d);
+    __m256  svml_ps(tan)(__m256);
+    __m256d svml_pd(tan)(__m256d);
+    __m256  svml_ps(asin)(__m256);
+    __m256d svml_pd(asin)(__m256d);
+    __m256  svml_ps(acos)(__m256);
+    __m256d svml_pd(acos)(__m256d);
+    __m256  svml_ps(atan)(__m256);
+    __m256d svml_pd(atan)(__m256d);
+    __m256  svml_ps(sinh)(__m256);
+    __m256d svml_pd(sinh)(__m256d);
+    __m256  svml_ps(cosh)(__m256);
+    __m256d svml_pd(cosh)(__m256d);
+    __m256  svml_ps(tanh)(__m256);
+    __m256d svml_pd(tanh)(__m256d);
+    __m256  svml_ps(asinh)(__m256);
+    __m256d svml_pd(asinh)(__m256d);
+    __m256  svml_ps(acosh)(__m256);
+    __m256d svml_pd(acosh)(__m256d);
+    __m256  svml_ps(atanh)(__m256);
+    __m256d svml_pd(atanh)(__m256d);
+    __m256  svml_ps(cbrt)(__m256);
+    __m256d svml_pd(cbrt)(__m256d);
+    __m256  svml_ps(cdfnorm)(__m256);
+    __m256d svml_pd(cdfnorm)(__m256d);
+    __m256  svml_ps(cdfnorminv)(__m256);
+    __m256d svml_pd(cdfnorminv)(__m256d);
+    __m256  svml_ps(trunc)(__m256);
+    __m256d svml_pd(trunc)(__m256d);
+    __m256  svml_ps(invsqrt)(__m256);
+    __m256d svml_pd(invsqrt)(__m256d);
+    __m256  svml_ps(pow)(__m256, __m256);
+    __m256d svml_pd(pow)(__m256d, __m256d);
+    __m256  svml_ps_ha(pow)(__m256, __m256);
+    __m256d svml_pd_ha(pow)(__m256d, __m256d);
+    __m256  svml_ps(hypot)(__m256, __m256);
+    __m256d svml_pd(hypot)(__m256d, __m256d);
+    __m256  svml_ps_ha(hypot)(__m256, __m256);
+    __m256d svml_pd_ha(hypot)(__m256d, __m256d);
 }
 #endif  // !(defined(_MSC_VER) && defined(__clang__))
 
@@ -88,10 +102,12 @@ extern "C"
 // is left in its argument register. Declare each entry point __vectorcall
 // instead; the \01 prefix keeps the undecorated DLL symbol (no @@N suffix).
 #define SVML_FUNCTION_ONE_ARG(op)                                                                  \
-    extern "C" __m256 __vectorcall scalars_svml_##op##f8(__m256) __asm__("\01"                     \
-                                                                         "__svml_" #op "f8");      \
-    extern "C" __m256d __vectorcall scalars_svml_##op##4(__m256d) __asm__("\01"                    \
-                                                                          "__svml_" #op "4");      \
+    extern "C" __m256 __vectorcall scalars_svml_##op##f8(__m256) __asm__(                          \
+        "\01"                                                                                      \
+        "__svml_" #op "f8" SCALARS_SVML_ISA_STR);                                                  \
+    extern "C" __m256d __vectorcall scalars_svml_##op##4(__m256d) __asm__(                         \
+        "\01"                                                                                      \
+        "__svml_" #op "4" SCALARS_SVML_ISA_STR);                                                   \
     SCALARS_FORCE_INLINE __m256 __vectorcall _mm256_##op##_ps(__m256 x)                            \
     {                                                                                              \
         return scalars_svml_##op##f8(x);                                                           \
@@ -104,10 +120,10 @@ extern "C"
 #define SVML_FUNCTION_TWO_ARGS(op)                                                                 \
     extern "C" __m256 __vectorcall scalars_svml_##op##f8(__m256, __m256) __asm__(                  \
         "\01"                                                                                      \
-        "__svml_" #op "f8");                                                                       \
+        "__svml_" #op "f8" SCALARS_SVML_ISA_STR);                                                  \
     extern "C" __m256d __vectorcall scalars_svml_##op##4(__m256d, __m256d) __asm__(                \
         "\01"                                                                                      \
-        "__svml_" #op "4");                                                                        \
+        "__svml_" #op "4" SCALARS_SVML_ISA_STR);                                                   \
     SCALARS_FORCE_INLINE __m256 __vectorcall _mm256_##op##_ps(__m256 x, __m256 y)                  \
     {                                                                                              \
         return scalars_svml_##op##f8(x, y);                                                        \
@@ -263,6 +279,10 @@ SVML_FUNCTION_TWO_ARGS(hypot)
 #undef svml_pd_ha
 #undef svml_ps_mask
 #undef svml_pd_mask
+#undef SCALARS_SVML_CAT
+#undef SCALARS_SVML_CAT_
+#undef SCALARS_SVML_ISA
+#undef SCALARS_SVML_ISA_STR
 
 #endif  // !MSVC or the compiler does not already provide the SVML intrinsics
 #elif SCALARS_HAS_SLEEF && (SCALARS_HAS_AVX2 || SCALARS_HAS_AVX)

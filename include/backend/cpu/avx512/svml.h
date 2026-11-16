@@ -2,12 +2,20 @@
 
 #if SCALARS_HAS_SVML && SCALARS_HAS_AVX512
 
-#define svml_ps(op) __svml_##op##f16
-#define svml_pd(op) __svml_##op##8
-#define svml_ps_ha(op) __svml_##op##f16_ha
-#define svml_pd_ha(op) __svml_##op##8_ha
-#define svml_ps_mask(op) __svml_##op##f16_mask
-#define svml_pd_mask(op) __svml_##op##8_mask
+// Call the SVML variant for the ISA this backend is compiled for instead of the
+// generic entry points (e.g. __svml_sinf16), which route through SVML's runtime
+// CPU dispatcher. The build already requires AVX-512 F/CD/BW/DQ/VL, which is
+// SVML's _z0 (Skylake-AVX512) variant, so the dispatch is redundant.
+#define SCALARS_SVML_ISA _z0
+#define SCALARS_SVML_ISA_STR "_z0"
+#define SCALARS_SVML_CAT_(a, b) a##b
+#define SCALARS_SVML_CAT(a, b) SCALARS_SVML_CAT_(a, b)
+#define svml_ps(op) SCALARS_SVML_CAT(__svml_##op##f16, SCALARS_SVML_ISA)
+#define svml_pd(op) SCALARS_SVML_CAT(__svml_##op##8, SCALARS_SVML_ISA)
+#define svml_ps_ha(op) SCALARS_SVML_CAT(__svml_##op##f16_ha, SCALARS_SVML_ISA)
+#define svml_pd_ha(op) SCALARS_SVML_CAT(__svml_##op##8_ha, SCALARS_SVML_ISA)
+#define svml_ps_mask(op) SCALARS_SVML_CAT(__svml_##op##f16_mask, SCALARS_SVML_ISA)
+#define svml_pd_mask(op) SCALARS_SVML_CAT(__svml_##op##8_mask, SCALARS_SVML_ISA)
 
 // Under clang on Windows the entry points are redeclared below as __vectorcall
 // under the same symbol names; a default-convention declaration of the same
@@ -15,69 +23,69 @@
 #if !(defined(_MSC_VER) && defined(__clang__))
 extern "C"
 {
-    __m512  __svml_expf16(__m512);
-    __m512d __svml_exp8(__m512d);
-    __m512  __svml_expm1f16(__m512);
-    __m512d __svml_expm18(__m512d);
-    __m512  __svml_exp2f16(__m512);
-    __m512d __svml_exp28(__m512d);
-    __m512  __svml_exp10f16(__m512);
-    __m512d __svml_exp108(__m512d);
-    __m512  __svml_logf16(__m512);
-    __m512d __svml_log8(__m512d);
-    __m512  __svml_log1pf16(__m512);
-    __m512d __svml_log1p8(__m512d);
-    __m512  __svml_log2f16(__m512);
-    __m512d __svml_log28(__m512d);
-    __m512  __svml_log10f16(__m512);
-    __m512d __svml_log108(__m512d);
-    __m512  __svml_sinf16(__m512);
-    __m512d __svml_sin8(__m512d);
-    __m512  __svml_cosf16(__m512);
-    __m512d __svml_cos8(__m512d);
-    __m512  __svml_tanf16(__m512);
-    __m512d __svml_tan8(__m512d);
-    __m512  __svml_asinf16(__m512);
-    __m512d __svml_asin8(__m512d);
-    __m512  __svml_acosf16(__m512);
-    __m512d __svml_acos8(__m512d);
-    __m512  __svml_atanf16(__m512);
-    __m512d __svml_atan8(__m512d);
-    __m512  __svml_sinhf16(__m512);
-    __m512d __svml_sinh8(__m512d);
-    __m512  __svml_coshf16(__m512);
-    __m512d __svml_cosh8(__m512d);
-    __m512  __svml_tanhf16(__m512);
-    __m512d __svml_tanh8(__m512d);
-    __m512  __svml_asinhf16(__m512);
-    __m512d __svml_asinh8(__m512d);
-    __m512  __svml_acoshf16(__m512);
-    __m512d __svml_acosh8(__m512d);
-    __m512  __svml_atanhf16(__m512);
-    __m512d __svml_atanh8(__m512d);
-    __m512  __svml_cbrtf16(__m512);
-    __m512d __svml_cbrt8(__m512d);
-    __m512  __svml_cdfnormf16(__m512);
-    __m512d __svml_cdfnorm8(__m512d);
-    __m512  __svml_cdfnorminvf16(__m512);
-    __m512d __svml_cdfnorminv8(__m512d);
-    __m512  __svml_truncf16(__m512);
-    __m512d __svml_trunc8(__m512d);
-    __m512  __svml_invsqrtf16(__m512);
-    __m512d __svml_invsqrt8(__m512d);
-    __m512  __svml_powf16(__m512, __m512);
-    __m512d __svml_pow8(__m512d, __m512d);
-    __m512  __svml_powf16_ha(__m512, __m512);
-    __m512d __svml_pow8_ha(__m512d, __m512d);
-    __m512  __svml_hypotf16(__m512, __m512);
-    __m512d __svml_hypot8(__m512d, __m512d);
-    __m512  __svml_hypotf16_ha(__m512, __m512);
-    __m512d __svml_hypot8_ha(__m512d, __m512d);
+    __m512  svml_ps(exp)(__m512);
+    __m512d svml_pd(exp)(__m512d);
+    __m512  svml_ps(expm1)(__m512);
+    __m512d svml_pd(expm1)(__m512d);
+    __m512  svml_ps(exp2)(__m512);
+    __m512d svml_pd(exp2)(__m512d);
+    __m512  svml_ps(exp10)(__m512);
+    __m512d svml_pd(exp10)(__m512d);
+    __m512  svml_ps(log)(__m512);
+    __m512d svml_pd(log)(__m512d);
+    __m512  svml_ps(log1p)(__m512);
+    __m512d svml_pd(log1p)(__m512d);
+    __m512  svml_ps(log2)(__m512);
+    __m512d svml_pd(log2)(__m512d);
+    __m512  svml_ps(log10)(__m512);
+    __m512d svml_pd(log10)(__m512d);
+    __m512  svml_ps(sin)(__m512);
+    __m512d svml_pd(sin)(__m512d);
+    __m512  svml_ps(cos)(__m512);
+    __m512d svml_pd(cos)(__m512d);
+    __m512  svml_ps(tan)(__m512);
+    __m512d svml_pd(tan)(__m512d);
+    __m512  svml_ps(asin)(__m512);
+    __m512d svml_pd(asin)(__m512d);
+    __m512  svml_ps(acos)(__m512);
+    __m512d svml_pd(acos)(__m512d);
+    __m512  svml_ps(atan)(__m512);
+    __m512d svml_pd(atan)(__m512d);
+    __m512  svml_ps(sinh)(__m512);
+    __m512d svml_pd(sinh)(__m512d);
+    __m512  svml_ps(cosh)(__m512);
+    __m512d svml_pd(cosh)(__m512d);
+    __m512  svml_ps(tanh)(__m512);
+    __m512d svml_pd(tanh)(__m512d);
+    __m512  svml_ps(asinh)(__m512);
+    __m512d svml_pd(asinh)(__m512d);
+    __m512  svml_ps(acosh)(__m512);
+    __m512d svml_pd(acosh)(__m512d);
+    __m512  svml_ps(atanh)(__m512);
+    __m512d svml_pd(atanh)(__m512d);
+    __m512  svml_ps(cbrt)(__m512);
+    __m512d svml_pd(cbrt)(__m512d);
+    __m512  svml_ps(cdfnorm)(__m512);
+    __m512d svml_pd(cdfnorm)(__m512d);
+    __m512  svml_ps(cdfnorminv)(__m512);
+    __m512d svml_pd(cdfnorminv)(__m512d);
+    __m512  svml_ps(trunc)(__m512);
+    __m512d svml_pd(trunc)(__m512d);
+    __m512  svml_ps(invsqrt)(__m512);
+    __m512d svml_pd(invsqrt)(__m512d);
+    __m512  svml_ps(pow)(__m512, __m512);
+    __m512d svml_pd(pow)(__m512d, __m512d);
+    __m512  svml_ps_ha(pow)(__m512, __m512);
+    __m512d svml_pd_ha(pow)(__m512d, __m512d);
+    __m512  svml_ps(hypot)(__m512, __m512);
+    __m512d svml_pd(hypot)(__m512d, __m512d);
+    __m512  svml_ps_ha(hypot)(__m512, __m512);
+    __m512d svml_pd_ha(hypot)(__m512d, __m512d);
 #if defined(__SCALARS_COMPILER_MSVC__) && _MSC_VER <= 1920
-    __m512  __svml_ceilf16(__m512);
-    __m512d __svml_ceil8(__m512d);
-    __m512  __svml_floorf16(__m512);
-    __m512d __svml_floor8(__m512d);
+    __m512  svml_ps(ceil)(__m512);
+    __m512d svml_pd(ceil)(__m512d);
+    __m512  svml_ps(floor)(__m512);
+    __m512d svml_pd(floor)(__m512d);
 #endif
 }
 #endif  // !(defined(_MSC_VER) && defined(__clang__))
@@ -94,10 +102,12 @@ extern "C"
 // is left in its argument register. Declare each entry point __vectorcall
 // instead; the \01 prefix keeps the undecorated DLL symbol (no @@N suffix).
 #define SVML_FUNCTION_ONE_ARG(op)                                                                  \
-    extern "C" __m512 __vectorcall scalars_svml_##op##f16(__m512) __asm__("\01"                    \
-                                                                          "__svml_" #op "f16");    \
-    extern "C" __m512d __vectorcall scalars_svml_##op##8(__m512d) __asm__("\01"                    \
-                                                                          "__svml_" #op "8");      \
+    extern "C" __m512 __vectorcall scalars_svml_##op##f16(__m512) __asm__(                         \
+        "\01"                                                                                      \
+        "__svml_" #op "f16" SCALARS_SVML_ISA_STR);                                                 \
+    extern "C" __m512d __vectorcall scalars_svml_##op##8(__m512d) __asm__(                         \
+        "\01"                                                                                      \
+        "__svml_" #op "8" SCALARS_SVML_ISA_STR);                                                   \
     SCALARS_FORCE_INLINE __m512 __vectorcall _mm512_##op##_ps(__m512 x)                            \
     {                                                                                              \
         return scalars_svml_##op##f16(x);                                                          \
@@ -110,10 +120,10 @@ extern "C"
 #define SVML_FUNCTION_TWO_ARGS(op)                                                                 \
     extern "C" __m512 __vectorcall scalars_svml_##op##f16(__m512, __m512) __asm__(                 \
         "\01"                                                                                      \
-        "__svml_" #op "f16");                                                                      \
+        "__svml_" #op "f16" SCALARS_SVML_ISA_STR);                                                 \
     extern "C" __m512d __vectorcall scalars_svml_##op##8(__m512d, __m512d) __asm__(                \
         "\01"                                                                                      \
-        "__svml_" #op "8");                                                                        \
+        "__svml_" #op "8" SCALARS_SVML_ISA_STR);                                                   \
     SCALARS_FORCE_INLINE __m512 __vectorcall _mm512_##op##_ps(__m512 x, __m512 y)                  \
     {                                                                                              \
         return scalars_svml_##op##f16(x, y);                                                       \
@@ -221,6 +231,10 @@ SVML_FUNCTION_ONE_ARG(floor)
 #undef svml_pd_ha
 #undef svml_ps_mask
 #undef svml_pd_mask
+#undef SCALARS_SVML_CAT
+#undef SCALARS_SVML_CAT_
+#undef SCALARS_SVML_ISA
+#undef SCALARS_SVML_ISA_STR
 
 #endif  // !MSVC or the compiler does not already provide the SVML intrinsics
 #elif SCALARS_HAS_SLEEF && SCALARS_HAS_AVX512
