@@ -225,6 +225,8 @@ SVML_FUNCTION_ONE_ARG(floor)
 
 #include <sleef.h>
 
+#include "math/normal_cdf.h"  // scalars::inv_normalcdf for cdfnorminv below
+
 // clang-format off
 
 // SSE SLEEF wrappers: float=4 lanes (f4), double=2 lanes (d2), accuracy=1 ULP (u10).

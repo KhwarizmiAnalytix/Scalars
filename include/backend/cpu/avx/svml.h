@@ -289,6 +289,8 @@ SVML_FUNCTION_TWO_ARGS(hypot)
 
 #include <sleef.h>
 
+#include "math/normal_cdf.h"  // scalars::inv_normalcdf for cdfnorminv below
+
 // clang-format off
 
 // AVX2 SLEEF wrappers: float=8 lanes (f8), double=4 lanes (d4), accuracy=1 ULP (u10).
