@@ -217,6 +217,18 @@
 #define SCALARS_ALIGN(alignment)
 #endif
 
+// alignas() for an inline static data member defined in its class. nvcc's EDG
+// front end (seen with CUDA 13.2 and cl.exe as host compiler) rejects that
+// combination: "alignment attribute must also appear on definition". The
+// members using this have SIMD vector types (__m256d, __m512i, ...), whose
+// type alignment already equals the requested value, so dropping the
+// redundant specifier under nvcc keeps the same storage alignment.
+#if defined(__NVCC__) && !defined(__clang__)
+#define SCALARS_ALIGNAS_INLINE_STATIC(alignment)
+#else
+#define SCALARS_ALIGNAS_INLINE_STATIC(alignment) alignas(alignment)
+#endif
+
 inline constexpr std::size_t SCALARS_ALIGNMENT = 64;
 
 #if __cplusplus >= 201703L

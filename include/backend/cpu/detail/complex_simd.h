@@ -634,10 +634,10 @@ public:
             const auto half      = r::set(T(.5));
             const auto magnitude = r::sqrt(r::fma(a.imag, a.imag, r::mul(a.real, a.real)));
             const auto large     = r::sqrt(r::mul(r::add(magnitude, r::fabs(a.real)), half));
-            const auto small     = r::mul(r::div(a.imag, large), half);
+            const auto small_value = r::mul(r::div(a.imag, large), half);
             const auto positive  = r::ge(a.real, r::setzero());
-            return {r::if_else(positive, large, r::fabs(small)),
-                r::if_else(positive, small, r::signcopy(large, a.imag))};
+            return {r::if_else(positive, large, r::fabs(small_value)),
+                r::if_else(positive, small_value, r::signcopy(large, a.imag))};
         }
         return map(a, [](value_t x) { return scalars::sqrt(x); });
     }

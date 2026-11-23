@@ -54,8 +54,9 @@ template <class T> SCALARS_FORCE_INLINE __m128 widen4(const uint16_t* from)
         normal = _mm_add_epi32(normal, _mm_and_si128(special, _mm_set1_epi32(0x38000000)));
         const auto subnormal =
             _mm_castps_si128(_mm_mul_ps(_mm_cvtepi32_ps(mag), _mm_set1_ps(0x1p-24f)));
-        const auto small = _mm_cmpgt_epi32(_mm_set1_epi32(0x400), mag);
-        return _mm_castsi128_ps(_mm_or_si128(sign, select_bits(small, subnormal, normal)));
+        // Not "small": the Windows SDK (rpcndr.h) defines it as a macro.
+        const auto small_value = _mm_cmpgt_epi32(_mm_set1_epi32(0x400), mag);
+        return _mm_castsi128_ps(_mm_or_si128(sign, select_bits(small_value, subnormal, normal)));
 #endif
     }
     else
