@@ -161,6 +161,10 @@ if(SCALARS_GPU_BACKEND STREQUAL "cuda")
     endif()
     enable_language(CUDA)
     set(SCALARS_HAS_CUDA 1)
+    # types/complex.h includes Thrust. CUDA 13 moved it into include/cccl,
+    # which only nvcc searches by default.
+    find_package(CUDAToolkit REQUIRED)
+    find_package(CCCL CONFIG REQUIRED HINTS "${CUDAToolkit_LIBRARY_DIR}/cmake")
 
     if(DEFINED CMAKE_CUDA_ARCHITECTURES AND NOT CMAKE_CUDA_ARCHITECTURES STREQUAL ""
        AND NOT CMAKE_CUDA_ARCHITECTURES STREQUAL "native"
@@ -244,11 +248,9 @@ function(scalars_apply_gpu_backend target)
                        CUDA_ARCHITECTURES "${SCALARS_CUDA_ARCHITECTURES}"
                        CUDA_SEPARABLE_COMPILATION OFF
         )
+        target_link_libraries(${target} PUBLIC CCCL::CCCL)
         if(CMAKE_CUDA_COMPILER_ID STREQUAL "Clang")
             target_compile_options(${target} PRIVATE $<$<COMPILE_LANGUAGE:CUDA>:-ffast-math>)
-            target_compile_options(
-                ${target} PRIVATE $<$<COMPILE_LANGUAGE:CUDA>:-std=c++${SCALARS_CXX_STANDARD}>
-            )
         elseif(MSVC)
             # cl.exe's traditional preprocessor trips a hard error in CCCL's
             # headers (cuda/std/__cccl/preprocessor.h); nvcc's MSVC host needs
