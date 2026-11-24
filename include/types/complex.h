@@ -334,7 +334,7 @@ template <typename T> struct alignas(sizeof(T) * 2) complex
                 // independently: components may differ by thousands of powers
                 // of two while one quotient component remains finite.
                 int denominator_exponent = 0;
-                std::frexp(std::fmax(std::fabs(c), std::fabs(d)), &denominator_exponent);
+                (void)std::frexp(std::fmax(std::fabs(c), std::fabs(d)), &denominator_exponent);
                 const T    normalized_c = std::scalbn(c, -denominator_exponent);
                 const T    normalized_d = std::scalbn(d, -denominator_exponent);
                 const auto denominator  = normalized_c * normalized_c + normalized_d * normalized_d;

@@ -821,7 +821,7 @@ template <class T> void run_simd_complex_UnaryMath()
 
     CHECK_UNARY(exp, (region{{-8, 8}, {-25, 25}}), (tol{2.2, by_reference(2.5, 3.1)}), std::exp(z));
     CHECK_UNARY(
-        exp, (region{{-e, e}, {-512, 512}}), (tol{2.3, by_reference(2.8, 3.1)}), std::exp(z));
+        exp, (region{{-e, e}, {-512, 512}}), (tol{2.4, by_reference(2.8, 3.1)}), std::exp(z));
     CHECK_UNARY(expm1, (region{{-8, 8}, {-25, 25}}), (tol{2.3, 1.8}), ref_expm1(z));
     CHECK_UNARY(expm1, box(1e-3), (tol{2.2, 1.4}), ref_expm1(z));
     CHECK_UNARY(
@@ -1852,7 +1852,7 @@ template <class T> void run_simd_complex_native_MixedLaneEdgesAndBranchCuts()
         c(T(-1), tiny)};
     const tol               magnitude   = signed_zeros(tol{0.5, 0.5});
     const tol               exponential = signed_zeros(tol{1, 1.4});
-    const tol               logarithm   = signed_zeros(tol{0.5, 0.5});
+    const tol               logarithm   = signed_zeros(tol{0.77, 0.5});
     std::array<c, s::size>  input, output;
     std::array<T, s::size>  real;
     for (const auto edge : edges)

@@ -1,4 +1,4 @@
-Complex SIMD test tolerances, 2026-11-15.
+Complex SIMD test tolerances, 2026-11-24.
 
 [`TestSimdComplex.cxx`](../Testing/Cxx/TestSimdComplex.cxx) holds every
 one-, two-, and three-argument math function of the complex packets to the
@@ -98,6 +98,7 @@ entries the emulated Linux x86 runs had underestimated:
 | Linux x86_64 | AVX2 + SVML | Clang 21, Release | double `mul` |
 | Linux x86_64 | AVX-512 | GCC 15, Release | float `sqrt`, `invsqrt`, `reciprocal`, `exp`, `log2`, `log10`, `abs`, `fabs`, `fma`; double `reciprocal`, `expm1`, `exp10`, `log1p`, `sin`, `tan`, `acosh` |
 | Windows x86_64 | AVX2 + SVML | MSVC 19.44, Release | double `exp` (narrow) |
+| Linux x86_64 | AVX + SVML (`_e9`) | GCC 15, Release | float `exp` (wide), `MixedLaneEdgesAndBranchCuts` float `log` |
 
 Not measured: MKL. Under Valgrind, x87 `long double` arithmetic runs in
 double precision, so the `complex<double>` reference is no better than the
@@ -118,7 +119,7 @@ for half and bfloat16.
 | `invsqrt` | sweep / box(10) | 1.8 / 1.7 | 2.3 / 2.2 |
 | `reciprocal` | sweep / box(10) | 1.3 / 1.3 | 1.1 / 2 |
 | `sqr` | box(100) | 0.89 | 0.98 (1.2 narrow) |
-| `exp` | re ±8, im ±25 / wide | 2.2 / 2.3 | 2.5 (3.1 narrow) / 2.8 (3.1 narrow) |
+| `exp` | re ±8, im ±25 / wide | 2.2 / 2.4 | 2.5 (3.1 narrow) / 2.8 (3.1 narrow) |
 | `expm1` | re ±8, im ±25 / box(1e-3) | 2.3 / 2.2 | 1.8 / 1.4 |
 | `exp2` | re ±12, im ±25 | 8.8 | 13 |
 | `exp10` | re ±3, im ±10 | 12 | 20 |
