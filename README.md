@@ -301,10 +301,8 @@ between scalar and SIMD execution.
 | CMake option | Selection |
 | --- | --- |
 | `SCALARS_CPU_BACKEND` | `no`, `sse`, `avx`, `avx2`, `avx512`, `neon`, `sve` |
-| `SCALARS_ENABLE_SVML` | Bundled Intel SVML on supported x86 platforms |
+| `SCALARS_MATH_BACKEND` | `auto` (default, built-in), `svml`, `sleef`, `accelerate` |
 | `SCALARS_ENABLE_MKL` | Intel MKL VML on x86 |
-| `SCALARS_ENABLE_SLEEF` | SLEEF from `ThirdParty/sleef` |
-| `SCALARS_ENABLE_ACCELERATE` | Apple Accelerate vForce on AArch64 |
 
 The default CPU backend is AVX2 on x86, NEON on AArch64, and `no` elsewhere,
 subject to compiler support. SVE currently reuses NEON packets and requires
@@ -316,11 +314,21 @@ is **no runtime ISA dispatch**. The CMake target propagates matching ISA flags t
 consumers. Select the narrowest backend supported by your deployment machines;
 use `-DSCALARS_CPU_BACKEND=no` to disable CPU packet code.
 
-On x86, math uses SVML or MKL, then SLEEF when selected. On AArch64, it uses
-Accelerate or SLEEF. Configuration may auto-enable SVML on x86, Accelerate on
-Apple AArch64, or SLEEF on other AArch64 hosts. Inspect the configuration summary
-for the actual provider. Without a vector math provider, transcendental functions
-map standard-library calls over individual lanes.
+`SCALARS_MATH_BACKEND` selects the vector math library behind the CPU packets'
+transcendental functions: `svml` is the bundled Intel SVML (x86 only), `sleef`
+builds SLEEF from `ThirdParty/sleef`, `accelerate` is Apple Accelerate vForce
+(Apple only), and `auto` (the default) is the built-in port described below,
+used even when the compiler provides SVML intrinsics. A library that cannot be
+used falls back to `auto` with a warning; the configuration summary shows the
+requested and resolved backend.
+MKL VML is enabled separately with `SCALARS_ENABLE_MKL`. The built-in port is a
+vectorized port of Eigen's packet math
+([`vector_math.h`](include/backend/cpu/detail/vector_math.h)) on every CPU tier:
+exp, expm1, exp2, exp10, log, log1p, log2, log10, trigonometric, inverse
+trigonometric, hyperbolic and inverse hyperbolic functions, cbrt, pow, hypot,
+and the normal distribution and its inverse. Measured against libm, most
+functions are within 2 ulp for float and double, the inverse trigonometric
+functions and tan within 3.5, and the erfc-based functions within 7. GPU device code keeps the CUDA, HIP, or Metal math library.
 
 <details>
 <summary>Packet memory, precision, and packing details</summary>
@@ -522,6 +530,9 @@ The project license is [MIT](LICENSE). Sections of
 [`types/half.h`](include/types/half.h) and
 [`types/bfloat16.h`](include/types/bfloat16.h) derive from PyTorch c10
 `Half-inl.h` and `BFloat16-inl.h` under BSD-3-Clause. Half conversion routines
-also derive from Marat Dukhan's FP16 library under MIT. [NOTICE](NOTICE)
+also derive from Marat Dukhan's FP16 library under MIT. The vectorized math in
+[`backend/cpu/detail/vector_math.h`](include/backend/cpu/detail/vector_math.h)
+is ported from Eigen and stays under MPL-2.0, which applies to that file only.
+[NOTICE](NOTICE)
 contains the attributions and license text; vendored dependencies retain their
 own notices, including [Intel SVML's license](ThirdParty/svml/LICENSE).

@@ -185,7 +185,7 @@ jobs:
   # ---------------------------------------------------------------------------
   # Intel SVML: ThirdParty/svml ships prebuilt Unix (.so) and Windows (.dll)
   # binaries directly in-tree, so no extra install step is required -- only
-  # SCALARS_ENABLE_SVML=ON plus an x86 CPU backend that activates
+  # SCALARS_MATH_BACKEND=svml plus an x86 CPU backend that activates
   # backend/cpu/avx/svml.h (SCALARS_HAS_AVX || SCALARS_HAS_AVX2).
   # ---------------------------------------------------------------------------
   svml:
@@ -216,7 +216,7 @@ jobs:
         run: >
           python3 "${{ github.workspace }}/Scripts/setup.py" config --compiler=default --source-dir . --build-dir build-svml --generator Ninja --build-type=Release
           --compile-commands=ON
-          --svml=ON --cpu-backend=avx2
+          --math-backend=svml --cpu-backend=avx2
 
       - name: Build
         run: python3 "${{ github.workspace }}/Scripts/setup.py" build --build-dir build-svml --parallel 4
@@ -552,11 +552,9 @@ jobs:
           python3 "${{ github.workspace }}/Scripts/setup.py" test --build-dir . --build-dir "$RUNNER_TEMP/scalars-consumer-build"
 
   # ---------------------------------------------------------------------------
-  # Installed SVML consumer: on Linux/Windows x86 with GCC/Clang, SVML gets
-  # auto-enabled by cmake/utils.cmake whenever the compiler lacks builtin
-  # SVML-equivalent intrinsics, so install-consumer above already links
-  # against it implicitly in most configurations. This job instead forces
-  # SCALARS_ENABLE_SVML=ON explicitly (matching the svml job above) so the
+  # Installed SVML consumer: SCALARS_MATH_BACKEND=auto uses the built-in
+  # vector math, so install-consumer above never links SVML. This job sets
+  # SCALARS_MATH_BACKEND=svml explicitly (matching the svml job above) so the
   # exported SVML::SVML/IRC/INTLC PUBLIC link requirement is exercised the
   # same way regardless of host compiler, and InstallConsumer's
   # check_simd_math() calls the exp/log/sin entry points backed by it.
@@ -593,7 +591,7 @@ jobs:
           fi
           python3 "${{ github.workspace }}/Scripts/setup.py" config --compiler=default --source-dir . --build-dir build-install-svml --generator Ninja --build-type=Release \
             --shared=ON --testing=OFF \
-            --svml=ON --cpu-backend=avx2 \
+            --math-backend=svml --cpu-backend=avx2 \
             --install-libdir=lib --install-prefix="$package_prefix" \
             "${rpath_args[@]}"
           python3 "${{ github.workspace }}/Scripts/setup.py" build --build-dir build-install-svml --parallel 4

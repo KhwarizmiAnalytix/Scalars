@@ -649,7 +649,14 @@ public:
     }
     static simd_t exp(simd_t a)
     {
-#if SCALARS_HAS_SVML || SCALARS_HAS_MKL || SCALARS_HAS_SLEEF || SCALARS_HAS_ACCELERATE
+// The vectorized fast path needs accurate packet exp/log/sin/cos: a math
+// library, or the port of Eigen's packet math (backend/cpu/detail/vector_math.h)
+// that serves the packets when SCALARS_X86_NATIVE_MATH / SCALARS_NEON_NATIVE_MATH.
+// The port takes it only with FMA: log_fast() and expm1 recover rounding errors
+// with fma, and without it they lose up to thousands of ulp near |z| = 1 (as
+// the library-backed path does on SSE2 builds without FMA).
+#if SCALARS_HAS_SVML || SCALARS_HAS_MKL || SCALARS_HAS_SLEEF || SCALARS_HAS_ACCELERATE || \
+    (SCALARS_X86_NATIVE_MATH && defined(__FMA__)) || SCALARS_NEON_NATIVE_MATH
         // Keep exp(real) normal and finite. Overflow/underflow and nonfinite
         // complex inputs retain the scalar library's special-value behavior.
         constexpr T limit = std::is_same_v<T, float> ? T(80) : T(700);
@@ -693,7 +700,14 @@ public:
     }
     static simd_t log(simd_t a)
     {
-#if SCALARS_HAS_SVML || SCALARS_HAS_MKL || SCALARS_HAS_SLEEF || SCALARS_HAS_ACCELERATE
+// The vectorized fast path needs accurate packet exp/log/sin/cos: a math
+// library, or the port of Eigen's packet math (backend/cpu/detail/vector_math.h)
+// that serves the packets when SCALARS_X86_NATIVE_MATH / SCALARS_NEON_NATIVE_MATH.
+// The port takes it only with FMA: log_fast() and expm1 recover rounding errors
+// with fma, and without it they lose up to thousands of ulp near |z| = 1 (as
+// the library-backed path does on SSE2 builds without FMA).
+#if SCALARS_HAS_SVML || SCALARS_HAS_MKL || SCALARS_HAS_SLEEF || SCALARS_HAS_ACCELERATE || \
+    (SCALARS_X86_NATIVE_MATH && defined(__FMA__)) || SCALARS_NEON_NATIVE_MATH
         // Same fast-path condition as exp() above. This used to exclude
         // Accelerate, which was only ever load-bearing while log_fast()
         // computed 0.5*log(re^2+im^2) directly: that formula loses all

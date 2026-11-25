@@ -268,7 +268,10 @@ SVML_FUNCTION_ONE_ARG(acosh)
 SVML_FUNCTION_ONE_ARG(atanh)
 SVML_FUNCTION_ONE_ARG(cbrt)
 SVML_FUNCTION_TWO_ARGS(pow)
-SVML_FUNCTION_TWO_ARGS(hypot)
+
+// hypot uses 0.5 ULP accuracy in SLEEF (no u10 variant exists).
+SCALARS_FORCE_INLINE __m128  _mm_hypot_ps(__m128  x, __m128  y) { return Sleef_hypotf4_u05(x, y); }
+SCALARS_FORCE_INLINE __m128d _mm_hypot_pd(__m128d x, __m128d y) { return Sleef_hypotd2_u05(x, y); }
 
 // trunc is mathematically exact — SLEEF uses no ULP suffix.
 SCALARS_FORCE_INLINE __m128  _mm_trunc_ps(__m128  x) { return Sleef_truncf4(x); }

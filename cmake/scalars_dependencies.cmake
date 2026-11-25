@@ -85,15 +85,9 @@ function(scalars_setup_sleef)
     if(NOT TARGET sleef AND NOT TARGET Sleef::sleef)
         set(_sleef_src "${SCALARS_THIRD_PARTY_DIR}/sleef")
         if(NOT EXISTS "${_sleef_src}/CMakeLists.txt")
-            message(WARNING "SCALARS_ENABLE_SLEEF=ON but ${_sleef_src} is missing (run "
-                            "'git submodule update --init -- ThirdParty/sleef'). Disabling SLEEF."
-            )
-            set(SCALARS_ENABLE_SLEEF
-                OFF
-                CACHE
-                    BOOL
-                    "Enable SLEEF SIMD math library (SSE/AVX/AVX2/AVX512/NEON); mutually exclusive with SVML"
-                    FORCE
+            message(WARNING "SCALARS_MATH_BACKEND resolved to sleef but ${_sleef_src} is missing (run "
+                            "'git submodule update --init -- ThirdParty/sleef'); falling back to "
+                            "compiler SVML intrinsics or the built-in vector math."
             )
             return()
         endif()
@@ -121,6 +115,10 @@ function(scalars_setup_sleef)
         # test_psha/test_psha_capi in CTest even though SLEEF_BUILD_TESTS is OFF -- those
         # phantom third-party tests then fail as "Not Run" in Scalars' own ctest run.
         set(SLEEF_ENABLE_SSL OFF CACHE BOOL "Disable SLEEF SSL-backed tester checks" FORCE)
+        # The pinned SLEEF builds SSE2 only on request (its option defaults OFF), but
+        # include/backend/cpu/sse/svml.h calls the 128-bit Sleef_*f4/*d2 entry points,
+        # which exist only when it is on. Ignored by SLEEF on non-x86 targets.
+        set(SLEEF_ENABLE_SSE2 ON CACHE BOOL "Build SLEEF's SSE2 variants for the SSE backend" FORCE)
         set(SLEEF_SHOW_CONFIG OFF CACHE BOOL "Suppress SLEEF config output" FORCE)
         set(SLEEF_BUILD_SHARED_LIBS OFF CACHE BOOL "Build SLEEF as a static library" FORCE)
 

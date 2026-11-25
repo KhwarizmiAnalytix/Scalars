@@ -15,6 +15,7 @@
 #endif
 #endif
 
+#include "backend/cpu/x86/math_fallback.h"
 #include "scalars_macros.h"
 
 namespace scalars
@@ -81,9 +82,9 @@ struct simd<double>
 #endif  // __FMA__
     }
 
-    SCALARS_SIMD_METHOD simd_t pow(simd_t x, simd_t y) { return _mm256_pow_pd(x, y); }
+    SCALARS_SIMD_METHOD simd_t pow(simd_t x, simd_t y) { return x86_math::pow(x, y); }
 
-    SCALARS_SIMD_METHOD simd_t hypot(simd_t x, simd_t y) { return _mm256_hypot_pd(x, y); }
+    SCALARS_SIMD_METHOD simd_t hypot(simd_t x, simd_t y) { return x86_math::hypot(x, y); }
 
     SCALARS_SIMD_METHOD simd_t min(simd_t x, simd_t y) { return _mm256_min_pd(x, y); }
 
@@ -104,40 +105,40 @@ struct simd<double>
 
     SCALARS_SIMD_METHOD simd_t floor(simd_t x) { return _mm256_floor_pd(x); }
 
-    SCALARS_SIMD_METHOD simd_t exp(simd_t x) { return _mm256_exp_pd(x); }
-    SCALARS_SIMD_METHOD simd_t expm1(simd_t x) { return _mm256_expm1_pd(x); }
-    SCALARS_SIMD_METHOD simd_t exp2(simd_t x) { return _mm256_exp2_pd(x); }
-    SCALARS_SIMD_METHOD simd_t exp10(simd_t x) { return _mm256_exp10_pd(x); }
+    SCALARS_SIMD_METHOD simd_t exp(simd_t x) { return x86_math::exp(x); }
+    SCALARS_SIMD_METHOD simd_t expm1(simd_t x) { return x86_math::expm1(x); }
+    SCALARS_SIMD_METHOD simd_t exp2(simd_t x) { return x86_math::exp2(x); }
+    SCALARS_SIMD_METHOD simd_t exp10(simd_t x) { return x86_math::exp10(x); }
 
-    SCALARS_SIMD_METHOD simd_t log(simd_t x) { return _mm256_log_pd(x); }
-    SCALARS_SIMD_METHOD simd_t log1p(simd_t x) { return _mm256_log1p_pd(x); }
-    SCALARS_SIMD_METHOD simd_t log2(simd_t x) { return _mm256_log2_pd(x); }
-    SCALARS_SIMD_METHOD simd_t log10(simd_t x) { return _mm256_log10_pd(x); }
+    SCALARS_SIMD_METHOD simd_t log(simd_t x) { return x86_math::log(x); }
+    SCALARS_SIMD_METHOD simd_t log1p(simd_t x) { return x86_math::log1p(x); }
+    SCALARS_SIMD_METHOD simd_t log2(simd_t x) { return x86_math::log2(x); }
+    SCALARS_SIMD_METHOD simd_t log10(simd_t x) { return x86_math::log10(x); }
 
-    SCALARS_SIMD_METHOD simd_t sin(simd_t x) { return _mm256_sin_pd(x); }
-    SCALARS_SIMD_METHOD simd_t cos(simd_t x) { return _mm256_cos_pd(x); }
-    SCALARS_SIMD_METHOD simd_t tan(simd_t x) { return _mm256_tan_pd(x); }
+    SCALARS_SIMD_METHOD simd_t sin(simd_t x) { return x86_math::sin(x); }
+    SCALARS_SIMD_METHOD simd_t cos(simd_t x) { return x86_math::cos(x); }
+    SCALARS_SIMD_METHOD simd_t tan(simd_t x) { return x86_math::tan(x); }
 
-    SCALARS_SIMD_METHOD simd_t asin(simd_t x) { return _mm256_asin_pd(x); }
-    SCALARS_SIMD_METHOD simd_t acos(simd_t x) { return _mm256_acos_pd(x); }
-    SCALARS_SIMD_METHOD simd_t atan(simd_t x) { return _mm256_atan_pd(x); }
+    SCALARS_SIMD_METHOD simd_t asin(simd_t x) { return x86_math::asin(x); }
+    SCALARS_SIMD_METHOD simd_t acos(simd_t x) { return x86_math::acos(x); }
+    SCALARS_SIMD_METHOD simd_t atan(simd_t x) { return x86_math::atan(x); }
 
-    SCALARS_SIMD_METHOD simd_t sinh(simd_t x) { return _mm256_sinh_pd(x); }
-    SCALARS_SIMD_METHOD simd_t cosh(simd_t x) { return _mm256_cosh_pd(x); }
-    SCALARS_SIMD_METHOD simd_t tanh(simd_t x) { return _mm256_tanh_pd(x); }
+    SCALARS_SIMD_METHOD simd_t sinh(simd_t x) { return x86_math::sinh(x); }
+    SCALARS_SIMD_METHOD simd_t cosh(simd_t x) { return x86_math::cosh(x); }
+    SCALARS_SIMD_METHOD simd_t tanh(simd_t x) { return x86_math::tanh(x); }
 
-    SCALARS_SIMD_METHOD simd_t asinh(simd_t x) { return _mm256_asinh_pd(x); }
-    SCALARS_SIMD_METHOD simd_t acosh(simd_t x) { return _mm256_acosh_pd(x); }
-    SCALARS_SIMD_METHOD simd_t atanh(simd_t x) { return _mm256_atanh_pd(x); }
+    SCALARS_SIMD_METHOD simd_t asinh(simd_t x) { return x86_math::asinh(x); }
+    SCALARS_SIMD_METHOD simd_t acosh(simd_t x) { return x86_math::acosh(x); }
+    SCALARS_SIMD_METHOD simd_t atanh(simd_t x) { return x86_math::atanh(x); }
 
-    SCALARS_SIMD_METHOD simd_t cbrt(simd_t x) { return _mm256_cbrt_pd(x); }
+    SCALARS_SIMD_METHOD simd_t cbrt(simd_t x) { return x86_math::cbrt(x); }
 
-    SCALARS_SIMD_METHOD simd_t cdf(simd_t x) { return _mm256_cdfnorm_pd(x); }
-    SCALARS_SIMD_METHOD simd_t inv_cdf(simd_t x) { return _mm256_cdfnorminv_pd(x); }
+    SCALARS_SIMD_METHOD simd_t cdf(simd_t x) { return x86_math::cdfnorm(x); }
+    SCALARS_SIMD_METHOD simd_t inv_cdf(simd_t x) { return x86_math::cdfnorminv(x); }
 
-    SCALARS_SIMD_METHOD simd_t trunc(simd_t x) { return _mm256_trunc_pd(x); }
+    SCALARS_SIMD_METHOD simd_t trunc(simd_t x) { return x86_math::trunc(x); }
 
-    SCALARS_SIMD_METHOD simd_t invsqrt(simd_t x) { return _mm256_invsqrt_pd(x); }
+    SCALARS_SIMD_METHOD simd_t invsqrt(simd_t x) { return x86_math::invsqrt(x); }
 
     SCALARS_SIMD_METHOD simd_t fabs(simd_t x) { return _mm256_andnot_pd(sign_mask, x); }
 

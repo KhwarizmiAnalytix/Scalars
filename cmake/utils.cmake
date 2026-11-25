@@ -2,10 +2,9 @@
 # (xsigma_/VECTORIZATION_ -> scalars_/SCALARS_). The Ubuntu GCC-version check and
 # INTERN_BUILD_MOBILE branch are omitted; they do not apply here.
 #
-# Requires SCALARS_CPU_BACKEND, SCALARS_ENABLE_SVML, SCALARS_ENABLE_SLEEF,
-# SCALARS_ENABLE_ACCELERATE, and SCALARS_SVE_VECTOR_BITS to be defined.
+# Requires SCALARS_CPU_BACKEND, SCALARS_MATH_BACKEND_RESOLVED, and
+# SCALARS_SVE_VECTOR_BITS to be defined.
 # Sets _scalars_has_{sse,avx,avx2,avx512,neon,sve} and SCALARS_SIMD_COMPILER_FLAGS.
-# May FORCE SCALARS_ENABLE_SVML, SCALARS_ENABLE_SLEEF, and SCALARS_ENABLE_ACCELERATE.
 include_guard(GLOBAL)
 
 include(CheckCXXSourceCompiles)
@@ -218,17 +217,9 @@ if(_scalars_vec_is_x86)
          }"
         SCALARS_COMPILER_SUPPORTS_SVML_EXTENSIONS
     )
-    if(NOT SCALARS_COMPILER_SUPPORTS_SVML_EXTENSIONS AND _scalars_simd_active AND NOT SCALARS_ENABLE_SLEEF)
-        message(WARNING
-            "Scalars: compiler does not provide SVML functions. Turning SCALARS_ENABLE_SVML ON."
-        )
-        set(SCALARS_ENABLE_SVML ON
-            CACHE BOOL "Enable Intel SVML short vector math library" FORCE
-        )
-    endif()
     cmake_pop_check_state()
 
-    if(SCALARS_ENABLE_SVML)
+    if(SCALARS_MATH_BACKEND_RESOLVED STREQUAL "svml")
         find_package(SVML QUIET)
         if(SVML_FOUND)
             message(STATUS
@@ -236,7 +227,8 @@ if(_scalars_vec_is_x86)
             )
         else()
             message(WARNING
-                "SCALARS_ENABLE_SVML=ON but ThirdParty SVML binaries were not found. "
+                "SCALARS_MATH_BACKEND resolved to svml but ThirdParty SVML binaries were not found; "
+                "falling back to the built-in vector math (auto). "
                 "Ensure ThirdParty/svml/ contains the required libraries."
             )
         endif()
@@ -299,55 +291,6 @@ if(_scalars_vec_is_aarch64)
         endif()
     endif()
     cmake_pop_check_state()
-
-    # ---[ Probe Apple Accelerate vForce (vvexpf/vvsinf/vvcosf/vvlogf).
-    # include/backend/cpu/neon/svml.h is also used for SVE's fixed 128-bit layout,
-    # so either tier triggers the probe. Without Accelerate, SLEEF is turned on.
-    if(_scalars_has_neon OR _scalars_has_sve)
-        if(APPLE AND NOT SCALARS_ENABLE_SLEEF)
-            cmake_push_check_state(RESET)
-            set(CMAKE_REQUIRED_LIBRARIES "-framework Accelerate")
-            check_cxx_source_compiles(
-                "#include <Accelerate/Accelerate.h>
-                 int main() {
-                   const int n = 4;
-                   float x[4] = {1.f, 2.f, 3.f, 4.f};
-                   float y[4];
-                   vvexpf(y, x, &n);
-                   vvsinf(y, x, &n);
-                   vvcosf(y, x, &n);
-                   vvlogf(y, x, &n);
-                   return 0;
-                 }"
-                SCALARS_COMPILER_SUPPORTS_ACCELERATE
-            )
-            cmake_pop_check_state()
-            if(SCALARS_COMPILER_SUPPORTS_ACCELERATE)
-                message(STATUS "Scalars: Accelerate vForce available -- "
-                               "auto-enabling SCALARS_ENABLE_ACCELERATE."
-                )
-                set(SCALARS_ENABLE_ACCELERATE ON
-                    CACHE BOOL "Enable Apple Accelerate vForce on AArch64 NEON (auto-enabled)" FORCE
-                )
-            else()
-                message(STATUS "Scalars: Accelerate vForce unavailable -- "
-                               "auto-enabling SCALARS_ENABLE_SLEEF."
-                )
-                set(SCALARS_ENABLE_SLEEF ON
-                    CACHE BOOL "Enable SLEEF SIMD math library (auto-enabled: Accelerate vForce unavailable)"
-                    FORCE
-                )
-            endif()
-        elseif(NOT APPLE AND NOT SCALARS_ENABLE_SLEEF)
-            message(STATUS "Scalars: non-Apple AArch64 detected -- Accelerate vForce is "
-                           "unavailable, auto-enabling SCALARS_ENABLE_SLEEF."
-            )
-            set(SCALARS_ENABLE_SLEEF ON
-                CACHE BOOL "Enable SLEEF SIMD math library (auto-enabled: Accelerate unavailable on non-Apple)"
-                FORCE
-            )
-        endif()
-    endif()
 endif()
 
 if(USE_NATIVE_ARCH)

@@ -133,3 +133,27 @@ license:
 See ThirdParty/svml/LICENSE for the license covering the prebuilt
 libsvml/libintlc/libirc/svml_dispmd binaries vendored under
 ThirdParty/svml/.
+
+4. Eigen (MPL-2.0)
+------------------
+
+File:
+  - include/backend/cpu/detail/vector_math.h
+
+The vectorized elementary functions in this file (log, log1p, log2, log10,
+exp, expm1, exp2, sin, cos, tan, asin, acos, atan, sinh, cosh, tanh, asinh,
+acosh, atanh, cbrt, pow, erfc, ndtri, and the frexp/ldexp and double-word
+helpers they use) are ported from Eigen (https://gitlab.com/libeigen/eigen),
+Eigen/src/Core/arch/Default/GenericPacketMath*.h and
+unsupported/Eigen/src/SpecialFunctions/SpecialFunctionsImpl.h. Eigen's exp and
+log initially come from Julien Pommier's sse_mathfun, and several kernels and
+ndtri from the Cephes Math Library by Stephen L. Moshier.
+
+    Copyright (C) 2007 Julien Pommier
+    Copyright (C) 2014 Pedro Gonnet
+    Copyright (C) 2009-2019 Gael Guennebaud
+    Copyright (C) 2018-2025 Rasmus Munk Larsen
+
+This file is distributed under the Mozilla Public License, v. 2.0, which
+applies to that file only; the rest of Scalars remains under the MIT license.
+A copy of the MPL is available at http://mozilla.org/MPL/2.0/.

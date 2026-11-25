@@ -148,7 +148,7 @@ def validate_legacy(tokens, flags_factory, parser):
     """Reject misspelled actions rather than silently ignoring them."""
     flags = flags_factory([])
     allowed = set(next(value for name, value in vars(flags).items() if name.endswith("__key")))
-    allowed.update(ACTIONS | {"release", "debug", "relwithdebinfo", "minsizerel", "ninja", "xcode", "vs17", "vs19", "vs22", "vs26", "clang", "clang-cl", "gcc", "msvc", "shared", "address", "undefined", "thread", "memory", "leak", "ccache", "sccache", "buildcache", "none", "no", "sse", "avx", "avx2", "avx512", "neon", "sve", "cuda", "hip", "metal", "native", "loguru", "glog", "spdlog", "sequential", "stdthread", "openmp", "tbb", "v", "vv", "torch", "noinstall", "tao", "logfatal", "throw", "nocxademangle", "nomimalloc", "batch", "clean"})
+    allowed.update(ACTIONS | {"release", "debug", "relwithdebinfo", "minsizerel", "ninja", "xcode", "vs17", "vs19", "vs22", "vs26", "clang", "clang-cl", "gcc", "msvc", "shared", "address", "undefined", "thread", "memory", "leak", "ccache", "sccache", "buildcache", "none", "no", "sse", "avx", "avx2", "avx512", "neon", "sve", "cuda", "hip", "metal", "svml", "sleef", "accelerate", "native", "loguru", "glog", "spdlog", "sequential", "stdthread", "openmp", "tbb", "v", "vv", "torch", "noinstall", "tao", "logfatal", "throw", "nocxademangle", "nomimalloc", "batch", "clean"})
     for token in tokens:
         if token in allowed or token.startswith(("lto.", "linker.", "backend.", "gpu.", "gpu_backend.", "cpu_backend.", "parallel_backend.", "packet_size.")) or re.fullmatch(r"(?:cxx|c\+\+)\d+|psize\d+|sve(?:128|256|512)", token):
             continue

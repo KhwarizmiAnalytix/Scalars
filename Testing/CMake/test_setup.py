@@ -87,9 +87,32 @@ class setup_tests(unittest.TestCase):
         self.assertIn("_sve", flags.builder_suffix)
         self.assertIn("_hip", flags.builder_suffix)
 
+    def test_math_backend_defaults_to_empty(self):
+        _, values, _ = self.flags("config.build.test")
+        self.assertNotIn("SCALARS_MATH_BACKEND", values)
+        self.assertFalse(any(name.startswith(("SCALARS_ENABLE_SVML", "SCALARS_ENABLE_SLEEF")) for name in values))
+
+    def test_math_backend_tokens(self):
+        for token in ("svml", "sleef", "accelerate"):
+            with self.subTest(token=token):
+                flags, values, _ = self.flags(f"config.{token}")
+                self.assertEqual(values["SCALARS_MATH_BACKEND"], token)
+                self.assertIn(f"_{token}", flags.builder_suffix)
+        cmake = (SCRIPTS.parent / "cmake" / "simd.cmake").read_text()
+        self.assertIn("SCALARS_MATH_BACKEND", cmake)
+
+    def test_math_backend_equals_form(self):
+        flags, values, _ = self.flags("config", "--math_backend=auto")
+        self.assertEqual(values["SCALARS_MATH_BACKEND"], "auto")
+        self.assertNotIn("_auto", flags.builder_suffix)
+        _, values, _ = self.flags("config", "--math-backend=SLEEF")
+        self.assertEqual(values["SCALARS_MATH_BACKEND"], "sleef")
+
     def test_invalid_options_fail(self):
         for arg in [
             "mkl",
+            "--math_backend=mkl",
+            "--math_backend=native",
             "cxx17",
             "c++17",
             "--lto.invalid",

@@ -1,5 +1,6 @@
 #pragma once
 
+#include <limits>
 #include <type_traits>
 
 #if SCALARS_HAS_SVML || SCALARS_HAS_SLEEF
@@ -15,6 +16,7 @@
 #endif
 #endif
 
+#include "backend/cpu/x86/math_fallback.h"
 #include "scalars_macros.h"
 
 namespace scalars
@@ -75,9 +77,9 @@ struct simd<float>
 
     SCALARS_SIMD_METHOD simd_t div(simd_t x, simd_t y) { return _mm512_div_ps(x, y); }
 
-    SCALARS_SIMD_METHOD simd_t pow(simd_t x, simd_t y) { return _mm512_pow_ps(x, y); }
+    SCALARS_SIMD_METHOD simd_t pow(simd_t x, simd_t y) { return x86_math::pow(x, y); }
 
-    SCALARS_SIMD_METHOD simd_t hypot(simd_t x, simd_t y) { return _mm512_hypot_ps(x, y); }
+    SCALARS_SIMD_METHOD simd_t hypot(simd_t x, simd_t y) { return x86_math::hypot(x, y); }
 
     SCALARS_SIMD_METHOD simd_t min(simd_t x, simd_t y) { return _mm512_min_ps(x, y); }
 
@@ -110,50 +112,64 @@ struct simd<float>
 
     SCALARS_SIMD_METHOD simd_t floor(simd_t x) { return _mm512_floor_ps(x); }
 
-    SCALARS_SIMD_METHOD simd_t exp(simd_t x) { return _mm512_exp_ps(x); }
-    SCALARS_SIMD_METHOD simd_t expm1(simd_t x) { return _mm512_expm1_ps(x); }
-    SCALARS_SIMD_METHOD simd_t exp2(simd_t x) { return _mm512_exp2_ps(x); }
-    SCALARS_SIMD_METHOD simd_t exp10(simd_t x) { return _mm512_exp10_ps(x); }
+    SCALARS_SIMD_METHOD simd_t exp(simd_t x) { return x86_math::exp(x); }
+    SCALARS_SIMD_METHOD simd_t expm1(simd_t x) { return x86_math::expm1(x); }
+    SCALARS_SIMD_METHOD simd_t exp2(simd_t x) { return x86_math::exp2(x); }
+    SCALARS_SIMD_METHOD simd_t exp10(simd_t x) { return x86_math::exp10(x); }
 
-    SCALARS_SIMD_METHOD simd_t log(simd_t x) { return _mm512_log_ps(x); }
-    SCALARS_SIMD_METHOD simd_t log1p(simd_t x) { return _mm512_log1p_ps(x); }
-    SCALARS_SIMD_METHOD simd_t log2(simd_t x) { return _mm512_log2_ps(x); }
-    SCALARS_SIMD_METHOD simd_t log10(simd_t x) { return _mm512_log10_ps(x); }
+    SCALARS_SIMD_METHOD simd_t log(simd_t x) { return x86_math::log(x); }
+    SCALARS_SIMD_METHOD simd_t log1p(simd_t x) { return x86_math::log1p(x); }
+    SCALARS_SIMD_METHOD simd_t log2(simd_t x) { return x86_math::log2(x); }
+    SCALARS_SIMD_METHOD simd_t log10(simd_t x) { return x86_math::log10(x); }
 
-    SCALARS_SIMD_METHOD simd_t sin(simd_t x) { return _mm512_sin_ps(x); }
-    SCALARS_SIMD_METHOD simd_t cos(simd_t x) { return _mm512_cos_ps(x); }
-    SCALARS_SIMD_METHOD simd_t tan(simd_t x) { return _mm512_tan_ps(x); }
+    SCALARS_SIMD_METHOD simd_t sin(simd_t x) { return x86_math::sin(x); }
+    SCALARS_SIMD_METHOD simd_t cos(simd_t x) { return x86_math::cos(x); }
+    SCALARS_SIMD_METHOD simd_t tan(simd_t x) { return x86_math::tan(x); }
 
-    SCALARS_SIMD_METHOD simd_t asin(simd_t x) { return _mm512_asin_ps(x); }
-    SCALARS_SIMD_METHOD simd_t acos(simd_t x) { return _mm512_acos_ps(x); }
-    SCALARS_SIMD_METHOD simd_t atan(simd_t x) { return _mm512_atan_ps(x); }
+    SCALARS_SIMD_METHOD simd_t asin(simd_t x) { return x86_math::asin(x); }
+    SCALARS_SIMD_METHOD simd_t acos(simd_t x) { return x86_math::acos(x); }
+    SCALARS_SIMD_METHOD simd_t atan(simd_t x) { return x86_math::atan(x); }
 
-    SCALARS_SIMD_METHOD simd_t sinh(simd_t x) { return _mm512_sinh_ps(x); }
-    SCALARS_SIMD_METHOD simd_t cosh(simd_t x) { return _mm512_cosh_ps(x); }
-    SCALARS_SIMD_METHOD simd_t tanh(simd_t x) { return _mm512_tanh_ps(x); }
+    SCALARS_SIMD_METHOD simd_t sinh(simd_t x) { return x86_math::sinh(x); }
+    SCALARS_SIMD_METHOD simd_t cosh(simd_t x) { return x86_math::cosh(x); }
+    SCALARS_SIMD_METHOD simd_t tanh(simd_t x) { return x86_math::tanh(x); }
 
-    SCALARS_SIMD_METHOD simd_t asinh(simd_t x) { return _mm512_asinh_ps(x); }
-    SCALARS_SIMD_METHOD simd_t acosh(simd_t x) { return _mm512_acosh_ps(x); }
-    SCALARS_SIMD_METHOD simd_t atanh(simd_t x) { return _mm512_atanh_ps(x); }
+    SCALARS_SIMD_METHOD simd_t asinh(simd_t x) { return x86_math::asinh(x); }
+    SCALARS_SIMD_METHOD simd_t acosh(simd_t x) { return x86_math::acosh(x); }
+    SCALARS_SIMD_METHOD simd_t atanh(simd_t x) { return x86_math::atanh(x); }
 
-    SCALARS_SIMD_METHOD simd_t cbrt(simd_t x) { return _mm512_cbrt_ps(x); }
+    SCALARS_SIMD_METHOD simd_t cbrt(simd_t x) { return x86_math::cbrt(x); }
 
-    SCALARS_SIMD_METHOD simd_t cdf(simd_t x) { return _mm512_cdfnorm_ps(x); }
-    SCALARS_SIMD_METHOD simd_t inv_cdf(simd_t x) { return _mm512_cdfnorminv_ps(x); }
+    SCALARS_SIMD_METHOD simd_t cdf(simd_t x) { return x86_math::cdfnorm(x); }
+    SCALARS_SIMD_METHOD simd_t inv_cdf(simd_t x) { return x86_math::cdfnorminv(x); }
 
-    SCALARS_SIMD_METHOD simd_t trunc(simd_t x) { return _mm512_trunc_ps(x); }
+    SCALARS_SIMD_METHOD simd_t trunc(simd_t x) { return x86_math::trunc(x); }
 
     SCALARS_SIMD_METHOD simd_t invsqrt(simd_t x)
     {
 #if SCALARS_HAS_SVML || SCALARS_HAS_SLEEF
-        return _mm512_invsqrt_ps(x);
+        return x86_math::invsqrt(x);
 #else
         // rsqrt14 gives ~14-bit accuracy; one Newton-Raphson step reaches ~28 bits (full float).
         // r_new = (r / 2) * (3 - x * r^2)
-        __m512 r   = _mm512_rsqrt14_ps(x);
-        __m512 xr2 = _mm512_mul_ps(x, _mm512_mul_ps(r, r));
-        return _mm512_mul_ps(
-            _mm512_mul_ps(r, _mm512_set1_ps(0.5f)), _mm512_sub_ps(_mm512_set1_ps(3.0f), xr2));
+        const auto refine = [](simd_t v, simd_t r)
+        { return mul(mul(r, set(0.5f)), sub(set(3.0f), mul(v, mul(r, r)))); };
+        const simd_t inf = set(std::numeric_limits<float>::infinity());
+        const simd_t y   = refine(x, _mm512_rsqrt14_ps(x));
+        // Positive normal inputs give finite results. Packets with any other lane, which are rare,
+        // take a second pass: the step is 0 * inf = NaN where the estimate is already exact
+        // (+-0 -> +-inf, +inf -> 0), so those lanes keep it, and subnormals are scaled by 2^24
+        // into the normal range and the result by 2^12, as on SSE and AVX.
+        if (_mm512_cmp_ps_mask(fabs(y), inf, _CMP_NLT_UQ) == 0)
+        {
+            return y;
+        }
+        const mask_t tiny  = lt(fabs(x), set(std::numeric_limits<float>::min()));
+        const simd_t xs    = if_else(tiny, mul(x, set(0x1p24f)), x);
+        const simd_t r     = _mm512_rsqrt14_ps(xs);
+        const mask_t exact = or_mask(eq(xs, setzero()), eq(fabs(xs), inf));
+        const simd_t z     = if_else(exact, r, refine(xs, r));
+        return if_else(tiny, mul(z, set(0x1p12f)), z);
 #endif
     }
     SCALARS_SIMD_METHOD simd_t fabs(simd_t x) { return _mm512_abs_ps(x); }

@@ -85,8 +85,8 @@ bound the standard library. libc++'s float `asin`, `acosh`, `asinh`, and
 | Linux x86_64 (GCC 13, emulated) | SSE | libstdc++ | 80-bit | 140 passed |
 
 The Linux runs used the `scalars-linux-build` and `scalars-linux-build-amd64`
-Docker images. On macOS, `SCALARS_ENABLE_ACCELERATE=OFF` is overridden by
-auto-detection, so plain NEON without a vendor library was not measured.
+Docker images. On macOS, auto-detection selected Accelerate, so plain NEON
+without a vendor library (now `SCALARS_MATH_BACKEND=auto`) was not measured.
 
 The budgets also cover the GitHub Actions hosts, whose first run raised the
 entries the emulated Linux x86 runs had underestimated:
@@ -160,7 +160,7 @@ phase by up to about 18 ULPs for `|im|` near 10–25.
 - **x86 SLEEF builds do not compile.**
   [`avx/svml.h`](../include/backend/cpu/avx/svml.h) calls
   `scalars::inv_normalcdf` without including `math/normal_cdf.h`, so AVX/AVX2
-  builds with `SCALARS_ENABLE_SLEEF=ON` fail on Linux and macOS.
+  builds with `SCALARS_MATH_BACKEND=sleef` fail on Linux and macOS.
 - **macOS x86_64 links Linux SVML.** Without SLEEF, CMake auto-enables SVML
   and links the vendored Linux `.so` files, so the build fails.
 - **Emulated x87.** Rosetta and Docker on Apple silicon evaluate `log1pl` to

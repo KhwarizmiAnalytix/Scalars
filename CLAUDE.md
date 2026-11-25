@@ -55,9 +55,10 @@ CI are also valid. This repository has no Bazel build.
 
 CPU SIMD is selected with `cpu_backend` (`no`, `sse`, `avx`, `avx2`, `avx512`,
 `neon`, `sve`). GPU is selected independently with `gpu_backend` (`none`,
-`cuda`, `hip`, `metal`). Optional math libraries use `sleef` and the CMake
-options documented in `README.md` (`SCALARS_ENABLE_SVML`, `SCALARS_ENABLE_MKL`,
-`SCALARS_ENABLE_ACCELERATE`). Do not pass another repository's backend flags.
+`cuda`, `hip`, `metal`). The vector math library is selected with
+`math_backend` / `SCALARS_MATH_BACKEND` (`auto` = built-in vector math, `svml`,
+`sleef`, `accelerate`); MKL VML stays a separate `SCALARS_ENABLE_MKL` option documented in
+`README.md`. Do not pass another repository's backend flags.
 
 ## Test conventions
 

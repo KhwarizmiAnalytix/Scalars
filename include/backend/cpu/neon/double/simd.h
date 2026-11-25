@@ -174,30 +174,56 @@ template <> struct simd<double>
 
     SCALARS_SIMD_METHOD simd_t cdf(simd_t x)
     {
+#if SCALARS_NEON_NATIVE_MATH
+        return detail_neon::pmf64::normal_cdf(x);
+#else
         alignas(16) double b[2];
         vst1q_f64(b, x);
         b[0] = scalars::normalcdf(b[0]);
         b[1] = scalars::normalcdf(b[1]);
         return vld1q_f64(b);
+#endif
     }
 
     SCALARS_SIMD_METHOD simd_t inv_cdf(simd_t x)
     {
+#if SCALARS_NEON_NATIVE_MATH
+        return detail_neon::pmf64::inv_normal_cdf(x);
+#else
         alignas(16) double b[2];
         vst1q_f64(b, x);
         b[0] = scalars::inv_normalcdf(b[0]);
         b[1] = scalars::inv_normalcdf(b[1]);
         return vld1q_f64(b);
+#endif
     }
 
     SCALARS_SIMD_METHOD simd_t trunc(simd_t x) { return vrndq_f64(x); }
 
     SCALARS_SIMD_METHOD simd_t invsqrt(simd_t x)
     {
-        float64x2_t est = vrsqrteq_f64(x);
-        est             = vmulq_f64(vrsqrtsq_f64(vmulq_f64(x, est), est), est);
-        est             = vmulq_f64(vrsqrtsq_f64(vmulq_f64(x, est), est), est);
-        return est;
+        // vrsqrte estimate refined by two vrsqrts Newton steps.
+        const auto refine = [](simd_t v, simd_t r)
+        {
+            r = vmulq_f64(vrsqrtsq_f64(vmulq_f64(v, r), r), r);
+            return vmulq_f64(vrsqrtsq_f64(vmulq_f64(v, r), r), r);
+        };
+        const simd_t inf = set(std::numeric_limits<double>::infinity());
+        const simd_t y   = refine(x, vrsqrteq_f64(x));
+        // Positive normal inputs give finite results. Packets with any other lane, which are rare,
+        // take a second pass: the steps are 0 * inf = NaN where the estimate is already exact
+        // (+-0 -> +-inf, +inf -> 0), so those lanes keep it, and subnormals are scaled by 2^54
+        // into the normal range and the result by 2^27.
+        if (vminvq_u32(vreinterpretq_u32_u64(vcltq_f64(fabs(y), inf))) != 0)
+        {
+            return y;
+        }
+        const mask_t tiny  = lt(fabs(x), set(std::numeric_limits<double>::min()));
+        const simd_t xs    = if_else(tiny, mul(x, set(0x1p54)), x);
+        const simd_t r     = vrsqrteq_f64(xs);
+        const mask_t exact = or_mask(eq(xs, setzero()), eq(fabs(xs), inf));
+        const simd_t z     = if_else(exact, r, refine(xs, r));
+        return if_else(tiny, mul(z, set(0x1p27)), z);
     }
 
     SCALARS_SIMD_METHOD simd_t fabs(simd_t x)

@@ -287,8 +287,9 @@ void check_binary(const char* name, domain dx, domain dy, budget b, SimdOp simd_
 
 // NEON/SVE invsqrt is a vrsqrte estimate refined by Newton steps: one step
 // for float (about 16 correct bits, ~120 ULP measured) and two for double
-// (about 32 bits, ~1e6 ULP measured). x86 backends divide by sqrt, and the
-// reduced types divide in float, so they are held to the normal budget.
+// (about 32 bits, ~1e6 ULP measured). x86 float refines rsqrt by one step to
+// within a few ULP, x86 double divides by sqrt, and the reduced types divide
+// in float, so they are held to the normal budget.
 template <class T> constexpr double invsqrt_ulps()
 {
 #if SCALARS_HAS_NEON || SCALARS_HAS_SVE
@@ -636,6 +637,40 @@ TEST(simd_real, HypotSpecialValues_float)    { run_simd_real_HypotSpecialValues<
 TEST(simd_real, HypotSpecialValues_double)   { run_simd_real_HypotSpecialValues<double>(); }
 TEST(simd_real, HypotSpecialValues_half)     { run_simd_real_HypotSpecialValues<scalars::half>(); }
 TEST(simd_real, HypotSpecialValues_bfloat16) { run_simd_real_HypotSpecialValues<scalars::bfloat16>(); }
+
+// Confirmed bug: the built-in float invsqrt (SSE, AVX, AVX-512, NEON) and the
+// NEON double one refined the hardware estimate with a Newton step whose
+// x * r^2 is 0 * inf for x = +-0 and +inf, returning NaN instead of +-inf and
+// 0; the estimate also treats subnormals as zero, which the step turned into
+// -inf. Sweep zeros, infinities, NaN, negatives and subnormals against 1/sqrt.
+template <class T> void run_simd_real_InvsqrtSpecialValues()
+{
+    using S      = simd<T>;    // NOLINT(readability-identifier-naming)
+    using limits = std::numeric_limits<T>;
+    const double                 inf = std::numeric_limits<double>::infinity();
+    const double                 nan = std::numeric_limits<double>::quiet_NaN();
+    const double                 sub = to_double(limits::denorm_min());
+    const double                 min = to_double(limits::min());
+    const std::array<double, 15> cases{
+        0.0, -0.0, inf, -inf, nan, -1, -sub, sub, sub * 3, min / 2, min, to_double(limits::max()),
+        4, 0.25, 2};
+    for (const double c : cases)
+    {
+        accuracy_check<T> check("invsqrt", budget{invsqrt_ulps<T>()});
+        const T           x   = from_double<T>(c);
+        const auto        out = store<T>(S::invsqrt(S::set(x)));
+        for (const T lane : out)
+        {
+            check.check(lane, 1 / std::sqrt(to_double(x)), c);
+        }
+        check.report();
+    }
+}
+
+TEST(simd_real, InvsqrtSpecialValues_float)    { run_simd_real_InvsqrtSpecialValues<float>(); }
+TEST(simd_real, InvsqrtSpecialValues_double)   { run_simd_real_InvsqrtSpecialValues<double>(); }
+TEST(simd_real, InvsqrtSpecialValues_half)     { run_simd_real_InvsqrtSpecialValues<scalars::half>(); }
+TEST(simd_real, InvsqrtSpecialValues_bfloat16) { run_simd_real_InvsqrtSpecialValues<scalars::bfloat16>(); }
 
 template <class T> void run_simd_real_NaNPropagatesThroughArithmetic()
 {

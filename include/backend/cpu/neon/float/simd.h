@@ -175,6 +175,9 @@ template <> struct simd<float>
 
     SCALARS_SIMD_METHOD simd_t cdf(simd_t x)
     {
+#if SCALARS_NEON_NATIVE_MATH
+        return detail_neon::pmf32::normal_cdf(x);
+#else
         alignas(16) float b[4];
         vst1q_f32(b, x);
         b[0] = static_cast<float>(scalars::normalcdf(static_cast<double>(b[0])));
@@ -182,10 +185,14 @@ template <> struct simd<float>
         b[2] = static_cast<float>(scalars::normalcdf(static_cast<double>(b[2])));
         b[3] = static_cast<float>(scalars::normalcdf(static_cast<double>(b[3])));
         return vld1q_f32(b);
+#endif
     }
 
     SCALARS_SIMD_METHOD simd_t inv_cdf(simd_t x)
     {
+#if SCALARS_NEON_NATIVE_MATH
+        return detail_neon::pmf32::inv_normal_cdf(x);
+#else
         alignas(16) float b[4];
         vst1q_f32(b, x);
         b[0] = static_cast<float>(scalars::inv_normalcdf(static_cast<double>(b[0])));
@@ -193,15 +200,33 @@ template <> struct simd<float>
         b[2] = static_cast<float>(scalars::inv_normalcdf(static_cast<double>(b[2])));
         b[3] = static_cast<float>(scalars::inv_normalcdf(static_cast<double>(b[3])));
         return vld1q_f32(b);
+#endif
     }
 
     SCALARS_SIMD_METHOD simd_t trunc(simd_t x) { return vrndq_f32(x); }
 
     SCALARS_SIMD_METHOD simd_t invsqrt(simd_t x)
     {
-        float32x4_t est = vrsqrteq_f32(x);
-        est             = vmulq_f32(vrsqrtsq_f32(vmulq_f32(x, est), est), est);
-        return est;
+        // vrsqrte estimate refined by one vrsqrts Newton step.
+        const auto refine = [](simd_t v, simd_t r)
+        { return vmulq_f32(vrsqrtsq_f32(vmulq_f32(v, r), r), r); };
+        const simd_t inf = set(std::numeric_limits<float>::infinity());
+        const simd_t y   = refine(x, vrsqrteq_f32(x));
+        // Positive normal inputs give finite results. Packets with any other lane, which are rare,
+        // take a second pass: the step is 0 * inf = NaN where the estimate is already exact
+        // (+-0 -> +-inf, +inf -> 0), so those lanes keep it, and subnormals are scaled by 2^24
+        // into the normal range and the result by 2^12, so that the estimate and the step stay
+        // in range under flush-to-zero as well.
+        if (vminvq_u32(vcltq_f32(fabs(y), inf)) != 0)
+        {
+            return y;
+        }
+        const mask_t tiny  = lt(fabs(x), set(std::numeric_limits<float>::min()));
+        const simd_t xs    = if_else(tiny, mul(x, set(0x1p24f)), x);
+        const simd_t r     = vrsqrteq_f32(xs);
+        const mask_t exact = or_mask(eq(xs, setzero()), eq(fabs(xs), inf));
+        const simd_t z     = if_else(exact, r, refine(xs, r));
+        return if_else(tiny, mul(z, set(0x1p12f)), z);
     }
 
     SCALARS_SIMD_METHOD simd_t fabs(simd_t x)

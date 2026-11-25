@@ -46,17 +46,67 @@ if(NOT SCALARS_CPU_BACKEND MATCHES "^(no|sse|avx|avx2|avx512|neon|sve)$")
     )
 endif()
 
-option(SCALARS_ENABLE_SVML "Enable Intel SVML short vector math library" OFF)
-mark_as_advanced(SCALARS_ENABLE_SVML)
+# SCALARS_MATH_BACKEND (cache: auto|svml|sleef|accelerate) selects the
+# vector math library behind the CPU packets' transcendental functions:
+#   auto       -- the built-in vectorized port of Eigen's packet math
+#                 (include/backend/cpu/detail/vector_math.h), on every CPU
+#                 tier, even when compiler SVML intrinsics are available.
+#   svml       -- bundled Intel SVML from ThirdParty/svml (x86 only).
+#   sleef      -- SLEEF built from ThirdParty/sleef.
+#   accelerate -- Apple Accelerate vForce (Apple only).
+# A library that cannot be used falls back (with a warning) to auto.
+# SCALARS_MATH_BACKEND_RESOLVED holds the provider actually used: one of
+# svml, sleef, accelerate, or native (the built-in port).
+set(SCALARS_MATH_BACKEND "auto"
+    CACHE STRING "CPU vector math backend for Scalars. Options: auto, svml, sleef, accelerate"
+)
+# "native" was folded into "auto". Migrate a stale cache entry instead of failing.
+if(SCALARS_MATH_BACKEND STREQUAL "native")
+    message(WARNING "SCALARS_MATH_BACKEND=native was removed; auto now selects the built-in "
+                    "vector math. Using auto."
+    )
+    set(SCALARS_MATH_BACKEND "auto"
+        CACHE STRING "CPU vector math backend for Scalars. Options: auto, svml, sleef, accelerate"
+              FORCE
+    )
+endif()
+set_property(
+    CACHE SCALARS_MATH_BACKEND
+    PROPERTY STRINGS
+             auto
+             svml
+             sleef
+             accelerate
+)
+if(NOT SCALARS_MATH_BACKEND MATCHES "^(auto|svml|sleef|accelerate)$")
+    message(FATAL_ERROR "SCALARS_MATH_BACKEND must be one of: auto, svml, sleef, accelerate "
+                        "(got '${SCALARS_MATH_BACKEND}')"
+    )
+endif()
+# The per-library switches this replaces. Drop them so a stale cache entry
+# (including one auto-enabled by an older configure) cannot shadow the enum.
+foreach(_scalars_legacy_math IN ITEMS SVML SLEEF ACCELERATE NATIVE_MATH)
+    if(DEFINED SCALARS_ENABLE_${_scalars_legacy_math})
+        if(SCALARS_ENABLE_${_scalars_legacy_math})
+            message(
+                WARNING
+                    "SCALARS_ENABLE_${_scalars_legacy_math} was replaced by SCALARS_MATH_BACKEND "
+                    "and is ignored. Set -DSCALARS_MATH_BACKEND=<auto|svml|sleef|accelerate>."
+            )
+        endif()
+        unset(SCALARS_ENABLE_${_scalars_legacy_math} CACHE)
+        unset(SCALARS_ENABLE_${_scalars_legacy_math})
+    endif()
+endforeach()
+unset(_scalars_legacy_math)
+if(SCALARS_MATH_BACKEND STREQUAL "auto")
+    set(SCALARS_MATH_BACKEND_RESOLVED "native")
+else()
+    set(SCALARS_MATH_BACKEND_RESOLVED "${SCALARS_MATH_BACKEND}")
+endif()
+
 option(SCALARS_ENABLE_MKL "Enable Intel MKL VML vector math backend (x86 only, static link)" OFF)
 mark_as_advanced(SCALARS_ENABLE_MKL)
-option(SCALARS_ENABLE_SLEEF
-       "Enable SLEEF SIMD math library (SSE/AVX/AVX2/AVX512/NEON); mutually exclusive with SVML"
-       OFF
-)
-mark_as_advanced(SCALARS_ENABLE_SLEEF)
-option(SCALARS_ENABLE_ACCELERATE "Enable Apple Accelerate vForce on AArch64 NEON" OFF)
-mark_as_advanced(SCALARS_ENABLE_ACCELERATE)
 option(USE_NATIVE_ARCH "Prefer host CPU instruction tuning (-march=native, Clang/GCC only)" OFF)
 
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_LIST_DIR}/packages")
@@ -71,7 +121,6 @@ install(FILES "${CMAKE_CURRENT_LIST_DIR}/packages/FindSVML.cmake"
         DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake/Scalars/Modules"
 )
 
-set(SCALARS_HAS_SVML 0)
 set(SCALARS_HAS_MKL 0)
 if(SCALARS_ENABLE_MKL)
     string(TOLOWER "${CMAKE_SYSTEM_PROCESSOR}" _scalars_mkl_proc)
@@ -130,17 +179,56 @@ endif()
 
 include("${CMAKE_CURRENT_LIST_DIR}/utils.cmake")
 
-# Confirmed bug: this used to be set from SCALARS_ENABLE_SVML alone, so
-# SCALARS_HAS_SVML=1 was defined even when the ThirdParty SVML package was
-# not found (utils.cmake only warns in that case; it does not clear the
-# enable flag) or on non-x86 targets where SVML is never probed at all.
-# Require the actual imported target, matching how SCALARS_HAS_MKL is set
-# from MKL_FOUND above.
-if(SCALARS_ENABLE_SVML AND TARGET SVML::SVML)
-    set(SCALARS_HAS_SVML 1)
-else()
-    set(SCALARS_HAS_SVML 0)
+# Settle SCALARS_MATH_BACKEND_RESOLVED. SVML requires the imported target, not
+# just the request: utils.cmake only probes for it on x86 and only warns when
+# the ThirdParty binaries are missing.
+if(SCALARS_MATH_BACKEND_RESOLVED STREQUAL "svml" AND NOT TARGET SVML::SVML)
+    if(NOT _scalars_simd_is_x86)
+        message(WARNING "SCALARS_MATH_BACKEND=svml is only supported on x86; "
+                        "falling back to the built-in vector math (auto)."
+        )
+    endif()
+    set(SCALARS_MATH_BACKEND_RESOLVED "")
 endif()
+# Apple Accelerate vForce is a system framework -- no ThirdParty build needed,
+# just a link flag applied in scalars_apply_simd_compile_definitions() below.
+if(SCALARS_MATH_BACKEND_RESOLVED STREQUAL "accelerate" AND NOT APPLE)
+    message(WARNING "SCALARS_MATH_BACKEND=accelerate is only supported on Apple platforms; "
+                    "falling back to the built-in vector math (auto)."
+    )
+    set(SCALARS_MATH_BACKEND_RESOLVED "")
+endif()
+# Build/link ThirdParty SLEEF (vendored submodule) when requested. include/backend/cpu/{sse,avx,avx512,neon}/svml.h and
+# backend/cpu/x86/math_fallback.h branch on SCALARS_HAS_SLEEF.
+if(SCALARS_MATH_BACKEND_RESOLVED STREQUAL "sleef")
+    include("${CMAKE_CURRENT_LIST_DIR}/scalars_dependencies.cmake")
+    scalars_setup_sleef()
+    if(NOT TARGET Sleef::sleef)
+        set(SCALARS_MATH_BACKEND_RESOLVED "")
+    endif()
+endif()
+# No usable library: use the built-in port, exactly as auto does.
+if(SCALARS_MATH_BACKEND_RESOLVED STREQUAL "")
+    set(SCALARS_MATH_BACKEND_RESOLVED "native")
+endif()
+
+set(SCALARS_HAS_SVML 0)
+set(SCALARS_HAS_SLEEF 0)
+set(SCALARS_HAS_ACCELERATE 0)
+set(SCALARS_HAS_NATIVE_MATH 0)
+if(SCALARS_MATH_BACKEND_RESOLVED STREQUAL "svml")
+    set(SCALARS_HAS_SVML 1)
+elseif(SCALARS_MATH_BACKEND_RESOLVED STREQUAL "sleef")
+    set(SCALARS_HAS_SLEEF 1)
+elseif(SCALARS_MATH_BACKEND_RESOLVED STREQUAL "accelerate")
+    set(SCALARS_HAS_ACCELERATE 1)
+elseif(SCALARS_MATH_BACKEND_RESOLVED STREQUAL "native")
+    set(SCALARS_HAS_NATIVE_MATH 1)
+endif()
+message(STATUS "Scalars: vector math backend: ${SCALARS_MATH_BACKEND_RESOLVED} "
+               "(SCALARS_MATH_BACKEND=${SCALARS_MATH_BACKEND})."
+)
+
 if(SCALARS_COMPILER_SUPPORTS_SVML_EXTENSIONS)
     set(SCALARS_COMPILER_SUPPORTS_SVML_EXTENSIONS 1)
 else()
@@ -172,35 +260,6 @@ set(SCALARS_HAS_AVX2 ${_scalars_has_avx2})
 set(SCALARS_HAS_AVX512 ${_scalars_has_avx512})
 set(SCALARS_HAS_NEON ${_scalars_has_neon})
 set(SCALARS_HAS_SVE ${_scalars_has_sve})
-
-# Build/link ThirdParty SLEEF (vendored submodule) when requested, or auto-enabled
-# above for a NEON/SVE host without Apple Accelerate. Ported from Vectorization's
-# include/CMakeLists.txt; include/backend/cpu/{sse,avx,avx512,neon}/svml.h and
-# backend/cpu/x86/math_fallback.h branch on SCALARS_HAS_SLEEF.
-set(SCALARS_HAS_SLEEF 0)
-if(SCALARS_ENABLE_SLEEF)
-    include("${CMAKE_CURRENT_LIST_DIR}/scalars_dependencies.cmake")
-    scalars_setup_sleef()
-    if(TARGET Sleef::sleef)
-        set(SCALARS_HAS_SLEEF 1)
-    endif()
-endif()
-
-# Apple Accelerate vForce is a system framework -- no ThirdParty build needed,
-# just a link flag applied in scalars_apply_simd_compile_definitions() below.
-set(SCALARS_HAS_ACCELERATE 0)
-if(SCALARS_ENABLE_ACCELERATE)
-    if(NOT APPLE)
-        message(
-            WARNING "SCALARS_ENABLE_ACCELERATE=ON is only supported on Apple platforms; disabling."
-        )
-        set(SCALARS_ENABLE_ACCELERATE OFF
-            CACHE BOOL "Enable Apple Accelerate vForce on AArch64 NEON" FORCE
-        )
-    else()
-        set(SCALARS_HAS_ACCELERATE 1)
-    endif()
-endif()
 
 # 1 when any CPU SIMD backend/cpu/* tree is active (GPU does not affect this) --
 # gates backend/simd.h's system-intrinsic-header include block.
@@ -247,6 +306,7 @@ function(scalars_apply_simd_compile_definitions target)
             SCALARS_HAS_MKL=${SCALARS_HAS_MKL}
             SCALARS_HAS_SLEEF=${SCALARS_HAS_SLEEF}
             SCALARS_HAS_ACCELERATE=${SCALARS_HAS_ACCELERATE}
+            SCALARS_HAS_NATIVE_MATH=${SCALARS_HAS_NATIVE_MATH}
             SCALARS_VECTORIZED=${SCALARS_VECTORIZED}
             SCALARS_PACKET_SIZE=${SCALARS_PACKET_SIZE}
     )
@@ -267,7 +327,7 @@ function(scalars_apply_simd_compile_definitions target)
     # libintlc.so.5 is a direct DT_NEEDED of libsvml; Linux ld.so does not use
     # an executable RUNPATH to find a shared library's own dependencies, so
     # the library searches $ORIGIN, where the installed copies live.
-    if(SCALARS_ENABLE_SVML AND TARGET SVML::SVML)
+    if(SCALARS_HAS_SVML)
         if(UNIX AND NOT APPLE)
             # Nothing in Scalars calls libirc/libintlc symbols directly, so the
             # linker's default --as-needed drops them from this target's own
@@ -360,10 +420,10 @@ function(scalars_apply_simd_compile_definitions target)
             )
         endif()
     endif()
-    if(SCALARS_ENABLE_SLEEF AND TARGET Sleef::sleef)
+    if(SCALARS_HAS_SLEEF)
         target_link_libraries(${target} PUBLIC Sleef::sleef)
     endif()
-    if(SCALARS_ENABLE_ACCELERATE AND APPLE)
+    if(SCALARS_HAS_ACCELERATE)
         target_link_libraries(${target} PUBLIC "-framework Accelerate")
         message(STATUS "Scalars: linked Apple Accelerate framework (vForce).")
     endif()

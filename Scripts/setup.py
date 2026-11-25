@@ -50,6 +50,7 @@ DEBUG_FLAG = False
 
 _CPU_BACKENDS = {"no", "sse", "avx", "avx2", "avx512", "neon", "sve"}
 _GPU_BACKENDS = {"none", "cuda", "hip", "metal"}
+_MATH_BACKENDS = {"auto", "svml", "sleef", "accelerate"}
 
 
 class ErrorLogger:
@@ -464,8 +465,7 @@ class ScalarsFlags:
             "cppcheck",
             "cpu_backend",
             "gpu_backend",
-            "sleef",
-            "svml",
+            "math_backend",
         ]
         self.__description = [
             "build shared (default) or static libraries",
@@ -489,8 +489,7 @@ class ScalarsFlags:
             "enable cppcheck static analysis",
             "CPU SIMD backend: no | sse | avx | avx2 | avx512 | neon | sve (bare token, or --cpu_backend=<value>)",
             "GPU backend: none | cuda | hip | metal (bare token, or --gpu_backend=<value>)",
-            "enable SLEEF SIMD math library (SCALARS_ENABLE_SLEEF)",
-            "enable the bundled Intel SVML library",
+            "vector math backend: auto (built-in) | svml | sleef | accelerate (bare token, or --math_backend=<value>)",
         ]
 
     def __build_cmake_flag(self):
@@ -515,9 +514,8 @@ class ScalarsFlags:
             "lto": "SCALARS_LTO_MODE",
             "cpu_backend": "SCALARS_CPU_BACKEND",
             "gpu_backend": "SCALARS_GPU_BACKEND",
-            "sleef": "SCALARS_ENABLE_SLEEF",
+            "math_backend": "SCALARS_MATH_BACKEND",
         }
-        self.__name.update({"svml": "SCALARS_ENABLE_SVML"})
 
     def __fill_option_flags(self, arg_list):
         debug_print("Fill option flags")
@@ -541,10 +539,9 @@ class ScalarsFlags:
                 "sanitizer_enum": "address",
                 "cpu_backend": "",  # empty = let CMake's host-aware default apply
                 "gpu_backend": "",  # empty = let CMake default to "none"
-                "sleef": "",  # empty = let CMake's platform-aware auto-enable apply
+                "math_backend": "",  # empty = let CMake default to "auto"
             }
         )
-        self.__value.update({"svml": "OFF"})
 
     def __process_arg_list(self, arg_list):
         sanitizer_list = ["address", "undefined", "thread", "memory", "leak"]
@@ -612,6 +609,11 @@ class ScalarsFlags:
                 if arg != "none":
                     self.builder_suffix += f"_{arg}"
                 print_status(f"Setting GPU backend to {arg}", "INFO")
+            elif arg in _MATH_BACKENDS:
+                self.__value["math_backend"] = arg
+                if arg != "auto":
+                    self.builder_suffix += f"_{arg}"
+                print_status(f"Setting vector math backend to {arg}", "INFO")
             elif any(arg.lower() == item.lower() for item in cxx_std_list):
                 std_version = arg[3:]  # Remove "cxx" prefix
                 self.__value["cxxstd"] = std_version
@@ -1126,6 +1128,17 @@ def parse_args(args):
                 print_status(
                     f"Invalid GPU backend '{gpu_value}'. "
                     f"Valid options: {', '.join(sorted(_GPU_BACKENDS))}",
+                    "ERROR",
+                )
+                sys.exit(1)
+        elif arg.startswith("--math_backend=") or arg.startswith("--math-backend="):
+            math_value = arg.split("=", 1)[1].lower()
+            if math_value in _MATH_BACKENDS:
+                processed_args.append(math_value)
+            else:
+                print_status(
+                    f"Invalid math backend '{math_value}'. "
+                    f"Valid options: {', '.join(sorted(_MATH_BACKENDS))}",
                     "ERROR",
                 )
                 sys.exit(1)
