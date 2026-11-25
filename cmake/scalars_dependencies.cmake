@@ -131,10 +131,32 @@ function(scalars_setup_sleef)
         # directory-scoped link_directories(). Consumers in other directories (libScalars,
         # ScalarsCxxTests) then fail with "library 'tlfloat' not found". Forward SLEEF's
         # link directories on the target so the path travels with it.
+        #
+        # With CUDA enabled on Windows, nvcc's MSVC host toolchain sets the global
+        # CMAKE_LIBRARY_PATH_FLAG and CMAKE_LINK_LIBRARY_FLAG to "-LIBPATH:" and "", which
+        # CMake then also uses for a clang++ (GNU-style driver) C++ link: the driver reads
+        # the bare "tlfloat.lib" as an input file and fails. Under a GNU-style driver on
+        # Windows, pass TLFloat and its directory as driver flags, which CMake leaves as is.
         if(TARGET sleef)
             get_directory_property(_sleef_link_dirs DIRECTORY "${_sleef_src}" LINK_DIRECTORIES)
+            set(_sleef_gnu_driver OFF)
+            if(WIN32 AND CMAKE_CXX_COMPILER_FRONTEND_VARIANT STREQUAL "GNU")
+                set(_sleef_gnu_driver ON)
+                get_target_property(_sleef_iface sleef INTERFACE_LINK_LIBRARIES)
+                if(_sleef_iface)
+                    list(TRANSFORM _sleef_iface REPLACE "^tlfloat$" "-ltlfloat")
+                    list(TRANSFORM _sleef_iface REPLACE "^\\$<LINK_ONLY:tlfloat>$"
+                                                        "$<LINK_ONLY:-ltlfloat>"
+                    )
+                    set_property(TARGET sleef PROPERTY INTERFACE_LINK_LIBRARIES "${_sleef_iface}")
+                endif()
+            endif()
             foreach(_dir IN LISTS _sleef_link_dirs)
-                target_link_directories(sleef INTERFACE "$<BUILD_INTERFACE:${_dir}>")
+                if(_sleef_gnu_driver)
+                    target_link_options(sleef INTERFACE "$<BUILD_INTERFACE:-L${_dir}>")
+                else()
+                    target_link_directories(sleef INTERFACE "$<BUILD_INTERFACE:${_dir}>")
+                endif()
             endforeach()
         endif()
 
