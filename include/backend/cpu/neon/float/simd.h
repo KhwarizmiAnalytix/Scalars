@@ -10,7 +10,6 @@
 
 #include "backend/cpu/neon/svml.h"
 #include "backend/simd.h"
-#include "math/normal_cdf.h"
 #include "scalars_macros.h"
 
 namespace scalars
@@ -173,34 +172,16 @@ template <> struct simd<float>
     SCALARS_SIMD_METHOD simd_t atanh(simd_t x) { return vatanhq_f32(x); }
     SCALARS_SIMD_METHOD simd_t cbrt(simd_t x) { return vcbrtq_f32(x); }
 
+    // Neither Accelerate nor SLEEF has a normal CDF, so the vectorized port
+    // serves cdf/inv_cdf whatever SCALARS_MATH_BACKEND selects.
     SCALARS_SIMD_METHOD simd_t cdf(simd_t x)
     {
-#if SCALARS_NEON_NATIVE_MATH
         return detail_neon::pmf32::normal_cdf(x);
-#else
-        alignas(16) float b[4];
-        vst1q_f32(b, x);
-        b[0] = static_cast<float>(scalars::normalcdf(static_cast<double>(b[0])));
-        b[1] = static_cast<float>(scalars::normalcdf(static_cast<double>(b[1])));
-        b[2] = static_cast<float>(scalars::normalcdf(static_cast<double>(b[2])));
-        b[3] = static_cast<float>(scalars::normalcdf(static_cast<double>(b[3])));
-        return vld1q_f32(b);
-#endif
     }
 
     SCALARS_SIMD_METHOD simd_t inv_cdf(simd_t x)
     {
-#if SCALARS_NEON_NATIVE_MATH
         return detail_neon::pmf32::inv_normal_cdf(x);
-#else
-        alignas(16) float b[4];
-        vst1q_f32(b, x);
-        b[0] = static_cast<float>(scalars::inv_normalcdf(static_cast<double>(b[0])));
-        b[1] = static_cast<float>(scalars::inv_normalcdf(static_cast<double>(b[1])));
-        b[2] = static_cast<float>(scalars::inv_normalcdf(static_cast<double>(b[2])));
-        b[3] = static_cast<float>(scalars::inv_normalcdf(static_cast<double>(b[3])));
-        return vld1q_f32(b);
-#endif
     }
 
     SCALARS_SIMD_METHOD simd_t trunc(simd_t x) { return vrndq_f32(x); }

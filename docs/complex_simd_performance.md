@@ -43,10 +43,11 @@ Magnitude uses a scaled SIMD ratio rather than scalar lane mapping. With a math
 provider, exponential uses real vector math for finite inputs with real component
 in `(-80, 80)` for float or `(-700, 700)` for double; other lanes retain scalar
 semantics. NEON/SVE share sine/cosine range reduction and use provider `atan2`
-for argument. SLEEF/SVML logarithms have a bounded squared-magnitude vector path;
-Accelerate retains scalar complex logarithms because its small-array composition
-was slower in local measurements. Other complex transcendentals still use scalar
-lane mappings. These paths inherit the real provider's accuracy limits.
+for argument. Logarithms take a bounded vector path under the same condition as
+exponential (any math provider, including Accelerate, or the built-in port with
+FMA); it computes the real part with a `log1p`-based formula so it stays
+accurate near `|z| = 1`. Other complex transcendentals still use scalar lane
+mappings. These paths inherit the real provider's accuracy limits.
 
 Dot products use four packet accumulators and combine their widened reductions.
 Their accumulation order differs from both scalar loops and the former single

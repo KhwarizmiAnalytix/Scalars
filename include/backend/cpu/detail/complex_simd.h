@@ -654,8 +654,10 @@ public:
 // that serves the packets when SCALARS_X86_NATIVE_MATH / SCALARS_NEON_NATIVE_MATH.
 // The port takes it only with FMA: log_fast() and expm1 recover rounding errors
 // with fma, and without it they lose up to thousands of ulp near |z| = 1 (as
-// the library-backed path does on SSE2 builds without FMA).
-#if SCALARS_HAS_SVML || SCALARS_HAS_MKL || SCALARS_HAS_SLEEF || SCALARS_HAS_ACCELERATE || \
+// the library-backed path does on SSE2 builds without FMA). Accelerate counts
+// only where neon/svml.h actually routes the packets to vForce
+// (SCALARS_NEON_USE_ACCELERATE), not wherever SCALARS_HAS_ACCELERATE is set.
+#if SCALARS_HAS_SVML || SCALARS_HAS_MKL || SCALARS_HAS_SLEEF || SCALARS_NEON_USE_ACCELERATE || \
     (SCALARS_X86_NATIVE_MATH && defined(__FMA__)) || SCALARS_NEON_NATIVE_MATH
         // Keep exp(real) normal and finite. Overflow/underflow and nonfinite
         // complex inputs retain the scalar library's special-value behavior.
@@ -705,19 +707,18 @@ public:
 // that serves the packets when SCALARS_X86_NATIVE_MATH / SCALARS_NEON_NATIVE_MATH.
 // The port takes it only with FMA: log_fast() and expm1 recover rounding errors
 // with fma, and without it they lose up to thousands of ulp near |z| = 1 (as
-// the library-backed path does on SSE2 builds without FMA).
-#if SCALARS_HAS_SVML || SCALARS_HAS_MKL || SCALARS_HAS_SLEEF || SCALARS_HAS_ACCELERATE || \
+// the library-backed path does on SSE2 builds without FMA). Accelerate counts
+// only where neon/svml.h actually routes the packets to vForce
+// (SCALARS_NEON_USE_ACCELERATE), not wherever SCALARS_HAS_ACCELERATE is set.
+#if SCALARS_HAS_SVML || SCALARS_HAS_MKL || SCALARS_HAS_SLEEF || SCALARS_NEON_USE_ACCELERATE || \
     (SCALARS_X86_NATIVE_MATH && defined(__FMA__)) || SCALARS_NEON_NATIVE_MATH
         // Same fast-path condition as exp() above. This used to exclude
         // Accelerate, which was only ever load-bearing while log_fast()
         // computed 0.5*log(re^2+im^2) directly: that formula loses all
-        // relative precision near |z|=1 (see log_fast()'s own comment),
-        // and excluding Accelerate -- the default backend on this
-        // platform, and so the one actually exercised by default local
-        // test runs -- kept that bug from showing up here. Now that
-        // log_fast() uses the hi/lo-based log1p formula, it is accurate
-        // everywhere Accelerate's own vForce-backed log()/log1p() are
-        // (see neon/svml.h's vlogq_f32/vlog1pq_f32), so there is no
+        // relative precision near |z|=1 (see log_fast()'s own comment).
+        // Now that log_fast() uses the hi/lo-based log1p formula, it is
+        // accurate everywhere Accelerate's own vForce-backed log()/log1p()
+        // are (see neon/svml.h's vlogq_f32/vlog1pq_f32), so there is no
         // remaining reason for log() to be gated more narrowly than exp().
         // The larger component bounds the squared magnitude. Components below
         // the lower bound are harmless when the other component dominates.

@@ -11,7 +11,6 @@
 
 #include "backend/cpu/neon/svml.h"
 #include "backend/simd.h"
-#include "math/normal_cdf.h"
 #include "scalars_macros.h"
 
 namespace scalars
@@ -172,30 +171,16 @@ template <> struct simd<double>
     SCALARS_SIMD_METHOD simd_t atanh(simd_t x) { return vatanhq_f64(x); }
     SCALARS_SIMD_METHOD simd_t cbrt(simd_t x) { return vcbrtq_f64(x); }
 
+    // Neither Accelerate nor SLEEF has a normal CDF, so the vectorized port
+    // serves cdf/inv_cdf whatever SCALARS_MATH_BACKEND selects.
     SCALARS_SIMD_METHOD simd_t cdf(simd_t x)
     {
-#if SCALARS_NEON_NATIVE_MATH
         return detail_neon::pmf64::normal_cdf(x);
-#else
-        alignas(16) double b[2];
-        vst1q_f64(b, x);
-        b[0] = scalars::normalcdf(b[0]);
-        b[1] = scalars::normalcdf(b[1]);
-        return vld1q_f64(b);
-#endif
     }
 
     SCALARS_SIMD_METHOD simd_t inv_cdf(simd_t x)
     {
-#if SCALARS_NEON_NATIVE_MATH
         return detail_neon::pmf64::inv_normal_cdf(x);
-#else
-        alignas(16) double b[2];
-        vst1q_f64(b, x);
-        b[0] = scalars::inv_normalcdf(b[0]);
-        b[1] = scalars::inv_normalcdf(b[1]);
-        return vld1q_f64(b);
-#endif
     }
 
     SCALARS_SIMD_METHOD simd_t trunc(simd_t x) { return vrndq_f64(x); }

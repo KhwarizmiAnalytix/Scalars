@@ -47,8 +47,9 @@ the existing scalar complex implementation
 [`complex_math.h`](../include/math/complex_math.h)) lane-by-lane rather than
 claiming native vector transcendentals. Magnitude uses a scaled SIMD formula;
 `exp`/`exp2`/`exp10` use guarded real-provider vector math with scalar repair of
-exceptional lanes. SLEEF/SVML `log` has a bounded squared-magnitude vector path;
-Accelerate retains the scalar complex log path. NEON/SVE `arg` uses provider
+exceptional lanes. `log` has a bounded vector path under the same condition as
+`exp` (any math provider, including Accelerate, or the built-in port with FMA),
+with scalar repair of out-of-range lanes. NEON/SVE `arg` uses provider
 `atan2`, and complex exponential shares sine/cosine range reduction there.
 `sqrt` uses real SIMD square roots, arithmetic, division,
 and branch selection within the conservative division bounds, retaining

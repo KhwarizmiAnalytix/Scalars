@@ -185,11 +185,25 @@ if(SCALARS_MATH_BACKEND_RESOLVED STREQUAL "svml" AND NOT TARGET SVML::SVML)
 endif()
 # Apple Accelerate vForce is a system framework -- no ThirdParty build needed,
 # just a link flag applied in scalars_apply_simd_compile_definitions() below.
-if(SCALARS_MATH_BACKEND_RESOLVED STREQUAL "accelerate" AND NOT APPLE)
-    message(WARNING "SCALARS_MATH_BACKEND=accelerate is only supported on Apple platforms; "
-                    "falling back to the built-in vector math (auto)."
-    )
-    set(SCALARS_MATH_BACKEND_RESOLVED "")
+# Only the NEON packets (backend/cpu/neon/svml.h, which SVE reuses) call
+# vForce. Elsewhere -- x86 Macs, or SCALARS_CPU_BACKEND=no -- the packets
+# would use the built-in port anyway, so do not link or report Accelerate,
+# and do not set SCALARS_HAS_ACCELERATE, which code paths treat as a promise
+# that vForce serves the packets.
+if(SCALARS_MATH_BACKEND_RESOLVED STREQUAL "accelerate")
+    if(NOT APPLE)
+        message(WARNING "SCALARS_MATH_BACKEND=accelerate is only supported on Apple platforms; "
+                        "falling back to the built-in vector math (auto)."
+        )
+        set(SCALARS_MATH_BACKEND_RESOLVED "")
+    elseif(NOT _scalars_has_neon AND NOT _scalars_has_sve)
+        message(
+            WARNING
+                "SCALARS_MATH_BACKEND=accelerate requires SCALARS_CPU_BACKEND=neon or sve "
+                "(got '${SCALARS_CPU_BACKEND}'); falling back to the built-in vector math (auto)."
+        )
+        set(SCALARS_MATH_BACKEND_RESOLVED "")
+    endif()
 endif()
 # Build/link ThirdParty SLEEF (vendored submodule) when requested. include/backend/cpu/{sse,avx,avx512,neon}/svml.h and
 # backend/cpu/x86/math_fallback.h branch on SCALARS_HAS_SLEEF.
