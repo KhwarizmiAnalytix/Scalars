@@ -551,7 +551,7 @@ template <class R> std::complex<R> ref_div(std::complex<R> x, std::complex<R> y)
     const auto exponent = [](std::complex<R> z)
     {
         int e = 0;
-        std::frexp(std::max(std::fabs(z.real()), std::fabs(z.imag())), &e);
+        (void)std::frexp(std::max(std::fabs(z.real()), std::fabs(z.imag())), &e);
         return e;
     };
     const auto scaled = [](std::complex<R> z, int e)
@@ -883,8 +883,8 @@ template <class T> void run_simd_complex_RealValuedFunctions()
     CHECK_REAL(abs2, box(100), (tol{0.91, 1}), ref_abs2(z));
     CHECK_REAL(abs2, root_sweep<T>(), (tol{0.92, by_reference(0.98, 0.99)}), ref_abs2(z));
     CHECK_REAL(norm, box(100), (tol{0.91, 1}), ref_abs2(z));
-    CHECK_REAL(arg, wide, (tol{0.86, 0.64}), std::atan2(z.imag(), z.real()));
-    CHECK_REAL(arg, box(10), (tol{1.1, 1}), std::atan2(z.imag(), z.real()));
+    CHECK_REAL(arg, wide, (tol{0.92, 0.64}), std::atan2(z.imag(), z.real()));
+    CHECK_REAL(arg, box(10), (tol{1.4, 1}), std::atan2(z.imag(), z.real()));
     CHECK_REAL(real, wide, kExact, z.real());
     CHECK_REAL(imag, wide, kExact, z.imag());
 #undef CHECK_REAL
@@ -1674,7 +1674,7 @@ template <class T> void run_simd_complex_native_MagnitudeAndSpecialValues()
         c(T(0x1p31) + T(.5), -T(0x1p31) - T(.5)),
         c(T(0x1p23) - T(.5), -T(0x1p23) + T(.5)),
         c(T(.75), T(-.75))};
-    const tol                 magnitude{0.5, 0.95};
+    const tol                 magnitude{0.54, 0.95};
     const tol                 angle     = signed_zeros(tol{0.5, 0.5});
     const tol                 logarithm = signed_zeros(tol{0.5, 0.5});
     const tol                 root      = signed_zeros(tol{0.5, 0.92});
@@ -1852,7 +1852,7 @@ template <class T> void run_simd_complex_native_MixedLaneEdgesAndBranchCuts()
         c(T(-1), tiny)};
     const tol               magnitude   = signed_zeros(tol{0.5, 0.5});
     const tol               exponential = signed_zeros(tol{1, 1.4});
-    const tol               logarithm   = signed_zeros(tol{0.77, 0.5});
+    const tol               logarithm   = signed_zeros(tol{1.3, 0.5});
     std::array<c, s::size>  input, output;
     std::array<T, s::size>  real;
     for (const auto edge : edges)

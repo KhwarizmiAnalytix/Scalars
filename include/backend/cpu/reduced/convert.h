@@ -33,7 +33,7 @@ SCALARS_FORCE_INLINE __m128i select_bits(__m128i mask, __m128i yes, __m128i no)
 // before packing so every 16-bit encoding (including negative values) survives.
 SCALARS_FORCE_INLINE __m128i pack_u16(__m128i x)
 {
-    x = _mm_sub_epi32(x, _mm_set1_epi32(0x8000));
+    x = _mm_sub_epi32(x, _mm_set1_epi32(0x8000));  // NOLINT(portability-simd-intrinsics)
     return _mm_xor_si128(_mm_packs_epi32(x, x), _mm_set1_epi16(short(-32768)));
 }
 
@@ -102,7 +102,7 @@ template <class T> SCALARS_FORCE_INLINE void narrow4(__m128 from, uint16_t* to)
         const auto bits = _mm_castps_si128(from);
         const auto lsb  = _mm_and_si128(_mm_srli_epi32(bits, 16), _mm_set1_epi32(1));
         const auto rounded =
-            _mm_srli_epi32(_mm_add_epi32(bits, _mm_add_epi32(_mm_set1_epi32(0x7fff), lsb)), 16);
+            _mm_srli_epi32(_mm_add_epi32(bits, _mm_add_epi32(_mm_set1_epi32(0x7fff), lsb)), 16);  // NOLINT(portability-simd-intrinsics)
         const auto nan = _mm_castps_si128(_mm_cmpunord_ps(from, from));
         // Match bfloat16::bfloat16(float), which canonicalizes every NaN to 0x7fc0.
         packed = pack_u16(select_bits(nan, _mm_set1_epi32(0x7fc0), rounded));
@@ -194,7 +194,7 @@ template <class T> SCALARS_FORCE_INLINE void narrow(float_packet from, uint16_t*
         const auto bits    = _mm256_castps_si256(from);
         const auto lsb     = _mm256_and_si256(_mm256_srli_epi32(bits, 16), _mm256_set1_epi32(1));
         auto       rounded = _mm256_srli_epi32(
-            _mm256_add_epi32(bits, _mm256_add_epi32(_mm256_set1_epi32(0x7fff), lsb)), 16);
+            _mm256_add_epi32(bits, _mm256_add_epi32(_mm256_set1_epi32(0x7fff), lsb)), 16);  // NOLINT(portability-simd-intrinsics)
         rounded           = _mm256_blendv_epi8(rounded,
             _mm256_set1_epi32(0x7fc0),
             _mm256_castps_si256(_mm256_cmp_ps(from, from, _CMP_UNORD_Q)));

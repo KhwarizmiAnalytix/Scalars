@@ -85,9 +85,10 @@ function(scalars_setup_sleef)
     if(NOT TARGET sleef AND NOT TARGET Sleef::sleef)
         set(_sleef_src "${SCALARS_THIRD_PARTY_DIR}/sleef")
         if(NOT EXISTS "${_sleef_src}/CMakeLists.txt")
-            message(WARNING "SCALARS_MATH_BACKEND resolved to sleef but ${_sleef_src} is missing (run "
-                            "'git submodule update --init -- ThirdParty/sleef'); falling back to "
-                            "compiler SVML intrinsics or the built-in vector math."
+            message(
+                WARNING "SCALARS_MATH_BACKEND resolved to sleef but ${_sleef_src} is missing (run "
+                        "'git submodule update --init -- ThirdParty/sleef'); falling back to "
+                        "compiler SVML intrinsics or the built-in vector math."
             )
             return()
         endif()

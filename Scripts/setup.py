@@ -1131,7 +1131,7 @@ def parse_args(args):
                     "ERROR",
                 )
                 sys.exit(1)
-        elif arg.startswith("--math_backend=") or arg.startswith("--math-backend="):
+        elif arg.startswith(("--math_backend=", "--math-backend=")):
             math_value = arg.split("=", 1)[1].lower()
             if math_value in _MATH_BACKENDS:
                 processed_args.append(math_value)

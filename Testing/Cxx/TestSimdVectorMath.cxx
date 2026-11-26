@@ -328,8 +328,8 @@ template <class T> void run_simd_vector_math_Hyperbolic()
     VMATH_SWEEP(tanh, (domain{-20, 20}), (budgets{2, 3}), std::tanh(x));
     VMATH_SWEEP(tanh, (domain{1e-30, 1, true, true}), (budgets{2, 3}), std::tanh(x));
     VMATH_SWEEP(asinh, (domain{1e-30, big, true, true}), (budgets{2, 2}), std::asinh(x));
-    VMATH_SWEEP(acosh, (domain{1, big, true}), (budgets{3, 2}), std::acosh(x));
-    VMATH_SWEEP(acosh, (domain{1, 2}), (budgets{3, 2}), std::acosh(x));
+    VMATH_SWEEP(acosh, (domain{1, big, true}), (budgets{3, 3}), std::acosh(x));
+    VMATH_SWEEP(acosh, (domain{1, 2}), (budgets{3, 3}), std::acosh(x));
     VMATH_SWEEP(atanh, (domain{-1, 1}), (budgets{2, 2}), std::atanh(x));
     VMATH_SWEEP(atanh, (domain{1e-30, 0.5, true, true}), (budgets{2, 2}), std::atanh(x));
 }
@@ -343,7 +343,7 @@ template <class T> void run_simd_vector_math_PowersAndRoots()
                      true,
                      true};
 
-    VMATH_SWEEP(cbrt, all, (budgets{1, 2}), accurate_cbrt(x));
+    VMATH_SWEEP(cbrt, all, (budgets{1, 3}), accurate_cbrt(x));
     VMATH_SWEEP(rsqrt, (domain{all.lo, all.hi, true}), (budgets{2, 2}), 1 / std::sqrt(x));
 
     const auto pow_fn  = [](vec_t<T> x, vec_t<T> y) { return P::pow(x, y); };

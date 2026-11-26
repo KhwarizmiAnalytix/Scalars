@@ -96,6 +96,10 @@ exclude_patterns = [
     # Scripts/benchmark_complex_simd.py with its own torch include flags, not
     # by CMake; it never has a compile_commands.json entry to lint against.
     'Testing/Benchmark/CompareComplexSimdPytorch.cpp',
+    # Benchmark files require benchmark/benchmark.h, available only when
+    # SCALARS_ENABLE_BENCHMARK=ON; they never have a compile_commands.json
+    # entry in a standard build and cannot be linted without the header.
+    'Testing/Benchmark/BenchmarkVectorMath.cxx',
 ]
 command = [
     'python3',

@@ -70,14 +70,7 @@ if(SCALARS_MATH_BACKEND STREQUAL "native")
               FORCE
     )
 endif()
-set_property(
-    CACHE SCALARS_MATH_BACKEND
-    PROPERTY STRINGS
-             auto
-             svml
-             sleef
-             accelerate
-)
+set_property(CACHE SCALARS_MATH_BACKEND PROPERTY STRINGS auto svml sleef accelerate)
 if(NOT SCALARS_MATH_BACKEND MATCHES "^(auto|svml|sleef|accelerate)$")
     message(FATAL_ERROR "SCALARS_MATH_BACKEND must be one of: auto, svml, sleef, accelerate "
                         "(got '${SCALARS_MATH_BACKEND}')"
