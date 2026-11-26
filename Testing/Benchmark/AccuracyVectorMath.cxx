@@ -18,6 +18,7 @@
 #include <cmath>
 #include <cstddef>
 #include <cstdio>
+#include <exception>
 #include <limits>
 #include <random>
 #include <string>
@@ -92,37 +93,67 @@ template <class T> std::vector<segment> wide_domain(const std::string& n)
     using l              = lim<T>;
     const double cdf_low = sizeof(T) == 4 ? -13.0 : -37.5;
     if (n == "exp")
+    {
         return {U(std::log(l::nmin), std::log(l::max)), U(std::log(l::dmin), std::log(l::nmin))};
+    }
     if (n == "expm1")
+    {
         return {L(l::nmin, std::log(l::max)), L(l::nmin, -std::log(l::dmin), false, 0, -1)};
+    }
     if (n == "exp2")
+    {
         return {
             U(std::log2(l::nmin), std::log2(l::max)), U(std::log2(l::dmin), std::log2(l::nmin))};
+    }
     if (n == "exp10")
+    {
         return {U(std::log10(l::nmin), std::log10(l::max)),
             U(std::log10(l::dmin), std::log10(l::nmin))};
+    }
     if (n == "log" || n == "log2" || n == "log10")
+    {
         return {L(l::dmin, l::max), L(l::eps, 0.5, false, 1, -1), L(l::eps, 1, false, 1, 1)};
+    }
     if (n == "log1p")
+    {
         return {L(l::nmin, l::max), L(l::nmin, 0.5, false, 0, -1), L(l::eps, 0.5, false, -1, 1)};
+    }
     if (n == "sin" || n == "cos" || n == "tan")
+    {
         return {L(l::dmin, l::max, true), L(1, 1e5, true)};
+    }
     if (n == "asin" || n == "acos" || n == "atanh")
+    {
         return {L(l::dmin, 1, true), L(l::eps / 2, 1, true, 1, -1)};
+    }
     if (n == "atan" || n == "asinh" || n == "cbrt")
+    {
         return {L(l::dmin, l::max, true)};
+    }
     if (n == "sinh" || n == "cosh")
+    {
         return {segment{0, std::log(l::max) + 0.6, false, true}, L(l::dmin, 1, true)};
+    }
     if (n == "tanh")
+    {
         return {L(l::dmin, 50, true)};
+    }
     if (n == "acosh")
+    {
         return {L(l::eps / 4, l::max, false, 1, 1)};
+    }
     if (n == "sqrt" || n == "invsqrt")
+    {
         return {L(l::dmin, l::max)};
+    }
     if (n == "cdf")
+    {
         return {U(cdf_low, 9), L(l::dmin, 1, true)};
+    }
     if (n == "inv_cdf")
+    {
         return {L(l::nmin, 0.5), L(l::eps / 2, 0.5, false, 1, -1)};
+    }
     return {};
 }
 
@@ -546,14 +577,24 @@ template <class Op, class T> void measure()
 
 int main()
 {
-    for_each_op([](auto op) { measure<decltype(op), float>(); });
-    if constexpr (kExtendedReference)
+    // Sample generation and scoring allocate (std::vector, std::string), so
+    // report a failure instead of letting std::bad_alloc escape main.
+    try
     {
-        for_each_op([](auto op) { measure<decltype(op), double>(); });
+        for_each_op([](auto op) { measure<decltype(op), float>(); });
+        if constexpr (kExtendedReference)
+        {
+            for_each_op([](auto op) { measure<decltype(op), double>(); });
+        }
+        else
+        {
+            std::fprintf(stderr, "long double is double here: double accuracy is not measured\n");
+        }
     }
-    else
+    catch (const std::exception& e)
     {
-        std::fprintf(stderr, "long double is double here: double accuracy is not measured\n");
+        std::fprintf(stderr, "accuracy_scalars_vectormath: %s\n", e.what());
+        return 1;
     }
     return 0;
 }

@@ -134,12 +134,14 @@ template <class Op, class T> void register_op()
 #endif
 }
 
+// NOLINTBEGIN(bugprone-throwing-static-initialization): Google Benchmark registration.
 [[maybe_unused]] const bool registered = []
 {
     for_each_op([](auto op) { register_op<decltype(op), float>(); });
     for_each_op([](auto op) { register_op<decltype(op), double>(); });
     return true;
 }();
+// NOLINTEND(bugprone-throwing-static-initialization)
 }  // namespace
 
 #endif  // SCALARS_VECTORIZED
