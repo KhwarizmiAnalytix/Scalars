@@ -123,9 +123,9 @@ inline float trig_reduce_huge(float xf, std::int32_t* quadrant)
 
 template <class O> struct packet_math
 {
-    using V = typename O::vec_t;
-    using T = typename O::scalar_t;
-    using U = typename ieee_traits<T>::uint_t;
+    using V = typename O::vec_t;                // NOLINT(readability-identifier-naming)
+    using T = typename O::scalar_t;             // NOLINT(readability-identifier-naming)
+    using U = typename ieee_traits<T>::uint_t;  // NOLINT(readability-identifier-naming)
 
     static constexpr bool kFloat   = std::is_same_v<T, float>;
     static constexpr int  kMant    = ieee_traits<T>::mantissa_bits;
@@ -238,8 +238,8 @@ template <class O> struct packet_math
         const V       e = float_to_int(O::min(O::max(exponent, negate(max_exp)), max_exp));
         const V       b = float_to_int(O::min(O::max(exponent, negate(last_max)), last_max));
         const V       t = O::bandnot(O::isub(e, b), bits(U(1)));  // even
-        const V       c1 = shl<kMant - 1>(O::iadd(t, bits(U(2 * kBias))));       // 2^(t/2)
-        const V       c2 = shl<kMant>(O::iadd(O::isub(e, t), bits(U(kBias))));  // 2^(e-t)
+        const V       c1       = shl<kMant - 1>(O::iadd(t, bits(U(2) * U(kBias))));   // 2^(t/2)
+        const V       c2       = shl<kMant>(O::iadd(O::isub(e, t), bits(U(kBias))));  // 2^(e-t)
         V             out = O::mul(a, c1);
         O::barrier(out);
         out = O::mul(out, c1);

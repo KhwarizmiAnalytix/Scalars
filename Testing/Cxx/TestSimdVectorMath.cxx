@@ -106,7 +106,7 @@ template <class T> double ulp_error(T actual, double expected, double floor)
 // Applies a packet function to a flat array, one packet at a time.
 template <class T, class F> std::vector<T> apply(const std::vector<T>& x, F f)
 {
-    using O = ops_t<T>;
+    using O = ops_t<T>;  // NOLINT(readability-identifier-naming)
     std::vector<T> out(x.size());
     for (std::size_t i = 0; i + kLanes<T> <= x.size(); i += kLanes<T>)
     {
@@ -118,7 +118,7 @@ template <class T, class F> std::vector<T> apply(const std::vector<T>& x, F f)
 template <class T, class F>
 std::vector<T> apply(const std::vector<T>& x, const std::vector<T>& y, F f)
 {
-    using O = ops_t<T>;
+    using O = ops_t<T>;  // NOLINT(readability-identifier-naming)
     std::vector<T> out(x.size());
     for (std::size_t i = 0; i + kLanes<T> <= x.size(); i += kLanes<T>)
     {
@@ -388,7 +388,7 @@ template <class T> void run_simd_vector_math_NormalDistribution()
 // Values every unary function is checked at, mixed with ordinary ones.
 template <class T> std::vector<T> special_inputs()
 {
-    using L = std::numeric_limits<T>;
+    using L = std::numeric_limits<T>;  // NOLINT(readability-identifier-naming)
     const T v[] = {L::quiet_NaN(), -L::quiet_NaN(), L::infinity(), -L::infinity(), T(0), -T(0),
                    L::denorm_min(), -L::denorm_min(), L::min(), -L::min(), L::max(), -L::max(),
                    T(1), T(-1), T(0.5), T(-0.5), T(2), T(-2), L::epsilon(), T(0.75), T(-3), T(10)};
@@ -502,7 +502,7 @@ template <class T> void run_simd_vector_math_SpecialValues()
                       [](T y, T x) { return std::atan2(y, x); });
 
     // The normal distribution at its limits.
-    using L = std::numeric_limits<T>;
+    using L = std::numeric_limits<T>;  // NOLINT(readability-identifier-naming)
     const std::vector<T> cdf_x = [] {
         std::vector<T> v = {L::quiet_NaN(), L::infinity(), -L::infinity(), T(0), -T(0), L::max(), -L::max()};
         while (v.size() % kLanes<T> != 0)

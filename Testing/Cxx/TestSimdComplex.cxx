@@ -1675,7 +1675,9 @@ template <class T> void run_simd_complex_native_MagnitudeAndSpecialValues()
         c(T(0x1p23) - T(.5), -T(0x1p23) + T(.5)),
         c(T(.75), T(-.75))};
     const tol                 magnitude{0.54, 0.95};
-    const tol                 angle     = signed_zeros(tol{0.5, 0.5});
+    // The built-in atan2 is faithfully, not correctly, rounded: arg(3+4i) is 0.59 ULP
+    // from the exact value in double. Same budget as the arg sweep.
+    const tol                 angle     = signed_zeros(tol{0.5, 0.64});
     const tol                 logarithm = signed_zeros(tol{0.5, 0.5});
     const tol                 root      = signed_zeros(tol{0.5, 0.92});
     const tol                 identity{1, 3};
