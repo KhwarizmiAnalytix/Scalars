@@ -58,14 +58,14 @@ public:
         dtype                 type = dtype::float32);
     void dispatch_fill(
         void* out_buffer, float value, std::size_t n_elems, dtype type = dtype::float32);
-    void dispatch_fused(std::string_view   kernel_source,
-        const void* const*                 in_buffers,
-        int                                n_in,
-        const float*                       scalars,
-        int                                n_scalars,
-        void*                              out_buffer,
-        std::size_t                        n_elems,
-        dtype                              type = dtype::float32);
+    void dispatch_fused(std::string_view kernel_source,
+        const void* const*               in_buffers,
+        int                              n_in,
+        const float*                     scalars,
+        int                              n_scalars,
+        void*                            out_buffer,
+        std::size_t                      n_elems,
+        dtype                            type = dtype::float32);
     void submit();
     void wait();
 
@@ -91,13 +91,13 @@ void dispatch_fill(void* out_buffer, float value, std::size_t n_elems);
 // n_in..n_in+n_scalars-1 (setBytes), then out and n. The kernel function
 // must be named fused_float. Source is compiled once and cached in an
 // LRU-bounded cache (see set_fused_pipeline_cache_capacity below).
-void dispatch_fused(std::string_view    kernel_source,
-    const void* const*                  in_buffers,
-    int                                 n_in,
-    float const*                        scalars,
-    int                                 n_scalars,
-    void*                               out_buffer,
-    std::size_t                         n_elems);
+void dispatch_fused(std::string_view kernel_source,
+    const void* const*               in_buffers,
+    int                              n_in,
+    float const*                     scalars,
+    int                              n_scalars,
+    void*                            out_buffer,
+    std::size_t                      n_elems);
 
 // Multi-block reductions. Each threadgroup writes one partial; the host
 // launcher encodes all ping-pong passes in one command buffer, reusing per-thread
@@ -118,14 +118,14 @@ void dispatch(const char* kernel_name,
     std::size_t           n_elems,
     dtype                 type);
 void dispatch_fill(void* out_buffer, float value, std::size_t n_elems, dtype type);
-void dispatch_fused(std::string_view    kernel_source,
-    const void* const*                  in_buffers,
-    int                                 n_in,
-    float const*                        scalars,
-    int                                 n_scalars,
-    void*                               out_buffer,
-    std::size_t                         n_elems,
-    dtype                               type);
+void dispatch_fused(std::string_view kernel_source,
+    const void* const*               in_buffers,
+    int                              n_in,
+    float const*                     scalars,
+    int                              n_scalars,
+    void*                            out_buffer,
+    std::size_t                      n_elems,
+    dtype                            type);
 // Reduced sums are never narrowed between threadgroups. All return FP32.
 float reduce_sum(const void* buffer, std::size_t n_elems, dtype type);
 float reduce_min(const void* buffer, std::size_t n_elems, dtype type);
@@ -137,8 +137,8 @@ float reduce_max(const void* buffer, std::size_t n_elems, dtype type);
 // graph) would otherwise grow it without bound. It evicts least-recently-used
 // entries past this capacity; the default is 256 distinct fused sources.
 // Shrinking it evicts immediately. Thread-safe; callable at any time.
-void              set_fused_pipeline_cache_capacity(std::size_t capacity);
-std::size_t       fused_pipeline_cache_capacity();
-std::size_t       fused_pipeline_cache_size();
+void        set_fused_pipeline_cache_capacity(std::size_t capacity);
+std::size_t fused_pipeline_cache_capacity();
+std::size_t fused_pipeline_cache_size();
 
 }  // namespace scalars::metal_backend

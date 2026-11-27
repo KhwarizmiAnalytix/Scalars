@@ -13,14 +13,10 @@
 /* Microsoft C/C++-compatible compiler */
 #include <intrin.h>
 #if _MSC_VER <= 1900
-#define _mm256_extract_epi64(X, Y) \
-  (_mm_extract_epi64(_mm256_extractf128_si256(X, Y >> 1), Y % 2))
-#define _mm256_extract_epi32(X, Y) \
-  (_mm_extract_epi32(_mm256_extractf128_si256(X, Y >> 2), Y % 4))
-#define _mm256_extract_epi16(X, Y) \
-  (_mm_extract_epi16(_mm256_extractf128_si256(X, Y >> 3), Y % 8))
-#define _mm256_extract_epi8(X, Y) \
-  (_mm_extract_epi8(_mm256_extractf128_si256(X, Y >> 4), Y % 16))
+#define _mm256_extract_epi64(X, Y) (_mm_extract_epi64(_mm256_extractf128_si256(X, Y >> 1), Y % 2))
+#define _mm256_extract_epi32(X, Y) (_mm_extract_epi32(_mm256_extractf128_si256(X, Y >> 2), Y % 4))
+#define _mm256_extract_epi16(X, Y) (_mm_extract_epi16(_mm256_extractf128_si256(X, Y >> 3), Y % 8))
+#define _mm256_extract_epi8(X, Y) (_mm_extract_epi8(_mm256_extractf128_si256(X, Y >> 4), Y % 16))
 #endif
 #elif defined(__GNUC__) && (defined(__ARM_NEON__) || defined(__aarch64__))
 /* GCC-compatible compiler, targeting ARM with NEON */
@@ -35,8 +31,7 @@
 #elif defined(__s390x__)
 // targets Z/architecture
 // we will include vecintrin later
-#elif (defined(__GNUC__) || defined(__xlC__)) && \
-    (defined(__VEC__) || defined(__ALTIVEC__))
+#elif (defined(__GNUC__) || defined(__xlC__)) && (defined(__VEC__) || defined(__ALTIVEC__))
 /* XLC or GCC-compatible compiler, targeting PowerPC with VMX/VSX */
 #include <altivec.h>
 /* We need to undef those tokens defined by <altivec.h> to avoid conflicts

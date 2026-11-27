@@ -1,6 +1,7 @@
 #pragma once
 
-#include "backend/simd.h"
+#include "backend/cpu/avx512/double/simd.h"
+#include "backend/cpu/avx512/float/simd.h"
 
 #include "backend/cpu/detail/complex_simd.h"
 

@@ -3,14 +3,14 @@
 #include <cmath>
 namespace scalars
 {
-#define SCALARS_REAL_MATH(NAME)                                                                     \
+#define SCALARS_REAL_MATH(NAME)                                                                    \
     inline half NAME(half x)                                                                       \
-    {                                                                                               \
+    {                                                                                              \
         return half(std::NAME(float(x)));                                                          \
-    }                                                                                               \
-    inline bfloat16 NAME(bfloat16 x)                                                                \
-    {                                                                                               \
-        return bfloat16(std::NAME(float(x)));                                                       \
+    }                                                                                              \
+    inline bfloat16 NAME(bfloat16 x)                                                               \
+    {                                                                                              \
+        return bfloat16(std::NAME(float(x)));                                                      \
     }
 SCALARS_REAL_MATH(exp)
 SCALARS_REAL_MATH(log)

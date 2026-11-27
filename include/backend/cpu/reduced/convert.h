@@ -8,6 +8,7 @@
 #include <cstring>
 #include <type_traits>
 
+#include "backend/cpu/real_simd.h"
 #include "types/bfloat16.h"
 #include "types/half.h"
 
@@ -102,7 +103,8 @@ template <class T> SCALARS_FORCE_INLINE void narrow4(__m128 from, uint16_t* to)
         const auto bits = _mm_castps_si128(from);
         const auto lsb  = _mm_and_si128(_mm_srli_epi32(bits, 16), _mm_set1_epi32(1));
         const auto rounded =
-            _mm_srli_epi32(_mm_add_epi32(bits, _mm_add_epi32(_mm_set1_epi32(0x7fff), lsb)), 16);  // NOLINT(portability-simd-intrinsics)
+            _mm_srli_epi32(_mm_add_epi32(bits, _mm_add_epi32(_mm_set1_epi32(0x7fff), lsb)),
+                16);  // NOLINT(portability-simd-intrinsics)
         const auto nan = _mm_castps_si128(_mm_cmpunord_ps(from, from));
         // Match bfloat16::bfloat16(float), which canonicalizes every NaN to 0x7fc0.
         packed = pack_u16(select_bits(nan, _mm_set1_epi32(0x7fc0), rounded));
@@ -194,7 +196,8 @@ template <class T> SCALARS_FORCE_INLINE void narrow(float_packet from, uint16_t*
         const auto bits    = _mm256_castps_si256(from);
         const auto lsb     = _mm256_and_si256(_mm256_srli_epi32(bits, 16), _mm256_set1_epi32(1));
         auto       rounded = _mm256_srli_epi32(
-            _mm256_add_epi32(bits, _mm256_add_epi32(_mm256_set1_epi32(0x7fff), lsb)), 16);  // NOLINT(portability-simd-intrinsics)
+            _mm256_add_epi32(bits, _mm256_add_epi32(_mm256_set1_epi32(0x7fff), lsb)),
+            16);  // NOLINT(portability-simd-intrinsics)
         rounded           = _mm256_blendv_epi8(rounded,
             _mm256_set1_epi32(0x7fc0),
             _mm256_castps_si256(_mm256_cmp_ps(from, from, _CMP_UNORD_Q)));

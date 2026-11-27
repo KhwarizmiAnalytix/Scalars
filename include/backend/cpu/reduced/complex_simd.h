@@ -20,8 +20,10 @@
 #include <limits>
 #include <type_traits>
 
+#include "backend/cpu/complex_simd.h"
 #include "backend/cpu/detail/complex_simd.h"
 #include "backend/cpu/reduced/convert.h"
+#include "backend/cpu/reduced/simd.h"
 #include "common/accumulate_type.h"
 #include "types/complex.h"
 
@@ -42,9 +44,9 @@ template <class T> struct complex_reduced_simd
 
     using value_t            = complex<T>;
     using component_r        = simd<T>;                        // reduced_simd<T>
-    using component_packet_t = typename component_r::simd_t;     // packet<T, size>
+    using component_packet_t = typename component_r::simd_t;   // packet<T, size>
     using cf                 = simd<scalars::complex<float>>;  // complete complex<float> backend
-    using simd_t             = complex_packet<T>;                // {component_packet_t real, imag}
+    using simd_t             = complex_packet<T>;              // {component_packet_t real, imag}
     using real_packet_t      = component_packet_t;
     using mask_t             = typename component_r::mask_t;
     using int_t              = typename component_r::int_t;
@@ -114,7 +116,8 @@ public:
         std::array<T, size> re, im;
         component_r::storeu(a.real, re.data());
         component_r::storeu(a.imag, im.data());
-        for (int i = 0; i < size; ++i) {
+        for (int i = 0; i < size; ++i)
+        {
             p[i] = value_t(re[i], im[i]);
         }
     }
@@ -122,11 +125,13 @@ public:
     static simd_t loadu(const value_t* p, int count)
     {
         assert(count >= 0 && count <= size);
-        if (count == size) {
+        if (count == size)
+        {
             return loadu(p);
         }
         std::array<value_t, size> lanes{};
-        for (int i = 0; i < count; ++i) {
+        for (int i = 0; i < count; ++i)
+        {
             lanes[i] = p[i];
         }
         return loadu(lanes.data());
@@ -141,13 +146,15 @@ public:
         }
         std::array<value_t, size> lanes;
         storeu(a, lanes.data());
-        for (int i = 0; i < count; ++i) {
+        for (int i = 0; i < count; ++i)
+        {
             p[i] = lanes[i];
         }
     }
     static simd_t gather(const value_t* p, std::ptrdiff_t stride)
     {
-        if (stride == 1) {
+        if (stride == 1)
+        {
             return loadu(p);
         }
         std::array<T, size> re, im;
@@ -168,7 +175,8 @@ public:
         std::array<T, size> re, im;
         component_r::storeu(a.real, re.data());
         component_r::storeu(a.imag, im.data());
-        for (int i = 0; i < size; ++i) {
+        for (int i = 0; i < size; ++i)
+        {
             p[i * stride] = value_t(re[i], im[i]);
         }
     }
@@ -177,7 +185,8 @@ public:
     static simd_t gather(const value_t* p, const Index* indices)
     {
         std::array<value_t, size> lanes;
-        for (int i = 0; i < size; ++i) {
+        for (int i = 0; i < size; ++i)
+        {
             lanes[i] = p[indices[i]];
         }
         return loadu(lanes.data());
@@ -188,7 +197,8 @@ public:
     {
         std::array<value_t, size> lanes;
         storeu(a, lanes.data());
-        for (int i = 0; i < size; ++i) {
+        for (int i = 0; i < size; ++i)
+        {
             p[indices[i]] = lanes[i];
         }
     }
@@ -219,7 +229,7 @@ public:
     {
         return set_mask(a != 0);
     }
-    static void   broadcast(const value_t* p, simd_t& a, simd_t& b, simd_t& c, simd_t& d)
+    static void broadcast(const value_t* p, simd_t& a, simd_t& b, simd_t& c, simd_t& d)
     {
         a = set(p[0]);
         b = set(p[1]);
@@ -230,7 +240,8 @@ public:
     {
         constexpr int             repeats = size / 4;
         std::array<value_t, size> lanes;
-        for (int i = 0; i < size; ++i) {
+        for (int i = 0; i < size; ++i)
+        {
             lanes[i] = p[i / repeats];
         }
         return loadu(lanes.data());
@@ -240,13 +251,16 @@ public:
     static void ptranspose(simd_t* rows)
     {
         std::array<value_t, static_cast<std::size_t>(N) * size> input, output;
-        for (int row = 0; row < N; ++row) {
+        for (int row = 0; row < N; ++row)
+        {
             storeu(rows[row], input.data() + row * size);
         }
-        for (std::size_t i = 0; i < input.size(); ++i) {
+        for (std::size_t i = 0; i < input.size(); ++i)
+        {
             output[i] = input[(i % N) * size + i / N];
         }
-        for (int row = 0; row < N; ++row) {
+        for (int row = 0; row < N; ++row)
+        {
             rows[row] = loadu(output.data() + row * size);
         }
     }
@@ -254,7 +268,8 @@ public:
     static simd_half_t set(const value_t* p)
     {
         std::array<value_t, size> lanes{};
-        for (int i = 0; i < half_size; ++i) {
+        for (int i = 0; i < half_size; ++i)
+        {
             lanes[i] = *p;
         }
         return {loadu(lanes.data())};
@@ -262,7 +277,8 @@ public:
     static simd_half_t gather_half(const value_t* p, std::ptrdiff_t stride)
     {
         std::array<value_t, size> lanes{};
-        for (int i = 0; i < half_size; ++i) {
+        for (int i = 0; i < half_size; ++i)
+        {
             lanes[i] = p[i * stride];
         }
         return {loadu(lanes.data())};
@@ -273,7 +289,8 @@ public:
     {
         std::array<value_t, size> lanes;
         storeu(a.value, lanes.data());
-        for (int i = 0; i < half_size; ++i) {
+        for (int i = 0; i < half_size; ++i)
+        {
             p[i * stride] = lanes[i];
         }
     }
@@ -289,7 +306,8 @@ public:
     {
         std::array<value_t, size> lanes;
         storeu(a, lanes.data());
-        for (int i = 0; i < half_size; ++i) {
+        for (int i = 0; i < half_size; ++i)
+        {
             lanes[i] += lanes[i + half_size];
         }
         return loadu_half(lanes.data());

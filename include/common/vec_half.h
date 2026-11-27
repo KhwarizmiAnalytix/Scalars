@@ -3,13 +3,16 @@
 #include "common/intrinsics.h"
 #include "scalars_macros.h"
 
-namespace scalars::vec {
+namespace scalars::vec
+{
 // See Note [CPU_CAPABILITY namespace]
-inline namespace CPU_CAPABILITY {
+inline namespace CPU_CAPABILITY
+{
 
-#if (defined(SCALARS_CPU_CAPABILITY_AVX2) || defined(SCALARS_CPU_CAPABILITY_AVX512)) && \
+#if (defined(SCALARS_CPU_CAPABILITY_AVX2) || defined(SCALARS_CPU_CAPABILITY_AVX512)) &&            \
     !defined(__APPLE__)
-static inline uint16_t float2half_scalar(float val) {
+static inline uint16_t float2half_scalar(float val)
+{
 // MSVC's _mm*_cvtps_ph immediate check rejects _MM_FROUND_NO_EXC (8) as C4556,
 // and /WX turns that into an error. Nearest-even is the same rounding mode.
 #if defined(_MSC_VER)
@@ -19,39 +22,38 @@ static inline uint16_t float2half_scalar(float val) {
 #endif
 #if defined(SCALARS_CPU_CAPABILITY_AVX2)
 #if defined(_MSC_VER)
-  __m256 v = _mm256_set1_ps(val);
-  __m128i o = _mm256_cvtps_ph(v, SCALARS_F16C_ROUND);
-  return static_cast<std::uint16_t>(_mm_cvtsi128_si32(o));
+    __m256  v = _mm256_set1_ps(val);
+    __m128i o = _mm256_cvtps_ph(v, SCALARS_F16C_ROUND);
+    return static_cast<std::uint16_t>(_mm_cvtsi128_si32(o));
 #else
-  return _cvtss_sh(val, SCALARS_F16C_ROUND);
+    return _cvtss_sh(val, SCALARS_F16C_ROUND);
 #endif
 #elif defined(SCALARS_CPU_CAPABILITY_AVX512)
-  __m512 v = _mm512_set1_ps(val);
-  __m256i o = _mm512_cvtps_ph(v, SCALARS_F16C_ROUND);
-  return static_cast<std::uint16_t>(
-      _mm_cvtsi128_si32(_mm256_castsi256_si128(o)));
+    __m512  v = _mm512_set1_ps(val);
+    __m256i o = _mm512_cvtps_ph(v, SCALARS_F16C_ROUND);
+    return static_cast<std::uint16_t>(_mm_cvtsi128_si32(_mm256_castsi256_si128(o)));
 #endif
 #undef SCALARS_F16C_ROUND
 }
 
-static inline float half2float_scalar(uint16_t val) {
+static inline float half2float_scalar(uint16_t val)
+{
 #if defined(SCALARS_CPU_CAPABILITY_AVX2)
 #if defined(_MSC_VER)
-  __m128i v = _mm_cvtsi32_si128(val);
-  __m256 o = _mm256_cvtph_ps(v);
-  return _mm256_cvtss_f32(o);
+    __m128i v = _mm_cvtsi32_si128(val);
+    __m256  o = _mm256_cvtph_ps(v);
+    return _mm256_cvtss_f32(o);
 #else
-  return _cvtsh_ss(val);
+    return _cvtsh_ss(val);
 #endif
 #elif defined(SCALARS_CPU_CAPABILITY_AVX512)
-  __m256i v =
-      _mm256_setr_epi16(val, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
-  __m512 o = _mm512_cvtph_ps(v);
-  return _mm512_cvtss_f32(o);
+    __m256i v = _mm256_setr_epi16(val, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+    __m512  o = _mm512_cvtph_ps(v);
+    return _mm512_cvtss_f32(o);
 #endif
 }
 
 #endif
 
-} // namespace CPU_CAPABILITY
+}  // namespace CPU_CAPABILITY
 }  // namespace scalars::vec

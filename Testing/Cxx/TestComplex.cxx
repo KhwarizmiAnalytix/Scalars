@@ -17,7 +17,10 @@ using namespace scalars;
 
 namespace
 {
-template <class T> T real_of(const complex<T>& value) { return value.real(); }
+template <class T> T real_of(const complex<T>& value)
+{
+    return value.real();
+}
 }  // namespace
 
 TEST(Complex, StorageAndProduct)
@@ -43,13 +46,13 @@ TEST(Complex, ConstructorsAssignmentAndPredicates)
     EXPECT_DOUBLE_EQ(std::real(value), 1.5);
     EXPECT_DOUBLE_EQ(std::imag(value), -2.5);
 
-    const complex<float> narrowed(value);
+    const complex<float>  narrowed(value);
     const complex<double> widened = complex<float>{1.0f, 2.0f};
     EXPECT_FLOAT_EQ(narrowed.real(), 1.5f);
     EXPECT_DOUBLE_EQ(widened.imag(), 2.0);
 
     const std::complex<double> standard{3.0, 4.0};
-    complex<double> from_std(standard);
+    complex<double>            from_std(standard);
     from_std = standard;
     EXPECT_DOUBLE_EQ(from_std.real(), 3.0);
     EXPECT_DOUBLE_EQ(from_std.imag(), 4.0);
@@ -76,14 +79,14 @@ TEST(Complex, ArithmeticDivisionAndIntegers)
     EXPECT_DOUBLE_EQ((+left).real(), 1.0);
     EXPECT_DOUBLE_EQ((-left).imag(), 2.0);
 
-    const auto sum = left + complex<double>{3.0, 4.0};
+    const auto sum        = left + complex<double>{3.0, 4.0};
     const auto difference = left - complex<double>{0.5, -0.5};
-    const auto product = left * complex<double>{2.0, 1.0};
+    const auto product    = left * complex<double>{2.0, 1.0};
     EXPECT_DOUBLE_EQ(sum.real(), 4.0);
     EXPECT_DOUBLE_EQ(difference.imag(), -1.5);
     EXPECT_DOUBLE_EQ(product.real(), 4.0);
 
-    const auto same_sign = left / complex<double>{2.0, -0.5};
+    const auto                 same_sign = left / complex<double>{2.0, -0.5};
     const std::complex<double> same_expected =
         std::complex<double>(1.0, -2.0) / std::complex<double>(2.0, -0.5);
     EXPECT_NEAR(same_sign.real(), same_expected.real(), 1e-12);
@@ -105,11 +108,11 @@ TEST(Complex, ArithmeticDivisionAndIntegers)
     EXPECT_NEAR(into.real(), into_reference.real(), 1e-12);
     EXPECT_NEAR(into.imag(), into_reference.imag(), 1e-12);
 
-    const auto real_sum = left + 1.5;
-    const auto real_from_left = 1.5 + left;
-    const auto real_diff = left - 0.5;
-    const auto real_from_right = 4.0 - left;
-    const auto real_product = left * 2.0;
+    const auto real_sum          = left + 1.5;
+    const auto real_from_left    = 1.5 + left;
+    const auto real_diff         = left - 0.5;
+    const auto real_from_right   = 4.0 - left;
+    const auto real_product      = left * 2.0;
     const auto real_from_product = 2.0 * left;
     EXPECT_DOUBLE_EQ(real_sum.real(), 2.5);
     EXPECT_DOUBLE_EQ(real_from_left.imag(), -2.0);
@@ -142,8 +145,8 @@ TEST(Complex, DivisionBySignedZeroMatchesPositiveZero)
     // negative (c < 0 is false for -0.0), flipping the sign of the quotient.
     // (1+1i) / (-0-0i) must equal (1+1i) / (0+0i), both (+inf, +inf).
     const complex<double> numerator{1.0, 1.0};
-    const auto positive_zero = complex<double>{1.0, 1.0} / complex<double>{0.0, 0.0};
-    const auto negative_zero = numerator / complex<double>{-0.0, -0.0};
+    const auto            positive_zero = complex<double>{1.0, 1.0} / complex<double>{0.0, 0.0};
+    const auto            negative_zero = numerator / complex<double>{-0.0, -0.0};
     EXPECT_EQ(positive_zero.real(), negative_zero.real());
     EXPECT_EQ(positive_zero.imag(), negative_zero.imag());
     EXPECT_GT(negative_zero.real(), 0.0);
@@ -187,15 +190,15 @@ TEST(Complex, ComparisonStreamLiteralsAndStd)
     written << value;
     EXPECT_FALSE(written.str().empty());
     std::stringstream parsed_stream("(3,4)");
-    complex<double> parsed;
+    complex<double>   parsed;
     parsed_stream >> parsed;
     EXPECT_DOUBLE_EQ(parsed.real(), 3.0);
     EXPECT_DOUBLE_EQ(parsed.imag(), 4.0);
 
     using namespace scalars::complex_literals;
-    const auto float_literal = 2.5_if;
+    const auto float_literal  = 2.5_if;
     const auto double_literal = 2.5_id;
-    const auto float_integer = 2_if;
+    const auto float_integer  = 2_if;
     const auto double_integer = 3_id;
     EXPECT_FLOAT_EQ(float_literal.imag(), 2.5f);
     EXPECT_DOUBLE_EQ(double_literal.imag(), 2.5);
@@ -224,7 +227,7 @@ TEST(Complex, HalfAndBFloat16)
     value -= complex<half>(half(0.5f), half(0.0f));
     value *= complex<half>(half(2.0f), half(0.0f));
     const complex<float> widened = static_cast<complex<float>>(value);
-    const complex<half> narrowed(widened);
+    const complex<half>  narrowed(widened);
     EXPECT_NEAR(static_cast<float>(narrowed.real()), 3.0f, 1e-3f);
     EXPECT_NEAR(static_cast<float>(narrowed.imag()), -2.0f, 1e-3f);
     EXPECT_NEAR(widened.real(), 3.0f, 1e-3f);
@@ -245,15 +248,13 @@ TEST(Complex, HalfAndBFloat16Division)
 {
     complex<half> half_value(half(3.0f), half(4.0f));
     half_value /= complex<half>(half(1.0f), half(2.0f));
-    const complex<float> half_reference =
-        complex<float>(3.0f, 4.0f) / complex<float>(1.0f, 2.0f);
+    const complex<float> half_reference = complex<float>(3.0f, 4.0f) / complex<float>(1.0f, 2.0f);
     EXPECT_NEAR(static_cast<float>(half_value.real()), half_reference.real(), 1e-2f);
     EXPECT_NEAR(static_cast<float>(half_value.imag()), half_reference.imag(), 1e-2f);
 
     complex<bfloat16> brain_value(bfloat16(3.0f), bfloat16(4.0f));
     brain_value /= complex<bfloat16>(bfloat16(1.0f), bfloat16(2.0f));
-    const complex<float> brain_reference =
-        complex<float>(3.0f, 4.0f) / complex<float>(1.0f, 2.0f);
+    const complex<float> brain_reference = complex<float>(3.0f, 4.0f) / complex<float>(1.0f, 2.0f);
     EXPECT_NEAR(static_cast<float>(brain_value.real()), brain_reference.real(), 0.05f);
     EXPECT_NEAR(static_cast<float>(brain_value.imag()), brain_reference.imag(), 0.05f);
 

@@ -135,56 +135,51 @@ extern "C"
 
 #elif defined(_MSC_VER)
 
-#define SVML_FUNCTION_ONE_ARG(op)                                                             \
-    SCALARS_FORCE_INLINE __m512 SCALARS_VECTORCALL _mm512_##op##_ps(__m512 x)     \
-    {                                                                                         \
-        return reinterpret_cast<__m512(SCALARS_VECTORCALL*)(__m512)>(svml_ps(op))(x);   \
-    }                                                                                         \
-                                                                                              \
-    SCALARS_FORCE_INLINE __m512d SCALARS_VECTORCALL _mm512_##op##_pd(__m512d x)   \
-    {                                                                                         \
-        return reinterpret_cast<__m512d(SCALARS_VECTORCALL*)(__m512d)>(svml_pd(op))(x); \
+#define SVML_FUNCTION_ONE_ARG(op)                                                                  \
+    SCALARS_FORCE_INLINE __m512 SCALARS_VECTORCALL _mm512_##op##_ps(__m512 x)                      \
+    {                                                                                              \
+        return reinterpret_cast<__m512(SCALARS_VECTORCALL*)(__m512)>(svml_ps(op))(x);              \
+    }                                                                                              \
+                                                                                                   \
+    SCALARS_FORCE_INLINE __m512d SCALARS_VECTORCALL _mm512_##op##_pd(__m512d x)                    \
+    {                                                                                              \
+        return reinterpret_cast<__m512d(SCALARS_VECTORCALL*)(__m512d)>(svml_pd(op))(x);            \
     }
 
-#define SVML_FUNCTION_TWO_ARGS(op)                                                               \
-    SCALARS_FORCE_INLINE __m512 SCALARS_VECTORCALL _mm512_##op##_ps(                 \
-        __m512 x, __m512 y)                                                                      \
-    {                                                                                            \
-        return reinterpret_cast<__m512(SCALARS_VECTORCALL*)(__m512, __m512)>(svml_ps(op))( \
-            x, y);                                                                               \
-    }                                                                                            \
-                                                                                                 \
-    SCALARS_FORCE_INLINE __m512d SCALARS_VECTORCALL _mm512_##op##_pd(                \
-        __m512d x, __m512d y)                                                                    \
-    {                                                                                            \
-        return reinterpret_cast<__m512d(SCALARS_VECTORCALL*)(__m512d, __m512d)>(           \
-            svml_pd(op))(x, y);                                                                  \
+#define SVML_FUNCTION_TWO_ARGS(op)                                                                 \
+    SCALARS_FORCE_INLINE __m512 SCALARS_VECTORCALL _mm512_##op##_ps(__m512 x, __m512 y)            \
+    {                                                                                              \
+        return reinterpret_cast<__m512(SCALARS_VECTORCALL*)(__m512, __m512)>(svml_ps(op))(x, y);   \
+    }                                                                                              \
+                                                                                                   \
+    SCALARS_FORCE_INLINE __m512d SCALARS_VECTORCALL _mm512_##op##_pd(__m512d x, __m512d y)         \
+    {                                                                                              \
+        return reinterpret_cast<__m512d(SCALARS_VECTORCALL*)(__m512d, __m512d)>(svml_pd(op))(      \
+            x, y);                                                                                 \
     }
 
 #else  // !_MSC_VER
 
-#define SVML_FUNCTION_ONE_ARG(op)                                                           \
-    SCALARS_FORCE_INLINE __m512 SCALARS_VECTORCALL _mm512_##op##_ps(__m512 x)   \
-    {                                                                                       \
-        return svml_ps(op)(x);                                                              \
-    }                                                                                       \
-                                                                                            \
-    SCALARS_FORCE_INLINE __m512d SCALARS_VECTORCALL _mm512_##op##_pd(__m512d x) \
-    {                                                                                       \
-        return svml_pd(op)(x);                                                              \
+#define SVML_FUNCTION_ONE_ARG(op)                                                                  \
+    SCALARS_FORCE_INLINE __m512 SCALARS_VECTORCALL _mm512_##op##_ps(__m512 x)                      \
+    {                                                                                              \
+        return svml_ps(op)(x);                                                                     \
+    }                                                                                              \
+                                                                                                   \
+    SCALARS_FORCE_INLINE __m512d SCALARS_VECTORCALL _mm512_##op##_pd(__m512d x)                    \
+    {                                                                                              \
+        return svml_pd(op)(x);                                                                     \
     }
 
-#define SVML_FUNCTION_TWO_ARGS(op)                                                \
-    SCALARS_FORCE_INLINE __m512 SCALARS_VECTORCALL _mm512_##op##_ps(  \
-        __m512 x, __m512 y)                                                       \
-    {                                                                             \
-        return svml_ps(op)(x, y);                                                 \
-    }                                                                             \
-                                                                                  \
-    SCALARS_FORCE_INLINE __m512d SCALARS_VECTORCALL _mm512_##op##_pd( \
-        __m512d x, __m512d y)                                                     \
-    {                                                                             \
-        return svml_pd(op)(x, y);                                                 \
+#define SVML_FUNCTION_TWO_ARGS(op)                                                                 \
+    SCALARS_FORCE_INLINE __m512 SCALARS_VECTORCALL _mm512_##op##_ps(__m512 x, __m512 y)            \
+    {                                                                                              \
+        return svml_ps(op)(x, y);                                                                  \
+    }                                                                                              \
+                                                                                                   \
+    SCALARS_FORCE_INLINE __m512d SCALARS_VECTORCALL _mm512_##op##_pd(__m512d x, __m512d y)         \
+    {                                                                                              \
+        return svml_pd(op)(x, y);                                                                  \
     }
 
 #endif  // defined(_MSC_VER)

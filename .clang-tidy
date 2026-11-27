@@ -1,8 +1,6 @@
-# Every header in this repository uses #pragma once (a deliberate, universal
-# convention, not an oversight) — hence -portability-avoid-pragma-once below.
-# That check only becomes reachable once --header-filter actually matches
-# include/|src/ (see cmake/clang_tidy.cmake); it used to match nothing here.
 ---
+# Preserve established parameter ordering and deliberate numeric conversions.
+# Headers intentionally use #pragma once rather than include guards.
 Checks: >
   -*,
   bugprone-*,
@@ -15,19 +13,13 @@ Checks: >
   readability-identifier-naming,
   -bugprone-easily-swappable-parameters,
   -bugprone-narrowing-conversions,
-  -bugprone-unsafe-functions,
   -portability-avoid-pragma-once
-WarningsAsErrors: ''
-HeaderFilterRegex: ''
-FormatStyle: none
+WarningsAsErrors: '*'
+HeaderFilterRegex: '(^|.*/)(include|src|Testing|Tests|examples|Examples)/'
+FormatStyle: file
 CheckOptions:
-  - key: readability-identifier-naming.ClassCase
-    value: lower_case
-  - key: readability-identifier-naming.StructCase
-    value: lower_case
-  - key: readability-identifier-naming.EnumCase
-    value: lower_case
-  - key: readability-identifier-naming.EnumConstantCase
-    value: lower_case
-  - key: readability-identifier-naming.TypeAliasCase
-    value: lower_case
+  readability-identifier-naming.ClassCase: 'lower_case'
+  readability-identifier-naming.StructCase: 'lower_case'
+  readability-identifier-naming.EnumCase: 'lower_case'
+  readability-identifier-naming.EnumConstantCase: 'lower_case'
+  readability-identifier-naming.TypeAliasCase: 'lower_case'

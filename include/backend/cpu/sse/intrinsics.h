@@ -1,5 +1,6 @@
 #pragma once
 
+#include "common/intrinsics.h"
 #include "scalars_macros.h"
 
 #define _mm_mask_and_ps(a, b) _mm_and_ps((a), (b))
@@ -85,46 +86,43 @@ SCALARS_FORCE_INLINE double _mm_hmin_pd(__m128d a) noexcept
     return _mm_cvtsd_f64(_mm_min_sd(a, _mm_unpackhi_pd(a, a)));
 }
 
-SCALARS_FORCE_INLINE __m128 SCALARS_VECTORCALL
-_mm_signcopy_ps(__m128 x, __m128 sign) noexcept
+SCALARS_FORCE_INLINE __m128 SCALARS_VECTORCALL _mm_signcopy_ps(__m128 x, __m128 sign) noexcept
 {
     const __m128 mask0 = _mm_set1_ps(-0.F);
     return _mm_or_ps(_mm_and_ps(sign, mask0), _mm_andnot_ps(mask0, x));
 }
 
-SCALARS_FORCE_INLINE __m128d SCALARS_VECTORCALL
-_mm_signcopy_pd(__m128d x, __m128d sign) noexcept
+SCALARS_FORCE_INLINE __m128d SCALARS_VECTORCALL _mm_signcopy_pd(__m128d x, __m128d sign) noexcept
 {
     const __m128d mask0 = _mm_set1_pd(-0.);
     return _mm_or_pd(_mm_and_pd(sign, mask0), _mm_andnot_pd(mask0, x));
 }
 
-SCALARS_FORCE_INLINE __m128 SCALARS_VECTORCALL
-_mm_gather_ps(float const* from, int stride) noexcept
+SCALARS_FORCE_INLINE __m128 SCALARS_VECTORCALL _mm_gather_ps(float const* from, int stride) noexcept
 {
     return _mm_set_ps(from[3 * stride], from[2 * stride], from[stride], from[0]);
 }
 
-SCALARS_FORCE_INLINE __m128d SCALARS_VECTORCALL
-_mm_gather_pd(double const* from, int stride) noexcept
+SCALARS_FORCE_INLINE __m128d SCALARS_VECTORCALL _mm_gather_pd(
+    double const* from, int stride) noexcept
 {
     return _mm_set_pd(from[stride], from[0]);
 }
 
-SCALARS_FORCE_INLINE __m128 SCALARS_VECTORCALL
-_mm_gather_ps(float const* from, int const* idxs) noexcept
+SCALARS_FORCE_INLINE __m128 SCALARS_VECTORCALL _mm_gather_ps(
+    float const* from, int const* idxs) noexcept
 {
     return _mm_set_ps(from[idxs[3]], from[idxs[2]], from[idxs[1]], from[idxs[0]]);
 }
 
-SCALARS_FORCE_INLINE __m128d SCALARS_VECTORCALL
-_mm_gather_pd(double const* from, int const* idxs) noexcept
+SCALARS_FORCE_INLINE __m128d SCALARS_VECTORCALL _mm_gather_pd(
+    double const* from, int const* idxs) noexcept
 {
     return _mm_set_pd(from[idxs[1]], from[idxs[0]]);
 }
 
-SCALARS_FORCE_INLINE void SCALARS_VECTORCALL
-_mm_scatter_ps(__m128 from, float* to, int stride) noexcept
+SCALARS_FORCE_INLINE void SCALARS_VECTORCALL _mm_scatter_ps(
+    __m128 from, float* to, int stride) noexcept
 {
     to[0]          = _mm_cvtss_f32(from);
     to[stride]     = _mm_cvtss_f32(_mm_shuffle_ps(from, from, 1));
@@ -132,15 +130,15 @@ _mm_scatter_ps(__m128 from, float* to, int stride) noexcept
     to[stride * 3] = _mm_cvtss_f32(_mm_shuffle_ps(from, from, 3));
 }
 
-SCALARS_FORCE_INLINE void SCALARS_VECTORCALL
-_mm_scatter_pd(__m128d from, double* to, int stride) noexcept
+SCALARS_FORCE_INLINE void SCALARS_VECTORCALL _mm_scatter_pd(
+    __m128d from, double* to, int stride) noexcept
 {
     to[0]      = _mm_cvtsd_f64(from);
     to[stride] = _mm_cvtsd_f64(_mm_shuffle_pd(from, from, 1));
 }
 
-SCALARS_FORCE_INLINE void SCALARS_VECTORCALL
-_mm_scatter_ps(__m128 from, float* to, int const* stride) noexcept
+SCALARS_FORCE_INLINE void SCALARS_VECTORCALL _mm_scatter_ps(
+    __m128 from, float* to, int const* stride) noexcept
 {
     to[stride[0]] = _mm_cvtss_f32(from);
     to[stride[1]] = _mm_cvtss_f32(_mm_shuffle_ps(from, from, 1));
@@ -148,8 +146,8 @@ _mm_scatter_ps(__m128 from, float* to, int const* stride) noexcept
     to[stride[3]] = _mm_cvtss_f32(_mm_shuffle_ps(from, from, 3));
 }
 
-SCALARS_FORCE_INLINE void SCALARS_VECTORCALL
-_mm_scatter_pd(__m128d from, double* to, int const* stride) noexcept
+SCALARS_FORCE_INLINE void SCALARS_VECTORCALL _mm_scatter_pd(
+    __m128d from, double* to, int const* stride) noexcept
 {
     to[stride[0]] = _mm_cvtsd_f64(from);
     to[stride[1]] = _mm_cvtsd_f64(_mm_shuffle_pd(from, from, 1));

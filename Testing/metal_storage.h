@@ -35,7 +35,8 @@ inline std::size_t page_multiple(std::size_t bytes)
     }
     if (bytes > std::numeric_limits<std::size_t>::max() - (page_size - remainder))
     {
-        throw std::invalid_argument("Metal test storage: buffer length exceeds page alignment limit");
+        throw std::invalid_argument(
+            "Metal test storage: buffer length exceeds page alignment limit");
     }
     return bytes + (page_size - remainder);
 }

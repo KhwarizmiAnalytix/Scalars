@@ -13,10 +13,11 @@
 #define SCALARS_HAVE_STD_BIT_CAST 1
 #else
 #define SCALARS_HAVE_STD_BIT_CAST 0
-#endif // __has_include(<bit>) && (__cplusplus >= 202002L ||
-       // (defined(__cpp_lib_bit_cast) && __cpp_lib_bit_cast >= 201806L))
+#endif  // __has_include(<bit>) && (__cplusplus >= 202002L ||
+        // (defined(__cpp_lib_bit_cast) && __cpp_lib_bit_cast >= 201806L))
 
-namespace scalars {
+namespace scalars
+{
 
 #if SCALARS_HAVE_STD_BIT_CAST
 using std::bit_cast;
@@ -28,22 +29,22 @@ using std::bit_cast;
 // See https://en.cppreference.com/w/cpp/numeric/bit_cast for more
 // information as well as the source of our implementations.
 template <class To, class From>
-SCALARS_HOST_DEVICE std::enable_if_t<
-    sizeof(To) == sizeof(From) && std::is_trivially_copyable_v<From> &&
-        std::is_trivially_copyable_v<To>,
+SCALARS_HOST_DEVICE std::enable_if_t<sizeof(To) == sizeof(From) &&
+                                         std::is_trivially_copyable_v<From> &&
+                                         std::is_trivially_copyable_v<To>,
     To>
 // constexpr support needs compiler magic
-bit_cast(const From& src) noexcept {
-  static_assert(
-      std::is_trivially_constructible_v<To>,
-      "This implementation additionally requires "
-      "destination type to be trivially constructible");
+bit_cast(const From& src) noexcept
+{
+    static_assert(std::is_trivially_constructible_v<To>,
+        "This implementation additionally requires "
+        "destination type to be trivially constructible");
 
-  To dst;
-  std::memcpy(&dst, &src, sizeof(To));
-  return dst;
+    To dst;
+    std::memcpy(&dst, &src, sizeof(To));
+    return dst;
 }
-#endif // SCALARS_HAVE_STD_BIT_CAST
+#endif  // SCALARS_HAVE_STD_BIT_CAST
 #undef SCALARS_HAVE_STD_BIT_CAST
 
 }  // namespace scalars

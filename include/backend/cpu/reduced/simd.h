@@ -59,7 +59,8 @@ template <class T> struct reduced_simd
     {
         assert(count >= 0 && count <= size);
         simd_t out{};
-        if (count != 0) {
+        if (count != 0)
+        {
             std::memcpy(out.bits.data(), from, count * sizeof(value_t));
         }
         return out;
@@ -67,7 +68,8 @@ template <class T> struct reduced_simd
     SCALARS_FORCE_INLINE static void storeu(simd_t from, value_t* to, int count)
     {
         assert(count >= 0 && count <= size);
-        if (count != 0) {
+        if (count != 0)
+        {
             std::memcpy(to, from.bits.data(), count * sizeof(value_t));
         }
     }
@@ -211,21 +213,24 @@ public:
     }
     SCALARS_FORCE_INLINE static simd_t fabs(simd_t x)
     {
-        for (auto& b : x.bits) {
+        for (auto& b : x.bits)
+        {
             b &= 0x7fff;
         }
         return x;
     }
     SCALARS_FORCE_INLINE static simd_t neg(simd_t x)
     {
-        for (auto& b : x.bits) {
+        for (auto& b : x.bits)
+        {
             b ^= 0x8000;
         }
         return x;
     }
     SCALARS_FORCE_INLINE static simd_t signcopy(simd_t x, simd_t sign)
     {
-        for (int i = 0; i < size; ++i) {
+        for (int i = 0; i < size; ++i)
+        {
             x.bits[i] = (x.bits[i] & 0x7fff) | (sign.bits[i] & 0x8000);
         }
         return x;
@@ -256,7 +261,7 @@ public:
     {
         std::memcpy(to, from.bits.data(), sizeof(from));
     }
-    SCALARS_FORCE_INLINE static void   store(mask_t from, int_t* to) { storeu(from, to); }
+    SCALARS_FORCE_INLINE static void store(mask_t from, int_t* to) { storeu(from, to); }
     // Same fix as backend/cpu/detail/complex_simd.h::set_mask: giving the
     // mask-returning overload its own name instead of overloading set(),
     // since set(int_t) happened to win over the set(U) template for an
@@ -269,7 +274,8 @@ public:
     }
     SCALARS_FORCE_INLINE static mask_t not_mask(mask_t x)
     {
-        for (auto& b : x.bits) {
+        for (auto& b : x.bits)
+        {
             b = static_cast<uint16_t>(~b);
         }
         return x;
@@ -287,7 +293,8 @@ public:
 #undef SCALARS_REDUCED_MASK
     SCALARS_FORCE_INLINE static simd_t if_else(mask_t mask, simd_t yes, simd_t no)
     {
-        for (int i = 0; i < size; ++i) {
+        for (int i = 0; i < size; ++i)
+        {
             yes.bits[i] = (mask.bits[i] & yes.bits[i]) | (uint16_t(~mask.bits[i]) & no.bits[i]);
         }
         return yes;
@@ -331,15 +338,19 @@ public:
         float out = values[0];
         for (int i = 0; i < size; ++i)
         {
-            if (std::isnan(values[i])) {
+            if (std::isnan(values[i]))
+            {
                 return value_t(values[i]);
             }
-            if (values[i] == 0 && out == 0) {
+            if (values[i] == 0 && out == 0)
+            {
                 out = IsMin ? std::copysign(
                                   0.f, std::signbit(out) || std::signbit(values[i]) ? -1.f : 1.f)
                             : std::copysign(
                                   0.f, std::signbit(out) && std::signbit(values[i]) ? -1.f : 1.f);
-            } else if (IsMin ? values[i] < out : values[i] > out) {
+            }
+            else if (IsMin ? values[i] < out : values[i] > out)
+            {
                 out = values[i];
             }
         }
@@ -351,7 +362,8 @@ public:
     SCALARS_FORCE_INLINE static simd_t gather(const value_t* from, int stride)
     {
         simd_t out;
-        for (int i = 0; i < size; ++i) {
+        for (int i = 0; i < size; ++i)
+        {
             out.bits[i] = from[static_cast<std::ptrdiff_t>(i) * stride].x;
         }
         return out;
@@ -359,20 +371,24 @@ public:
     SCALARS_FORCE_INLINE static simd_t gather(const value_t* from, const int* indices)
     {
         simd_t out;
-        for (int i = 0; i < size; ++i) {
+        for (int i = 0; i < size; ++i)
+        {
             out.bits[i] = from[indices[i]].x;
         }
         return out;
     }
     SCALARS_FORCE_INLINE static void scatter(simd_t from, int stride, value_t* to)
     {
-        for (int i = 0; i < size; ++i) {
-            to[static_cast<std::ptrdiff_t>(i) * stride] = value_t(from.bits[i], value_t::from_bits());
+        for (int i = 0; i < size; ++i)
+        {
+            to[static_cast<std::ptrdiff_t>(i) * stride] =
+                value_t(from.bits[i], value_t::from_bits());
         }
     }
     SCALARS_FORCE_INLINE static void scatter(simd_t from, const int* indices, value_t* to)
     {
-        for (int i = 0; i < size; ++i) {
+        for (int i = 0; i < size; ++i)
+        {
             to[indices[i]] = value_t(from.bits[i], value_t::from_bits());
         }
     }
@@ -391,7 +407,8 @@ public:
     SCALARS_FORCE_INLINE static simd_t ploadquad(const value_t* from)
     {
         simd_t out;
-        for (int i = 0; i < size; ++i) {
+        for (int i = 0; i < size; ++i)
+        {
             out.bits[i] = from[i / 4].x;
         }
         return out;
@@ -402,14 +419,16 @@ public:
         // Transpose N x size, then repack the row-major result into N packets.
         // This also handles rectangular blocks without converting NaN payloads.
         std::array<simd_t, N> out;
-        for (int row = 0; row < N; ++row) {
+        for (int row = 0; row < N; ++row)
+        {
             for (int col = 0; col < size; ++col)
             {
                 const int index                      = col * N + row;
                 out[index / size].bits[index % size] = rows[row].bits[col];
             }
         }
-        for (int row = 0; row < N; ++row) {
+        for (int row = 0; row < N; ++row)
+        {
             rows[row] = out[row];
         }
     }
@@ -422,7 +441,8 @@ public:
     SCALARS_FORCE_INLINE static simd_half_t gather_half(const value_t* from, int stride)
     {
         simd_half_t out;
-        for (int i = 0; i < half_size; ++i) {
+        for (int i = 0; i < half_size; ++i)
+        {
             out.bits[i] = from[static_cast<std::ptrdiff_t>(i) * stride].x;
         }
         return out;
@@ -459,8 +479,10 @@ public:
     }
     SCALARS_FORCE_INLINE static void scatter(simd_half_t from, int stride, value_t* to)
     {
-        for (int i = 0; i < half_size; ++i) {
-            to[static_cast<std::ptrdiff_t>(i) * stride] = value_t(from.bits[i], value_t::from_bits());
+        for (int i = 0; i < half_size; ++i)
+        {
+            to[static_cast<std::ptrdiff_t>(i) * stride] =
+                value_t(from.bits[i], value_t::from_bits());
         }
     }
 };

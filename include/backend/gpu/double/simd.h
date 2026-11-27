@@ -7,8 +7,8 @@
 // ::erfc, ::erfinv, ...) in the global namespace, so a single implementation
 // serves both; only the runtime header include differs.
 
-#include <cstdint>
 #include <cmath>
+#include <cstdint>
 #include <type_traits>
 
 #if defined(__CUDACC__)
@@ -23,11 +23,9 @@ namespace scalars
 {
 
 // Primary template forward declaration required before the explicit specialization.
-template <typename T>
-struct simd;
+template <typename T> struct simd;
 
-template <>
-struct simd<double>
+template <> struct simd<double>
 {
     using simd_t  = double;
     using mask_t  = uint64_t;
@@ -48,8 +46,7 @@ struct simd<double>
     SCALARS_SIMD_RETURN_TYPE store(simd_t from, value_t* to) { *to = from; }
     SCALARS_SIMD_RETURN_TYPE storeu(simd_t from, value_t* to) { *to = from; }
 
-    template <
-        typename scalar_t,
+    template <typename scalar_t,
         typename std::enable_if<std::is_fundamental<scalar_t>::value, bool>::type = true>
     SCALARS_SIMD_METHOD simd_t set(scalar_t alpha)
     {
@@ -116,10 +113,7 @@ struct simd<double>
     SCALARS_SIMD_METHOD simd_t atanh(simd_t x) { return ::atanh(x); }
 
     // N(x) = 0.5 * erfc(-x / sqrt(2))
-    SCALARS_SIMD_METHOD simd_t cdf(simd_t x)
-    {
-        return 0.5 * ::erfc(-x * 0.7071067811865475244);
-    }
+    SCALARS_SIMD_METHOD simd_t cdf(simd_t x) { return 0.5 * ::erfc(-x * 0.7071067811865475244); }
 
     // N^{-1}(p) = -sqrt(2) * erfinv(1 - 2p)
     SCALARS_SIMD_METHOD simd_t inv_cdf(simd_t x)
@@ -137,10 +131,7 @@ struct simd<double>
     }
 
     // On GPU, stride is the pre-computed absolute element index for this thread.
-    SCALARS_SIMD_METHOD simd_t gather(const value_t* base, int stride)
-    {
-        return base[stride];
-    }
+    SCALARS_SIMD_METHOD simd_t gather(const value_t* base, int stride) { return base[stride]; }
 
     SCALARS_SIMD_RETURN_TYPE scatter(simd_t val, const int* offsets, value_t* to)
     {
@@ -148,10 +139,7 @@ struct simd<double>
     }
 
     // On GPU, stride is the pre-computed absolute element index for this thread.
-    SCALARS_SIMD_RETURN_TYPE scatter(simd_t val, int stride, value_t* to)
-    {
-        to[stride] = val;
-    }
+    SCALARS_SIMD_RETURN_TYPE scatter(simd_t val, int stride, value_t* to) { to[stride] = val; }
 
     // -------------------------------------------------------------------------
     // Reductions — trivial identity for size=1
@@ -173,18 +161,12 @@ struct simd<double>
     {
         return x != y ? ~uint64_t(0) : uint64_t(0);
     }
-    SCALARS_SIMD_METHOD mask_t lt(simd_t x, simd_t y)
-    {
-        return x < y ? ~uint64_t(0) : uint64_t(0);
-    }
+    SCALARS_SIMD_METHOD mask_t lt(simd_t x, simd_t y) { return x < y ? ~uint64_t(0) : uint64_t(0); }
     SCALARS_SIMD_METHOD mask_t le(simd_t x, simd_t y)
     {
         return x <= y ? ~uint64_t(0) : uint64_t(0);
     }
-    SCALARS_SIMD_METHOD mask_t gt(simd_t x, simd_t y)
-    {
-        return x > y ? ~uint64_t(0) : uint64_t(0);
-    }
+    SCALARS_SIMD_METHOD mask_t gt(simd_t x, simd_t y) { return x > y ? ~uint64_t(0) : uint64_t(0); }
     SCALARS_SIMD_METHOD mask_t ge(simd_t x, simd_t y)
     {
         return x >= y ? ~uint64_t(0) : uint64_t(0);

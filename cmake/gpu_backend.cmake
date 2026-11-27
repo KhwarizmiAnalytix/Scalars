@@ -270,7 +270,8 @@ function(scalars_apply_gpu_backend target)
         # does not forward to lld-link. Link the CUDA runtime explicitly here
         # using full paths, which clang++ accepts alongside other .lib objects.
         if(WIN32 AND CMAKE_CXX_COMPILER_FRONTEND_VARIANT STREQUAL "GNU"
-           AND CMAKE_CUDA_IMPLICIT_LINK_DIRECTORIES)
+           AND CMAKE_CUDA_IMPLICIT_LINK_DIRECTORIES
+        )
             list(GET CMAKE_CUDA_IMPLICIT_LINK_DIRECTORIES 0 _scalars_cuda_lib_dir)
             foreach(_scalars_cuda_lib IN ITEMS cudart cudadevrt)
                 if(EXISTS "${_scalars_cuda_lib_dir}/${_scalars_cuda_lib}.lib")

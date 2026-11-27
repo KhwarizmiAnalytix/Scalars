@@ -1658,7 +1658,7 @@ template <class T> void run_simd_complex_native_MagnitudeAndSpecialValues()
     const T infinity = std::numeric_limits<T>::infinity(),
             nan      = std::numeric_limits<T>::quiet_NaN();
     const T maximum = std::numeric_limits<T>::max(), tiny = std::numeric_limits<T>::denorm_min();
-    const std::array<c, 16>   edges{c(3, 4),
+    const std::array<c, 16> edges{c(3, 4),
         c(maximum, maximum),
         c(tiny, -tiny),
         c(0, T(-0.0)),
@@ -1674,7 +1674,7 @@ template <class T> void run_simd_complex_native_MagnitudeAndSpecialValues()
         c(T(0x1p31) + T(.5), -T(0x1p31) - T(.5)),
         c(T(0x1p23) - T(.5), -T(0x1p23) + T(.5)),
         c(T(.75), T(-.75))};
-    const tol                 magnitude{0.54, 0.95};
+    const tol               magnitude{0.54, 0.95};
     // The built-in atan2 is faithfully, not correctly, rounded: arg(3+4i) is 0.59 ULP
     // from the exact value in double. Same budget as the arg sweep.
     const tol                 angle     = signed_zeros(tol{0.5, 0.64});

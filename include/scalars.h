@@ -1,8 +1,8 @@
 #pragma once
-#include "common/type_cast.h"
 #include "common/accumulate_type.h"
 #include "common/scalar_traits.h"
 #include "common/scalar_type.h"
+#include "common/type_cast.h"
 #include "common/type_promotion.h"
 #include "math/scalar_math.h"
 #include "types/bfloat16.h"

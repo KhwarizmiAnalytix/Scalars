@@ -10,6 +10,7 @@
 #include <numbers>
 #include <type_traits>
 
+#include "backend/simd_base.h"
 #include "common/accumulate_type.h"
 #include "scalars_macros.h"
 #include "types/complex.h"
@@ -183,8 +184,7 @@ private:
         // formula, unconditionally correct away from 1, covers the rest.
         const auto re = r::fabs(a.real), im = r::fabs(a.imag);
         const auto hi = r::max(re, im), lo = r::min(re, im);
-        const auto near_one =
-            r::and_mask(r::ge(hi, r::set(T(0.5))), r::le(hi, r::set(T(2))));
+        const auto near_one = r::and_mask(r::ge(hi, r::set(T(0.5))), r::le(hi, r::set(T(2))));
         // Each formula is a full transcendental call, so evaluate only the ones
         // some lane actually needs: packets entirely inside or entirely outside
         // the band (the common case for clustered inputs) pay for one.
@@ -631,11 +631,11 @@ public:
         // extreme values, zero complex lanes, and nonfinite inputs.
         if (Ops::division_is_safe(a, a))
         {
-            const auto half      = r::set(T(.5));
-            const auto magnitude = r::sqrt(r::fma(a.imag, a.imag, r::mul(a.real, a.real)));
-            const auto large     = r::sqrt(r::mul(r::add(magnitude, r::fabs(a.real)), half));
+            const auto half        = r::set(T(.5));
+            const auto magnitude   = r::sqrt(r::fma(a.imag, a.imag, r::mul(a.real, a.real)));
+            const auto large       = r::sqrt(r::mul(r::add(magnitude, r::fabs(a.real)), half));
             const auto small_value = r::mul(r::div(a.imag, large), half);
-            const auto positive  = r::ge(a.real, r::setzero());
+            const auto positive    = r::ge(a.real, r::setzero());
             return {r::if_else(positive, large, r::fabs(small_value)),
                 r::if_else(positive, small_value, r::signcopy(large, a.imag))};
         }
@@ -657,7 +657,7 @@ public:
 // the library-backed path does on SSE2 builds without FMA). Accelerate counts
 // only where neon/svml.h actually routes the packets to vForce
 // (SCALARS_NEON_USE_ACCELERATE), not wherever SCALARS_HAS_ACCELERATE is set.
-#if SCALARS_HAS_SVML || SCALARS_HAS_MKL || SCALARS_HAS_SLEEF || SCALARS_NEON_USE_ACCELERATE || \
+#if SCALARS_HAS_SVML || SCALARS_HAS_MKL || SCALARS_HAS_SLEEF || SCALARS_NEON_USE_ACCELERATE ||     \
     (SCALARS_X86_NATIVE_MATH && defined(__FMA__)) || SCALARS_NEON_NATIVE_MATH
         // Keep exp(real) normal and finite. Overflow/underflow and nonfinite
         // complex inputs retain the scalar library's special-value behavior.
@@ -710,7 +710,7 @@ public:
 // the library-backed path does on SSE2 builds without FMA). Accelerate counts
 // only where neon/svml.h actually routes the packets to vForce
 // (SCALARS_NEON_USE_ACCELERATE), not wherever SCALARS_HAS_ACCELERATE is set.
-#if SCALARS_HAS_SVML || SCALARS_HAS_MKL || SCALARS_HAS_SLEEF || SCALARS_NEON_USE_ACCELERATE || \
+#if SCALARS_HAS_SVML || SCALARS_HAS_MKL || SCALARS_HAS_SLEEF || SCALARS_NEON_USE_ACCELERATE ||     \
     (SCALARS_X86_NATIVE_MATH && defined(__FMA__)) || SCALARS_NEON_NATIVE_MATH
         // Same fast-path condition as exp() above. This used to exclude
         // Accelerate, which was only ever load-bearing while log_fast()

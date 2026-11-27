@@ -35,38 +35,36 @@
 #if defined(__CUDA_ARCH__) || defined(__HIP_DEVICE_COMPILE__)
 // Device pass: no host ISA check.
 #elif defined(SCALARS_HAS_AVX2) && SCALARS_HAS_AVX2 && !defined(__AVX2__)
-#error \
+#error                                                                                             \
     "Scalars was configured with SCALARS_CPU_BACKEND=avx2, but this translation unit is compiled without AVX2 (-mavx2) enabled. Compile it with the same ISA flags as Scalars, or rebuild Scalars with a narrower SCALARS_CPU_BACKEND."
 #elif defined(SCALARS_HAS_AVX512) && SCALARS_HAS_AVX512 && !defined(__AVX512F__)
-#error \
+#error                                                                                             \
     "Scalars was configured with SCALARS_CPU_BACKEND=avx512, but this translation unit is compiled without AVX-512 (-mavx512f) enabled. Compile it with the same ISA flags as Scalars, or rebuild Scalars with a narrower SCALARS_CPU_BACKEND."
 #elif defined(SCALARS_HAS_AVX) && SCALARS_HAS_AVX && !defined(__AVX__)
-#error \
+#error                                                                                             \
     "Scalars was configured with SCALARS_CPU_BACKEND=avx, but this translation unit is compiled without AVX (-mavx) enabled. Compile it with the same ISA flags as Scalars, or rebuild Scalars with a narrower SCALARS_CPU_BACKEND."
-#elif defined(SCALARS_HAS_SSE) && SCALARS_HAS_SSE && !defined(__SSE2__) && !defined(_M_X64) && \
+#elif defined(SCALARS_HAS_SSE) && SCALARS_HAS_SSE && !defined(__SSE2__) && !defined(_M_X64) &&     \
     !defined(_M_AMD64)
-#error \
+#error                                                                                             \
     "Scalars was configured with SCALARS_CPU_BACKEND=sse, but this translation unit is compiled without SSE2 (-msse2) enabled. Compile it with the same ISA flags as Scalars, or rebuild Scalars with -DSCALARS_CPU_BACKEND=no."
-#elif defined(SCALARS_HAS_NEON) && SCALARS_HAS_NEON && defined(__aarch64__) && \
-    !defined(__ARM_NEON)
-#error \
+#elif defined(SCALARS_HAS_NEON) && SCALARS_HAS_NEON && defined(__aarch64__) && !defined(__ARM_NEON)
+#error                                                                                             \
     "Scalars was configured with SCALARS_CPU_BACKEND=neon, but this translation unit is compiled without NEON enabled. Compile it with the same ISA flags as Scalars, or rebuild Scalars with -DSCALARS_CPU_BACKEND=no."
-#elif defined(SCALARS_HAS_SVE) && SCALARS_HAS_SVE && defined(__aarch64__) && \
+#elif defined(SCALARS_HAS_SVE) && SCALARS_HAS_SVE && defined(__aarch64__) &&                       \
     !defined(__ARM_FEATURE_SVE)
-#error \
+#error                                                                                             \
     "Scalars was configured with SCALARS_CPU_BACKEND=sve, but this translation unit is compiled without SVE enabled. Compile it with the same ISA flags as Scalars, or rebuild Scalars with -DSCALARS_CPU_BACKEND=no."
 #endif
 
 #if defined(__clang__)
-#define SCALARS_UBSAN_IGNORE_FLOAT_DIVIDE_BY_ZERO \
+#define SCALARS_UBSAN_IGNORE_FLOAT_DIVIDE_BY_ZERO                                                  \
     __attribute__((no_sanitize("float-divide-by-zero")))
 #define SCALARS_UBSAN_IGNORE_UNDEFINED __attribute__((no_sanitize("undefined")))
-#define SCALARS_UBSAN_IGNORE_SIGNED_INT_OVERFLOW \
+#define SCALARS_UBSAN_IGNORE_SIGNED_INT_OVERFLOW                                                   \
     __attribute__((no_sanitize("signed-integer-overflow")))
 #define SCALARS_UBSAN_IGNORE_POINTER_OVERFLOW __attribute__((no_sanitize("pointer-overflow")))
 #define SCALARS_UBSAN_IGNORE_FUNCTION __attribute__((no_sanitize("function")))
-#define SCALARS_UBSAN_IGNORE_FLOAT_CAST_OVERFLOW \
-    __attribute__((no_sanitize("float-cast-overflow")))
+#define SCALARS_UBSAN_IGNORE_FLOAT_CAST_OVERFLOW __attribute__((no_sanitize("float-cast-overflow")))
 #else
 #define SCALARS_UBSAN_IGNORE_FLOAT_DIVIDE_BY_ZERO
 #define SCALARS_UBSAN_IGNORE_UNDEFINED
@@ -86,7 +84,6 @@
 #define SCALARS_HOST
 #endif
 
-
 #define SCALARS_PRAGMA_IMPL(string) _Pragma(#string)
 #define SCALARS_PRAGMA(string) SCALARS_PRAGMA_IMPL(string)
 
@@ -104,17 +101,17 @@
 
 #define SCALARS_HIDDEN_NS_GET_MACRO(_1, _2, _3, NAME, ...) NAME
 #define SCALARS_HIDDEN_NS_1(n1) namespace n1 __attribute__((visibility("hidden"))) {
-#define SCALARS_HIDDEN_NS_2(n1, n2) \
-    namespace n1                    \
-    {                               \
+#define SCALARS_HIDDEN_NS_2(n1, n2)                                                                \
+    namespace n1                                                                                   \
+    {                                                                                              \
     namespace n2 __attribute__((visibility("hidden"))) {
-#define SCALARS_HIDDEN_NS_3(n1, n2, n3) \
-    namespace n1::n2                    \
-    {                                   \
+#define SCALARS_HIDDEN_NS_3(n1, n2, n3)                                                            \
+    namespace n1::n2                                                                               \
+    {                                                                                              \
     namespace n3 __attribute__((visibility("hidden"))) {
 #define SCALARS_HIDDEN_NS_END_1(n1) }
-#define SCALARS_HIDDEN_NS_END_N(n1, ...) \
-    }                                    \
+#define SCALARS_HIDDEN_NS_END_N(n1, ...)                                                           \
+    }                                                                                              \
     }
 #define SCALARS_EXPAND(...) __VA_ARGS__
 #define SCALARS_JOIN_GET_MACRO(_1, _2, _3, NAME, ...) NAME
@@ -123,13 +120,18 @@
 #define SCALARS_JOIN_NS3(a, b, c) a::b::c
 
 #if defined(__GNUG__) && !defined(_WIN32)
-#define SCALARS_HIDDEN_NAMESPACE_BEGIN(...) \
-    SCALARS_HIDDEN_NS_GET_MACRO(__VA_ARGS__, SCALARS_HIDDEN_NS_3, SCALARS_HIDDEN_NS_2, SCALARS_HIDDEN_NS_1)(__VA_ARGS__)
-#define SCALARS_HIDDEN_NAMESPACE_END(...) \
-    SCALARS_HIDDEN_NS_GET_MACRO(__VA_ARGS__, SCALARS_HIDDEN_NS_END_N, SCALARS_HIDDEN_NS_END_N, SCALARS_HIDDEN_NS_END_1)(__VA_ARGS__)
+#define SCALARS_HIDDEN_NAMESPACE_BEGIN(...)                                                        \
+    SCALARS_HIDDEN_NS_GET_MACRO(                                                                   \
+        __VA_ARGS__, SCALARS_HIDDEN_NS_3, SCALARS_HIDDEN_NS_2, SCALARS_HIDDEN_NS_1)(__VA_ARGS__)
+#define SCALARS_HIDDEN_NAMESPACE_END(...)                                                          \
+    SCALARS_HIDDEN_NS_GET_MACRO(                                                                   \
+        __VA_ARGS__, SCALARS_HIDDEN_NS_END_N, SCALARS_HIDDEN_NS_END_N, SCALARS_HIDDEN_NS_END_1)(   \
+        __VA_ARGS__)
 #else
-#define SCALARS_HIDDEN_NAMESPACE_BEGIN(...) \
-    namespace SCALARS_EXPAND(SCALARS_JOIN_GET_MACRO(__VA_ARGS__, SCALARS_JOIN_NS3, SCALARS_JOIN_NS2, SCALARS_JOIN_NS1)(__VA_ARGS__)) {
+#define SCALARS_HIDDEN_NAMESPACE_BEGIN(...)                                                        \
+    namespace SCALARS_EXPAND(SCALARS_JOIN_GET_MACRO(                                               \
+        __VA_ARGS__, SCALARS_JOIN_NS3, SCALARS_JOIN_NS2, SCALARS_JOIN_NS1)(__VA_ARGS__))           \
+    {
 #define SCALARS_HIDDEN_NAMESPACE_END(...) }
 #endif
 
@@ -178,7 +180,8 @@
 #endif
 
 #ifdef NDEBUG
-#define SCALARS_SIMD_RETURN_TYPE SCALARS_FORCE_INLINE SCALARS_HOST_DEVICE static void SCALARS_VECTORCALL
+#define SCALARS_SIMD_RETURN_TYPE                                                                   \
+    SCALARS_FORCE_INLINE SCALARS_HOST_DEVICE static void SCALARS_VECTORCALL
 #else
 #define SCALARS_SIMD_RETURN_TYPE SCALARS_HOST_DEVICE static void
 #endif

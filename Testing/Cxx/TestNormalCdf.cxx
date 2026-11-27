@@ -35,7 +35,7 @@ TEST(NormalCdf, LowerTailMatchesErfcToDoublePrecision)
     for (double z : {-7.071067811865475, -8.0, -10.0, -15.0, -20.0, -30.0, -38.0})
     {
         const double expected = 0.5 * std::erfc(-z / std::sqrt(2.0));
-        const double actual    = normalcdf(z);
+        const double actual   = normalcdf(z);
         ASSERT_GT(expected, 0.0) << "z=" << z;
         // Comparing two different formulations (erfc(-z/sqrt(2)) here vs.
         // erfc(-z * (1/sqrt(2))) in normalcdf) differs by a few ULP; this

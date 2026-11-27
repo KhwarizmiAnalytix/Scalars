@@ -9,14 +9,15 @@ template <class A, class B> struct promote_real
     // tiers below (e.g. promote_real<long double, double> gave double, and
     // promote_real<long double, float> gave float), silently narrowing it
     // away instead of it dominating, as the usual arithmetic conversions do.
-    using type = std::conditional_t<std::is_same_v<A, long double> || std::is_same_v<B, long double>,
-        long double,
-        std::conditional_t<std::is_same_v<A, double> || std::is_same_v<B, double>,
-            double,
-            std::conditional_t<std::is_same_v<A, float> || std::is_same_v<B, float> ||
-                                   !std::is_same_v<A, B>,
-                float,
-                A>>>;
+    using type =
+        std::conditional_t<std::is_same_v<A, long double> || std::is_same_v<B, long double>,
+            long double,
+            std::conditional_t<std::is_same_v<A, double> || std::is_same_v<B, double>,
+                double,
+                std::conditional_t<std::is_same_v<A, float> || std::is_same_v<B, float> ||
+                                       !std::is_same_v<A, B>,
+                    float,
+                    A>>>;
 };
 template <class A, class B> struct promote
 {

@@ -50,19 +50,31 @@ struct ops_neon_f32
     SCALARS_FORCE_INLINE static vec_t lt(vec_t a, vec_t b) { return f(vcltq_f32(a, b)); }
     SCALARS_FORCE_INLINE static vec_t le(vec_t a, vec_t b) { return f(vcleq_f32(a, b)); }
     SCALARS_FORCE_INLINE static vec_t eq(vec_t a, vec_t b) { return f(vceqq_f32(a, b)); }
-    SCALARS_FORCE_INLINE static vec_t nge(vec_t a, vec_t b) { return f(vmvnq_u32(vcgeq_f32(a, b))); }
+    SCALARS_FORCE_INLINE static vec_t nge(vec_t a, vec_t b)
+    {
+        return f(vmvnq_u32(vcgeq_f32(a, b)));
+    }
     SCALARS_FORCE_INLINE static vec_t isnan(vec_t a) { return f(vmvnq_u32(vceqq_f32(a, a))); }
 
     SCALARS_FORCE_INLINE static vec_t band(vec_t a, vec_t b) { return f(vandq_u32(u(a), u(b))); }
     SCALARS_FORCE_INLINE static vec_t bor(vec_t a, vec_t b) { return f(vorrq_u32(u(a), u(b))); }
     SCALARS_FORCE_INLINE static vec_t bxor(vec_t a, vec_t b) { return f(veorq_u32(u(a), u(b))); }
     SCALARS_FORCE_INLINE static vec_t bandnot(vec_t a, vec_t b) { return f(vbicq_u32(u(a), u(b))); }
-    SCALARS_FORCE_INLINE static vec_t select(vec_t m, vec_t a, vec_t b) { return vbslq_f32(u(m), a, b); }
+    SCALARS_FORCE_INLINE static vec_t select(vec_t m, vec_t a, vec_t b)
+    {
+        return vbslq_f32(u(m), a, b);
+    }
 
     SCALARS_FORCE_INLINE static vec_t iadd(vec_t a, vec_t b) { return f(vaddq_u32(u(a), u(b))); }
     SCALARS_FORCE_INLINE static vec_t isub(vec_t a, vec_t b) { return f(vsubq_u32(u(a), u(b))); }
-    template <int N> SCALARS_FORCE_INLINE static vec_t shl(vec_t a) { return f(vshlq_n_u32(u(a), N)); }
-    template <int N> SCALARS_FORCE_INLINE static vec_t shr(vec_t a) { return f(vshrq_n_u32(u(a), N)); }
+    template <int N> SCALARS_FORCE_INLINE static vec_t shl(vec_t a)
+    {
+        return f(vshlq_n_u32(u(a), N));
+    }
+    template <int N> SCALARS_FORCE_INLINE static vec_t shr(vec_t a)
+    {
+        return f(vshrq_n_u32(u(a), N));
+    }
 
     SCALARS_FORCE_INLINE static bool any(vec_t m) { return vmaxvq_u32(u(m)) != 0; }
     SCALARS_FORCE_INLINE static void barrier(vec_t& v) { SCALARS_VMATH_NEON_BARRIER(v); }
@@ -114,12 +126,21 @@ struct ops_neon_f64
     SCALARS_FORCE_INLINE static vec_t bor(vec_t a, vec_t b) { return f(vorrq_u64(u(a), u(b))); }
     SCALARS_FORCE_INLINE static vec_t bxor(vec_t a, vec_t b) { return f(veorq_u64(u(a), u(b))); }
     SCALARS_FORCE_INLINE static vec_t bandnot(vec_t a, vec_t b) { return f(vbicq_u64(u(a), u(b))); }
-    SCALARS_FORCE_INLINE static vec_t select(vec_t m, vec_t a, vec_t b) { return vbslq_f64(u(m), a, b); }
+    SCALARS_FORCE_INLINE static vec_t select(vec_t m, vec_t a, vec_t b)
+    {
+        return vbslq_f64(u(m), a, b);
+    }
 
     SCALARS_FORCE_INLINE static vec_t iadd(vec_t a, vec_t b) { return f(vaddq_u64(u(a), u(b))); }
     SCALARS_FORCE_INLINE static vec_t isub(vec_t a, vec_t b) { return f(vsubq_u64(u(a), u(b))); }
-    template <int N> SCALARS_FORCE_INLINE static vec_t shl(vec_t a) { return f(vshlq_n_u64(u(a), N)); }
-    template <int N> SCALARS_FORCE_INLINE static vec_t shr(vec_t a) { return f(vshrq_n_u64(u(a), N)); }
+    template <int N> SCALARS_FORCE_INLINE static vec_t shl(vec_t a)
+    {
+        return f(vshlq_n_u64(u(a), N));
+    }
+    template <int N> SCALARS_FORCE_INLINE static vec_t shr(vec_t a)
+    {
+        return f(vshrq_n_u64(u(a), N));
+    }
 
     SCALARS_FORCE_INLINE static bool any(vec_t m)
     {

@@ -1,5 +1,7 @@
 #pragma once
 
+#include "backend/simd_base.h"
+
 #include <limits>
 #include <type_traits>
 

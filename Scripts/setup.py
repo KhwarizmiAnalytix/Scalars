@@ -38,9 +38,9 @@ except ImportError:  # Windows CLI smoke and some CI jobs skip pip install
         RESET_ALL = ""
 
 
-from helpers import cli as cli_helper
 from helpers import (
     build as build_helper,
+    cli as cli_helper,
     config as config_helper,
     cppcheck as cppcheck_helper,
     test as test_helper,
@@ -1158,7 +1158,11 @@ def main():
     """Parse CLI args and drive config/build/test/coverage, or print --help."""
     setup_arguments, cmake_overrides = cli_helper.split_cmake_args(sys.argv[1:])
     forwarded = cli_helper.dispatch(
-        sys.argv[1:], Path(__file__).resolve().parents[1], ScalarsFlags, ScalarsConfiguration, parse_args
+        sys.argv[1:],
+        Path(__file__).resolve().parents[1],
+        ScalarsFlags,
+        ScalarsConfiguration,
+        parse_args,
     )
     if forwarded is not None:
         sys.exit(forwarded)

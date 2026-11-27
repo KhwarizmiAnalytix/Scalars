@@ -157,9 +157,9 @@ TEST(half, SoftwareIeeeConversion)
     std::uint32_t mix = 0;
     for (std::uint32_t bits = 0; bits < 65536; ++bits)
     {
-        const auto encoding = static_cast<std::uint16_t>(bits);
-        const float value   = detail::fp16_ieee_to_fp32_value(encoding);
-        const auto  back    = detail::fp16_ieee_from_fp32_value(value);
+        const auto  encoding = static_cast<std::uint16_t>(bits);
+        const float value    = detail::fp16_ieee_to_fp32_value(encoding);
+        const auto  back     = detail::fp16_ieee_from_fp32_value(value);
         mix ^= detail::fp16_ieee_to_fp32_bits(encoding);
         if ((encoding & 0x7c00u) != 0x7c00u)
         {
@@ -174,8 +174,15 @@ TEST(half, SoftwareIeeeConversion)
             EXPECT_TRUE(std::isinf(value)) << "encoding: " << bits;
         }
     }
-    const float specials[] = {0.0f, -0.0f, HUGE_VALF, -HUGE_VALF,
-        std::numeric_limits<float>::quiet_NaN(), 1.0e-8f, 1.0e20f, 1.0f, -2.5f};
+    const float specials[] = {0.0f,
+        -0.0f,
+        HUGE_VALF,
+        -HUGE_VALF,
+        std::numeric_limits<float>::quiet_NaN(),
+        1.0e-8f,
+        1.0e20f,
+        1.0f,
+        -2.5f};
     for (float value : specials)
     {
         mix ^= detail::fp16_ieee_from_fp32_value(value);

@@ -1,5 +1,7 @@
 #pragma once
 
+#include "backend/simd_base.h"
+
 #include <limits>
 #include <type_traits>
 
@@ -22,8 +24,7 @@
 namespace scalars
 {
 
-template <>
-struct simd<float>
+template <> struct simd<float>
 {
     using simd_t      = __m256;
     using mask_t      = __m256;
@@ -54,8 +55,7 @@ struct simd<float>
 
     SCALARS_SIMD_RETURN_TYPE storeu(simd_t from, value_t* to) { _mm256_storeu_ps(to, from); }
 
-    template <
-        typename scalar_t,
+    template <typename scalar_t,
         typename std::enable_if<std::is_fundamental<scalar_t>::value, bool>::type = true>
     SCALARS_SIMD_METHOD simd_t set(scalar_t alpha)
     {
@@ -204,8 +204,7 @@ struct simd<float>
     //======================================================================================
     SCALARS_SIMD_METHOD simd_t gather(value_t const* from, int stride)
     {
-        return _mm256_set_ps(
-            from[7 * stride],
+        return _mm256_set_ps(from[7 * stride],
             from[6 * stride],
             from[5 * stride],
             from[4 * stride],
@@ -236,8 +235,7 @@ struct simd<float>
         auto indices = _mm256_loadu_si256(reinterpret_cast<const simd_int_t*>(strides));
         return _mm256_i32gather_ps(from, indices, 4);
 #else
-        return _mm256_set_ps(
-            from[strides[7]],
+        return _mm256_set_ps(from[strides[7]],
             from[strides[6]],
             from[strides[5]],
             from[strides[4]],
@@ -271,35 +269,17 @@ struct simd<float>
         return _mm256_blendv_ps(z, y, x);
     }
 
-    SCALARS_SIMD_METHOD mask_t eq(simd_t x, simd_t y)
-    {
-        return _mm256_cmp_ps(x, y, _CMP_EQ_OQ);
-    }
+    SCALARS_SIMD_METHOD mask_t eq(simd_t x, simd_t y) { return _mm256_cmp_ps(x, y, _CMP_EQ_OQ); }
 
-    SCALARS_SIMD_METHOD mask_t neq(simd_t x, simd_t y)
-    {
-        return _mm256_cmp_ps(x, y, _CMP_NEQ_UQ);
-    }
+    SCALARS_SIMD_METHOD mask_t neq(simd_t x, simd_t y) { return _mm256_cmp_ps(x, y, _CMP_NEQ_UQ); }
 
-    SCALARS_SIMD_METHOD mask_t gt(simd_t x, simd_t y)
-    {
-        return _mm256_cmp_ps(x, y, _CMP_GT_OS);
-    }
+    SCALARS_SIMD_METHOD mask_t gt(simd_t x, simd_t y) { return _mm256_cmp_ps(x, y, _CMP_GT_OS); }
 
-    SCALARS_SIMD_METHOD mask_t lt(simd_t x, simd_t y)
-    {
-        return _mm256_cmp_ps(x, y, _CMP_LT_OS);
-    }
+    SCALARS_SIMD_METHOD mask_t lt(simd_t x, simd_t y) { return _mm256_cmp_ps(x, y, _CMP_LT_OS); }
 
-    SCALARS_SIMD_METHOD mask_t ge(simd_t x, simd_t y)
-    {
-        return _mm256_cmp_ps(x, y, _CMP_GE_OS);
-    }
+    SCALARS_SIMD_METHOD mask_t ge(simd_t x, simd_t y) { return _mm256_cmp_ps(x, y, _CMP_GE_OS); }
 
-    SCALARS_SIMD_METHOD mask_t le(simd_t x, simd_t y)
-    {
-        return _mm256_cmp_ps(x, y, _CMP_LE_OS);
-    }
+    SCALARS_SIMD_METHOD mask_t le(simd_t x, simd_t y) { return _mm256_cmp_ps(x, y, _CMP_LE_OS); }
 
     //======================================================================================
     // comparison function
@@ -354,8 +334,7 @@ struct simd<float>
         a3 = _mm256_broadcast_ss(from + 3);
     }
 
-    template <int N>
-    SCALARS_SIMD_RETURN_TYPE ptranspose(simd_t simd[N])  // NOLINT
+    template <int N> SCALARS_SIMD_RETURN_TYPE ptranspose(simd_t simd[N])  // NOLINT
     {
         if constexpr (N == 8)
         {
@@ -426,13 +405,10 @@ struct simd<float>
         return _mm_loadu_ps(from);
     }
 
-    SCALARS_FORCE_INLINE static simd_half_t set(const value_t* from)
-    {
-        return _mm_set1_ps(*from);
-    }
+    SCALARS_FORCE_INLINE static simd_half_t set(const value_t* from) { return _mm_set1_ps(*from); }
 
-    SCALARS_SIMD_METHOD simd_half_t
-    fma(const simd_half_t& x, const simd_half_t& y, const simd_half_t& z)
+    SCALARS_SIMD_METHOD simd_half_t fma(
+        const simd_half_t& x, const simd_half_t& y, const simd_half_t& z)
     {
 #ifdef __FMA__
         return _mm_fmadd_ps(x, y, z);

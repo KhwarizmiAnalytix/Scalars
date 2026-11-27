@@ -1,9 +1,9 @@
 #pragma once
 #include "common/scalar_type.h"
-#include <cstdint>
 #include "types/bfloat16.h"
 #include "types/complex.h"
 #include "types/half.h"
+#include <cstdint>
 
 // Defines the accumulation type for a scalar type.
 // Example:
@@ -43,24 +43,31 @@
 #include <hip/hip_runtime.h>
 #endif
 
-namespace scalars {
+namespace scalars
+{
 
-enum class device_type : std::uint8_t { cpu, gpu };
-
-template <typename T, device_type D>
-struct accumulate_type_device {};
-
-template <typename T, bool>
-struct accumulate_type_impl {};
-
-template <typename T>
-struct accumulate_type_impl<T, false> {
-  using type = typename accumulate_type_device<T, device_type::cpu>::type;
+enum class device_type : std::uint8_t
+{
+    cpu,
+    gpu
 };
 
-template <typename T>
-struct accumulate_type_impl<T, true> {
-  using type = typename accumulate_type_device<T, device_type::gpu>::type;
+template <typename T, device_type D> struct accumulate_type_device
+{
+};
+
+template <typename T, bool> struct accumulate_type_impl
+{
+};
+
+template <typename T> struct accumulate_type_impl<T, false>
+{
+    using type = typename accumulate_type_device<T, device_type::cpu>::type;
+};
+
+template <typename T> struct accumulate_type_impl<T, true>
+{
+    using type = typename accumulate_type_device<T, device_type::gpu>::type;
 };
 
 template <typename T, device_type device>
@@ -69,15 +76,13 @@ using acc_type_device = typename accumulate_type_device<T, device>::type;
 template <typename T, bool is_cuda>
 using acc_type = typename accumulate_type_impl<T, is_cuda>::type;
 
-#define SCALARS_ACC_TYPE(t, acc_t, device)    \
-  template <>                                 \
-  struct accumulate_type_device<t, device> {    \
-    using type = acc_t;                       \
-  };
-#define SCALARS_GPU_ACC_TYPE(t, acc_t) \
-  SCALARS_ACC_TYPE(t, acc_t, device_type::gpu)
-#define SCALARS_CPU_ACC_TYPE(t, acc_t) \
-  SCALARS_ACC_TYPE(t, acc_t, device_type::cpu)
+#define SCALARS_ACC_TYPE(t, acc_t, device)                                                         \
+    template <> struct accumulate_type_device<t, device>                                           \
+    {                                                                                              \
+        using type = acc_t;                                                                        \
+    };
+#define SCALARS_GPU_ACC_TYPE(t, acc_t) SCALARS_ACC_TYPE(t, acc_t, device_type::gpu)
+#define SCALARS_CPU_ACC_TYPE(t, acc_t) SCALARS_ACC_TYPE(t, acc_t, device_type::cpu)
 
 #if defined(__CUDACC__) || defined(__HIPCC__)
 SCALARS_GPU_ACC_TYPE(::half, float)
@@ -118,29 +123,32 @@ SCALARS_CPU_ACC_TYPE(complex<double>, complex<double>)
 #undef SCALARS_GPU_ACC_TYPE
 #undef SCALARS_ACC_TYPE
 
-constexpr scalar_type to_accumulate_type(scalar_type type, device_type device) noexcept {
-  const bool gpu = device == device_type::gpu;
-  switch (type) {
+constexpr scalar_type to_accumulate_type(scalar_type type, device_type device) noexcept
+{
+    const bool gpu = device == device_type::gpu;
+    switch (type)
+    {
     case scalar_type::float16:
     case scalar_type::bfloat16:
-      return scalar_type::float32;
+        return scalar_type::float32;
     case scalar_type::float32:
-      return gpu ? scalar_type::float32 : scalar_type::float64;
+        return gpu ? scalar_type::float32 : scalar_type::float64;
     case scalar_type::float64:
-      return scalar_type::float64;
+        return scalar_type::float64;
     case scalar_type::complex_half:
     case scalar_type::complex_bf16:
-      return scalar_type::complex_float;
+        return scalar_type::complex_float;
     case scalar_type::complex_float:
-      return gpu ? scalar_type::complex_float : scalar_type::complex_double;
+        return gpu ? scalar_type::complex_float : scalar_type::complex_double;
     case scalar_type::complex_double:
-      return scalar_type::complex_double;
-  }
-  return type;  // unreachable: the switch above covers every scalar_type enumerator
+        return scalar_type::complex_double;
+    }
+    return type;  // unreachable: the switch above covers every scalar_type enumerator
 }
 
-constexpr scalar_type to_accumulate_type(scalar_type type, bool is_cuda) noexcept {
-  return to_accumulate_type(type, is_cuda ? device_type::gpu : device_type::cpu);
+constexpr scalar_type to_accumulate_type(scalar_type type, bool is_cuda) noexcept
+{
+    return to_accumulate_type(type, is_cuda ? device_type::gpu : device_type::cpu);
 }
 
 }  // namespace scalars

@@ -56,13 +56,14 @@ if(SCALARS_ENABLE_GTEST)
             # See cmake/gpu_backend.cmake: CMAKE_CUDA_RUNTIME_LIBRARY=None is set for
             # WIN32+GNU to avoid MSVC-style link flags. Add the runtime explicitly here.
             if(WIN32 AND CMAKE_CXX_COMPILER_FRONTEND_VARIANT STREQUAL "GNU"
-               AND CMAKE_CUDA_IMPLICIT_LINK_DIRECTORIES)
+               AND CMAKE_CUDA_IMPLICIT_LINK_DIRECTORIES
+            )
                 list(GET CMAKE_CUDA_IMPLICIT_LINK_DIRECTORIES 0 _scalars_cuda_lib_dir)
                 foreach(_scalars_cuda_lib IN ITEMS cudart cudadevrt)
                     if(EXISTS "${_scalars_cuda_lib_dir}/${_scalars_cuda_lib}.lib")
                         target_link_libraries(
-                            ScalarsCxxTests PRIVATE
-                            "${_scalars_cuda_lib_dir}/${_scalars_cuda_lib}.lib"
+                            ScalarsCxxTests
+                            PRIVATE "${_scalars_cuda_lib_dir}/${_scalars_cuda_lib}.lib"
                         )
                     endif()
                 endforeach()
@@ -81,14 +82,89 @@ if(SCALARS_ENABLE_GTEST)
 
     scalars_configure_target(ScalarsCxxTests)
     set_target_properties(
-        ScalarsCxxTests PROPERTIES FOLDER "Tests" VS_DEBUGGER_WORKING_DIRECTORY
-                                                  "$<TARGET_FILE_DIR:ScalarsCxxTests>"
-                                   CXX_STANDARD ${SCALARS_CXX_STANDARD}
-                                   CXX_STANDARD_REQUIRED ON
-                                   CXX_EXTENSIONS OFF
+        ScalarsCxxTests
+        PROPERTIES FOLDER "Tests"
+                   VS_DEBUGGER_WORKING_DIRECTORY "$<TARGET_FILE_DIR:ScalarsCxxTests>"
+                   CXX_STANDARD ${SCALARS_CXX_STANDARD}
+                   CXX_STANDARD_REQUIRED ON
+                   CXX_EXTENSIONS OFF
     )
     add_test(NAME ScalarsCxxTests COMMAND ScalarsCxxTests
              WORKING_DIRECTORY "$<TARGET_FILE_DIR:ScalarsCxxTests>"
     )
     set_tests_properties(ScalarsCxxTests PROPERTIES TIMEOUT 120 LABELS "Scalars;Unit")
+
+    # Each generated source starts with the header under test, with no umbrella
+    # header or precompiled header supplying missing declarations for it.
+    set(_scalars_header_check_sources "")
+    function(scalars_add_simd_header_check name)
+        set(source "${CMAKE_CURRENT_BINARY_DIR}/header_checks/${name}.cxx")
+        set(content "")
+        foreach(header IN LISTS ARGN)
+            string(APPEND content "#include \"${header}\"\n")
+        endforeach()
+        file(GENERATE OUTPUT "${source}" CONTENT "${content}")
+        set(_scalars_header_check_sources ${_scalars_header_check_sources} "${source}" PARENT_SCOPE)
+    endfunction()
+
+    set(_scalars_headers backend/simd_base.h backend/simd.h backend/cpu/real_simd.h
+                         backend/cpu/complex_simd.h backend/cpu/detail/complex_simd.h
+    )
+    if(SCALARS_VECTORIZED)
+        list(APPEND _scalars_headers backend/cpu/reduced/convert.h backend/cpu/reduced/simd.h
+             backend/cpu/reduced/complex_simd.h
+        )
+        set(_scalars_header_backend "${SCALARS_CPU_BACKEND}")
+        if(_scalars_header_backend STREQUAL "avx2")
+            set(_scalars_header_backend avx)
+        endif()
+        foreach(kind float double complex)
+            list(APPEND _scalars_headers "backend/cpu/${_scalars_header_backend}/${kind}/simd.h")
+        endforeach()
+    endif()
+    foreach(header IN LISTS _scalars_headers)
+        string(MAKE_C_IDENTIFIER "${header}" name)
+        scalars_add_simd_header_check("single_${name}" "${header}" "${header}")
+        if(NOT header STREQUAL "backend/simd.h")
+            scalars_add_simd_header_check("before_${name}" "${header}" backend/simd.h)
+            scalars_add_simd_header_check("after_${name}" backend/simd.h "${header}")
+        endif()
+    endforeach()
+    scalars_add_simd_header_check(all_headers ${_scalars_headers})
+    list(REVERSE _scalars_headers)
+    scalars_add_simd_header_check(all_headers_reversed ${_scalars_headers})
+
+    if(SCALARS_VECTORIZED)
+        # Exercise all six permutations of the headers whose dependencies
+        # previously required callers to arrange their includes manually.
+        foreach(first convert simd complex_simd)
+            foreach(second convert simd complex_simd)
+                foreach(third convert simd complex_simd)
+                    if(NOT first STREQUAL second AND NOT first STREQUAL third AND NOT second
+                                                                                  STREQUAL third
+                    )
+                        scalars_add_simd_header_check(
+                            "reduced_${first}_${second}_${third}" "backend/cpu/reduced/${first}.h"
+                            "backend/cpu/reduced/${second}.h" "backend/cpu/reduced/${third}.h"
+                        )
+                    endif()
+                endforeach()
+            endforeach()
+        endforeach()
+    endif()
+    add_library(ScalarsSimdHeaderChecks OBJECT ${_scalars_header_check_sources})
+    target_link_libraries(ScalarsSimdHeaderChecks PRIVATE Scalars::Scalars)
+    set_target_properties(
+        ScalarsSimdHeaderChecks
+        PROPERTIES DISABLE_PRECOMPILE_HEADERS ON
+                   UNITY_BUILD OFF
+                   CXX_STANDARD ${SCALARS_CXX_STANDARD}
+                   CXX_STANDARD_REQUIRED ON
+                   CXX_EXTENSIONS OFF
+    )
+    # Use the public consumer requirements only. In particular, do not apply
+    # scalars_configure_target's forced <cstdlib> include to these probes.
+    if(SCALARS_ENABLE_CLANGTIDY)
+        scalars_target_clang_tidy(ScalarsSimdHeaderChecks ${SCALARS_ENABLE_FIX})
+    endif()
 endif()

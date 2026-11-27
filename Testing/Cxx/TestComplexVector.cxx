@@ -52,15 +52,18 @@ template <class T> void check_vectors()
                     c* yp = y.data() + 1 + (sy < 0 && count > 0 ? (count - 1) * -sy : 0);
                     for (int i = 0; i < count; ++i)
                     {
-                        xp[static_cast<std::ptrdiff_t>(i) * sx] = c(T(i + 1) / T(4), T(1 - i) / T(8));
-                        yp[static_cast<std::ptrdiff_t>(i) * sy] = c(T(2 - i) / T(4), T(i + 2) / T(8));
+                        xp[static_cast<std::ptrdiff_t>(i) * sx] =
+                            c(T(i + 1) / T(4), T(1 - i) / T(8));
+                        yp[static_cast<std::ptrdiff_t>(i) * sy] =
+                            c(T(2 - i) / T(4), T(i + 2) / T(8));
                     }
                     const auto      original_x = x, original_y = y;
                     std::complex<T> expected_dot{};
                     for (int i = 0; i < count; ++i)
                     {
                         const auto a = standard(xp[static_cast<std::ptrdiff_t>(i) * sx]);
-                        expected_dot += (conjugate ? std::conj(a) : a) * standard(yp[static_cast<std::ptrdiff_t>(i) * sy]);
+                        expected_dot += (conjugate ? std::conj(a) : a) *
+                                        standard(yp[static_cast<std::ptrdiff_t>(i) * sy]);
                     }
                     expect_complex(
                         scalars::complex_dot(xp, sx, yp, sy, count, conjugate), expected_dot);
@@ -71,8 +74,9 @@ template <class T> void check_vectors()
                     for (int i = 0; i < count; ++i)
                     {
                         const auto a = standard(xp[static_cast<std::ptrdiff_t>(i) * sx]);
-                        ep[static_cast<std::ptrdiff_t>(i) * sy]   = c(standard(ep[static_cast<std::ptrdiff_t>(i) * sy]) +
-                                         standard(alpha) * (conjugate ? std::conj(a) : a));
+                        ep[static_cast<std::ptrdiff_t>(i) * sy] =
+                            c(standard(ep[static_cast<std::ptrdiff_t>(i) * sy]) +
+                                standard(alpha) * (conjugate ? std::conj(a) : a));
                     }
                     scalars::complex_axpy(yp, sy, xp, sx, count, alpha, conjugate);
                     for (int i = 0; i < length; ++i)
@@ -85,7 +89,8 @@ template <class T> void check_vectors()
                     ep              = expected_x.data() + (xp - x.data());
                     for (int i = 0; i < count; ++i)
                     {
-                        ep[static_cast<std::ptrdiff_t>(i) * sx] = c(standard(ep[static_cast<std::ptrdiff_t>(i) * sx]) * T(-2));
+                        ep[static_cast<std::ptrdiff_t>(i) * sx] =
+                            c(standard(ep[static_cast<std::ptrdiff_t>(i) * sx]) * T(-2));
                     }
                     scalars::complex_scale(xp, sx, count, T(-2));
                     for (int i = 0; i < length; ++i)
@@ -101,9 +106,12 @@ template <class T> void check_vectors()
                     auto* ey   = expected_y.data() + (yp - y.data());
                     for (int i = 0; i < count; ++i)
                     {
-                        const auto a = standard(xp[static_cast<std::ptrdiff_t>(i) * sx]), b = standard(yp[static_cast<std::ptrdiff_t>(i) * sy]);
-                        ex[static_cast<std::ptrdiff_t>(i) * sx] = c(cosine * a + standard(sine) * b);
-                        ey[static_cast<std::ptrdiff_t>(i) * sy] = c(cosine * b - std::conj(standard(sine)) * a);
+                        const auto a = standard(xp[static_cast<std::ptrdiff_t>(i) * sx]),
+                                   b = standard(yp[static_cast<std::ptrdiff_t>(i) * sy]);
+                        ex[static_cast<std::ptrdiff_t>(i) * sx] =
+                            c(cosine * a + standard(sine) * b);
+                        ey[static_cast<std::ptrdiff_t>(i) * sy] =
+                            c(cosine * b - std::conj(standard(sine)) * a);
                     }
                     scalars::complex_rotate(xp, sx, yp, sy, count, cosine, sine);
                     for (int i = 0; i < length; ++i)

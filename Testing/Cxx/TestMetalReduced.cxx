@@ -37,9 +37,12 @@ template <class T> struct metal_buffer
 
 template <class T> void expect_bits(T actual, T expected)
 {
-    if (std::isnan(float(expected))) {
+    if (std::isnan(float(expected)))
+    {
         EXPECT_TRUE(std::isnan(float(actual)));
-    } else {
+    }
+    else
+    {
         EXPECT_EQ(actual.x, expected.x);
     }
 }
@@ -49,7 +52,7 @@ template <class T> void run_metal_reduced_FillArithmeticAndFusedRounding()
     using t                    = T;
     constexpr auto        type = metal_type<t>;
     constexpr std::size_t n    = 519;  // Partial final threadgroup.
-    metal_buffer<t>        a(n), b(n), c(n), out(n);
+    metal_buffer<t>       a(n), b(n), c(n), out(n);
     const float           eps = std::is_same_v<t, scalars::half> ? 0x1p-10f : 0x1p-7f;
     mb::dispatch_fill(a.data, 1 + eps, n, type);
     mb::dispatch_fill(b.data, 1 - eps, n, type);
@@ -67,7 +70,8 @@ template <class T> void run_metal_reduced_FillArithmeticAndFusedRounding()
                                : name == "min" ? y
                                : name == "max" ? x
                                                : std::fma(x, y, -1.f);
-        for (std::size_t i = 0; i < n; ++i) {
+        for (std::size_t i = 0; i < n; ++i)
+        {
             expect_bits(out.data[i], t(expected));
         }
     }
@@ -94,12 +98,18 @@ template <class T> void run_metal_reduced_FillArithmeticAndFusedRounding()
 
 TEST(metal_reduced, FillArithmeticAndFusedRounding_half)
 {
-    if (!mb::device_available()) { GTEST_SKIP() << "No Metal device"; }
+    if (!mb::device_available())
+    {
+        GTEST_SKIP() << "No Metal device";
+    }
     run_metal_reduced_FillArithmeticAndFusedRounding<scalars::half>();
 }
 TEST(metal_reduced, FillArithmeticAndFusedRounding_bfloat16)
 {
-    if (!mb::device_available()) { GTEST_SKIP() << "No Metal device"; }
+    if (!mb::device_available())
+    {
+        GTEST_SKIP() << "No Metal device";
+    }
     run_metal_reduced_FillArithmeticAndFusedRounding<scalars::bfloat16>();
 }
 
@@ -108,8 +118,9 @@ template <class T> void run_metal_reduced_UnaryMath()
     using t                    = T;
     constexpr auto        type = metal_type<t>;
     constexpr std::size_t n    = 513;
-    metal_buffer<t>        input(n), out(n);
-    for (std::size_t i = 0; i < n; ++i) {
+    metal_buffer<t>       input(n), out(n);
+    for (std::size_t i = 0; i < n; ++i)
+    {
         input.data[i] = t(0.25f + float(i) / float(n));
     }
     const void* inputs[] = {input.data};
@@ -136,12 +147,18 @@ template <class T> void run_metal_reduced_UnaryMath()
 
 TEST(metal_reduced, UnaryMath_half)
 {
-    if (!mb::device_available()) { GTEST_SKIP() << "No Metal device"; }
+    if (!mb::device_available())
+    {
+        GTEST_SKIP() << "No Metal device";
+    }
     run_metal_reduced_UnaryMath<scalars::half>();
 }
 TEST(metal_reduced, UnaryMath_bfloat16)
 {
-    if (!mb::device_available()) { GTEST_SKIP() << "No Metal device"; }
+    if (!mb::device_available())
+    {
+        GTEST_SKIP() << "No Metal device";
+    }
     run_metal_reduced_UnaryMath<scalars::bfloat16>();
 }
 
@@ -150,10 +167,11 @@ template <class T> void run_metal_reduced_EveryEncodingPreservesSignAndPayload()
     using t                    = T;
     constexpr auto        type = metal_type<t>;
     constexpr std::size_t n    = 65536;
-    metal_buffer<t>        input(n), out(n);
-    for (std::size_t i = 0; i < n; ++i) {
+    metal_buffer<t>       input(n), out(n);
+    for (std::size_t i = 0; i < n; ++i)
+    {
         input.data[i] = t(uint16_t(i), t::from_bits());
-}
+    }
     const void* inputs[] = {input.data};
     for (const char* op : {"neg", "fabs"})
     {
@@ -168,12 +186,18 @@ template <class T> void run_metal_reduced_EveryEncodingPreservesSignAndPayload()
 
 TEST(metal_reduced, EveryEncodingPreservesSignAndPayload_half)
 {
-    if (!mb::device_available()) { GTEST_SKIP() << "No Metal device"; }
+    if (!mb::device_available())
+    {
+        GTEST_SKIP() << "No Metal device";
+    }
     run_metal_reduced_EveryEncodingPreservesSignAndPayload<scalars::half>();
 }
 TEST(metal_reduced, EveryEncodingPreservesSignAndPayload_bfloat16)
 {
-    if (!mb::device_available()) { GTEST_SKIP() << "No Metal device"; }
+    if (!mb::device_available())
+    {
+        GTEST_SKIP() << "No Metal device";
+    }
     run_metal_reduced_EveryEncodingPreservesSignAndPayload<scalars::bfloat16>();
 }
 
@@ -182,7 +206,7 @@ template <class T> void run_metal_reduced_FloatReductionPartialsAndExceptionalVa
     using t                    = T;
     constexpr auto        type = metal_type<t>;
     constexpr std::size_t n    = 65537;  // Three passes with 256-thread groups.
-    metal_buffer<t>        input(n);
+    metal_buffer<t>       input(n);
     mb::dispatch_fill(input.data, 1, n, type);
     EXPECT_EQ(mb::reduce_sum(input.data, n, type), float(n));
     EXPECT_EQ(mb::reduce_min(input.data, n, type), 1.f);
@@ -209,19 +233,25 @@ template <class T> void run_metal_reduced_FloatReductionPartialsAndExceptionalVa
 
 TEST(metal_reduced, FloatReductionPartialsAndExceptionalValues_half)
 {
-    if (!mb::device_available()) { GTEST_SKIP() << "No Metal device"; }
+    if (!mb::device_available())
+    {
+        GTEST_SKIP() << "No Metal device";
+    }
     run_metal_reduced_FloatReductionPartialsAndExceptionalValues<scalars::half>();
 }
 TEST(metal_reduced, FloatReductionPartialsAndExceptionalValues_bfloat16)
 {
-    if (!mb::device_available()) { GTEST_SKIP() << "No Metal device"; }
+    if (!mb::device_available())
+    {
+        GTEST_SKIP() << "No Metal device";
+    }
     run_metal_reduced_FloatReductionPartialsAndExceptionalValues<scalars::bfloat16>();
 }
 
 template <class T> void run_metal_reduced_TypedFusedEntryPoints()
 {
-    using t             = T;
-    constexpr auto type = metal_type<t>;
+    using t              = T;
+    constexpr auto  type = metal_type<t>;
     metal_buffer<t> out(1);
     // One source with both entry points also exercises dtype-aware caching.
     const std::string source = R"(
@@ -240,12 +270,18 @@ template <class T> void run_metal_reduced_TypedFusedEntryPoints()
 
 TEST(metal_reduced, TypedFusedEntryPoints_half)
 {
-    if (!mb::device_available()) { GTEST_SKIP() << "No Metal device"; }
+    if (!mb::device_available())
+    {
+        GTEST_SKIP() << "No Metal device";
+    }
     run_metal_reduced_TypedFusedEntryPoints<scalars::half>();
 }
 TEST(metal_reduced, TypedFusedEntryPoints_bfloat16)
 {
-    if (!mb::device_available()) { GTEST_SKIP() << "No Metal device"; }
+    if (!mb::device_available())
+    {
+        GTEST_SKIP() << "No Metal device";
+    }
     run_metal_reduced_TypedFusedEntryPoints<scalars::bfloat16>();
 }
 

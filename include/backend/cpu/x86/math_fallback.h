@@ -18,7 +18,7 @@
 
 #if SCALARS_HAS_NATIVE_MATH ||                                                                     \
     (!SCALARS_HAS_SVML && !SCALARS_HAS_SLEEF && !SCALARS_COMPILER_SUPPORTS_SVML_EXTENSIONS &&      \
-     !defined(__INTEL_COMPILER) && !defined(__INTEL_LLVM_COMPILER))
+        !defined(__INTEL_COMPILER) && !defined(__INTEL_LLVM_COMPILER))
 #define SCALARS_X86_NATIVE_MATH 1
 #else
 #define SCALARS_X86_NATIVE_MATH 0

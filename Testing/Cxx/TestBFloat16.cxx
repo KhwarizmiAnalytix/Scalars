@@ -1,6 +1,6 @@
+#include "common/scalar_traits.h"
 #include "types/bfloat16.h"
 #include "types/half.h"
-#include "common/scalar_traits.h"
 
 #include <cmath>
 #include <cstdint>
@@ -202,19 +202,19 @@ TEST(bfloat16, NumericLimitsStreamAndRoundTrip)
 TEST(bfloat16, AccumulationType)
 {
     static_assert(std::is_same_v<accumulation_type_t<bfloat16>, float>,
-                  "bfloat16 accumulation type must be float");
-    static_assert(std::is_same_v<accumulation_type_t<half>, float>,
-                  "half accumulation type must be float");
+        "bfloat16 accumulation type must be float");
+    static_assert(
+        std::is_same_v<accumulation_type_t<half>, float>, "half accumulation type must be float");
     static_assert(std::is_same_v<accumulation_type_t<float>, double>,
-                  "float accumulation type must be double, matching acc_type<float, false>");
+        "float accumulation type must be double, matching acc_type<float, false>");
     static_assert(std::is_same_v<accumulation_type_t<double>, double>,
-                  "double accumulation type must be double");
+        "double accumulation type must be double");
 }
 
 TEST(bfloat16, AccumulationSimple)
 {
     using accum_type = accumulation_type_t<bfloat16>;
-    accum_type sum = 0;
+    accum_type sum   = 0;
 
     sum += static_cast<accum_type>(bfloat16(1.0f));
     sum += static_cast<accum_type>(bfloat16(2.0f));
@@ -226,7 +226,7 @@ TEST(bfloat16, AccumulationSimple)
 TEST(bfloat16, AccumulationWithError)
 {
     using accum_type = accumulation_type_t<bfloat16>;
-    accum_type sum = 0;
+    accum_type sum   = 0;
 
     for (int i = 0; i < 100; ++i)
     {
@@ -239,7 +239,7 @@ TEST(bfloat16, AccumulationWithError)
 TEST(bfloat16, AccumulationLargeValues)
 {
     using accum_type = accumulation_type_t<bfloat16>;
-    accum_type sum = 0;
+    accum_type sum   = 0;
 
     sum += static_cast<accum_type>(bfloat16(1000.0f));
     sum += static_cast<accum_type>(bfloat16(2000.0f));
@@ -250,14 +250,14 @@ TEST(bfloat16, AccumulationLargeValues)
 
 TEST(half, AccumulationType)
 {
-    static_assert(std::is_same_v<accumulation_type_t<half>, float>,
-                  "half accumulation type must be float");
+    static_assert(
+        std::is_same_v<accumulation_type_t<half>, float>, "half accumulation type must be float");
 }
 
 TEST(half, AccumulationSimple)
 {
     using accum_type = accumulation_type_t<half>;
-    accum_type sum = 0;
+    accum_type sum   = 0;
 
     sum += static_cast<accum_type>(half(1.0f));
     sum += static_cast<accum_type>(half(2.0f));
@@ -269,7 +269,7 @@ TEST(half, AccumulationSimple)
 TEST(half, AccumulationWithError)
 {
     using accum_type = accumulation_type_t<half>;
-    accum_type sum = 0;
+    accum_type sum   = 0;
 
     for (int i = 0; i < 100; ++i)
     {
@@ -282,7 +282,7 @@ TEST(half, AccumulationWithError)
 TEST(half, AccumulationLargeValues)
 {
     using accum_type = accumulation_type_t<half>;
-    accum_type sum = 0;
+    accum_type sum   = 0;
 
     sum += static_cast<accum_type>(half(1000.0f));
     sum += static_cast<accum_type>(half(2000.0f));

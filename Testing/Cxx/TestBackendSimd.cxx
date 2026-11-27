@@ -17,8 +17,8 @@ using scalars::simd;
 
 TEST(BackendSimd, FloatAddMatchesScalar)
 {
-    using simd_f              = simd<float>;
-    constexpr int      n      = simd_f::size;
+    using simd_f         = simd<float>;
+    constexpr int      n = simd_f::size;
     std::vector<float> a(n), b(n), out(n);
     for (int i = 0; i < n; ++i)
     {
@@ -39,8 +39,8 @@ TEST(BackendSimd, FloatAddMatchesScalar)
 
 TEST(BackendSimd, DoubleSetBroadcastsScalar)
 {
-    using simd_d               = simd<double>;
-    constexpr int       n      = simd_d::size;
+    using simd_d          = simd<double>;
+    constexpr int       n = simd_d::size;
     std::vector<double> out(n);
 
     auto v = simd_d::set(3.5);

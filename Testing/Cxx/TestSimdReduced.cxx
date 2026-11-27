@@ -170,8 +170,14 @@ template <class T> void run_simd_reduced_DenseDistinctPackets()
     static_assert(std::is_same_v<decltype(S::accumulate(S::setzero())), float>);
 }
 
-TEST(simd_reduced, DenseDistinctPackets_half)     { run_simd_reduced_DenseDistinctPackets<scalars::half>(); }
-TEST(simd_reduced, DenseDistinctPackets_bfloat16) { run_simd_reduced_DenseDistinctPackets<scalars::bfloat16>(); }
+TEST(simd_reduced, DenseDistinctPackets_half)
+{
+    run_simd_reduced_DenseDistinctPackets<scalars::half>();
+}
+TEST(simd_reduced, DenseDistinctPackets_bfloat16)
+{
+    run_simd_reduced_DenseDistinctPackets<scalars::bfloat16>();
+}
 
 template <class T> void run_simd_reduced_ExhaustiveEncodingWideningAndMemory()
 {
@@ -206,8 +212,14 @@ template <class T> void run_simd_reduced_ExhaustiveEncodingWideningAndMemory()
     }
 }
 
-TEST(simd_reduced, ExhaustiveEncodingWideningAndMemory_half)     { run_simd_reduced_ExhaustiveEncodingWideningAndMemory<scalars::half>(); }
-TEST(simd_reduced, ExhaustiveEncodingWideningAndMemory_bfloat16) { run_simd_reduced_ExhaustiveEncodingWideningAndMemory<scalars::bfloat16>(); }
+TEST(simd_reduced, ExhaustiveEncodingWideningAndMemory_half)
+{
+    run_simd_reduced_ExhaustiveEncodingWideningAndMemory<scalars::half>();
+}
+TEST(simd_reduced, ExhaustiveEncodingWideningAndMemory_bfloat16)
+{
+    run_simd_reduced_ExhaustiveEncodingWideningAndMemory<scalars::bfloat16>();
+}
 
 template <class T> void run_simd_reduced_NarrowingMidpointsAndExceptionalValues()
 {
@@ -274,8 +286,14 @@ template <class T> void run_simd_reduced_NarrowingMidpointsAndExceptionalValues(
     }
 }
 
-TEST(simd_reduced, NarrowingMidpointsAndExceptionalValues_half)     { run_simd_reduced_NarrowingMidpointsAndExceptionalValues<scalars::half>(); }
-TEST(simd_reduced, NarrowingMidpointsAndExceptionalValues_bfloat16) { run_simd_reduced_NarrowingMidpointsAndExceptionalValues<scalars::bfloat16>(); }
+TEST(simd_reduced, NarrowingMidpointsAndExceptionalValues_half)
+{
+    run_simd_reduced_NarrowingMidpointsAndExceptionalValues<scalars::half>();
+}
+TEST(simd_reduced, NarrowingMidpointsAndExceptionalValues_bfloat16)
+{
+    run_simd_reduced_NarrowingMidpointsAndExceptionalValues<scalars::bfloat16>();
+}
 
 template <class T> void run_simd_reduced_ArithmeticAndFloatAccumulation()
 {
@@ -337,8 +355,14 @@ template <class T> void run_simd_reduced_ArithmeticAndFloatAccumulation()
     expect_value(S::hmax(S::loadu(x.data())), x.back());
 }
 
-TEST(simd_reduced, ArithmeticAndFloatAccumulation_half)     { run_simd_reduced_ArithmeticAndFloatAccumulation<scalars::half>(); }
-TEST(simd_reduced, ArithmeticAndFloatAccumulation_bfloat16) { run_simd_reduced_ArithmeticAndFloatAccumulation<scalars::bfloat16>(); }
+TEST(simd_reduced, ArithmeticAndFloatAccumulation_half)
+{
+    run_simd_reduced_ArithmeticAndFloatAccumulation<scalars::half>();
+}
+TEST(simd_reduced, ArithmeticAndFloatAccumulation_bfloat16)
+{
+    run_simd_reduced_ArithmeticAndFloatAccumulation<scalars::bfloat16>();
+}
 
 template <class T> void run_simd_reduced_MasksComparisonsAndBitPreservingSelect()
 {
@@ -397,8 +421,14 @@ template <class T> void run_simd_reduced_MasksComparisonsAndBitPreservingSelect(
     }
 }
 
-TEST(simd_reduced, MasksComparisonsAndBitPreservingSelect_half)     { run_simd_reduced_MasksComparisonsAndBitPreservingSelect<scalars::half>(); }
-TEST(simd_reduced, MasksComparisonsAndBitPreservingSelect_bfloat16) { run_simd_reduced_MasksComparisonsAndBitPreservingSelect<scalars::bfloat16>(); }
+TEST(simd_reduced, MasksComparisonsAndBitPreservingSelect_half)
+{
+    run_simd_reduced_MasksComparisonsAndBitPreservingSelect<scalars::half>();
+}
+TEST(simd_reduced, MasksComparisonsAndBitPreservingSelect_bfloat16)
+{
+    run_simd_reduced_MasksComparisonsAndBitPreservingSelect<scalars::bfloat16>();
+}
 
 template <class T> void run_simd_reduced_SignedZerosNaNsAndMinMax()
 {
@@ -464,8 +494,14 @@ template <class T> void run_simd_reduced_SignedZerosNaNsAndMinMax()
     }
 }
 
-TEST(simd_reduced, SignedZerosNaNsAndMinMax_half)     { run_simd_reduced_SignedZerosNaNsAndMinMax<scalars::half>(); }
-TEST(simd_reduced, SignedZerosNaNsAndMinMax_bfloat16) { run_simd_reduced_SignedZerosNaNsAndMinMax<scalars::bfloat16>(); }
+TEST(simd_reduced, SignedZerosNaNsAndMinMax_half)
+{
+    run_simd_reduced_SignedZerosNaNsAndMinMax<scalars::half>();
+}
+TEST(simd_reduced, SignedZerosNaNsAndMinMax_bfloat16)
+{
+    run_simd_reduced_SignedZerosNaNsAndMinMax<scalars::bfloat16>();
+}
 
 template <class T> void run_simd_reduced_MemoryTailsBroadcastAndGatherScatter()
 {
@@ -557,8 +593,14 @@ template <class T> void run_simd_reduced_MemoryTailsBroadcastAndGatherScatter()
     EXPECT_EQ(out[0].x, input[0].x);  // last logical lane wins
 }
 
-TEST(simd_reduced, MemoryTailsBroadcastAndGatherScatter_half)     { run_simd_reduced_MemoryTailsBroadcastAndGatherScatter<scalars::half>(); }
-TEST(simd_reduced, MemoryTailsBroadcastAndGatherScatter_bfloat16) { run_simd_reduced_MemoryTailsBroadcastAndGatherScatter<scalars::bfloat16>(); }
+TEST(simd_reduced, MemoryTailsBroadcastAndGatherScatter_half)
+{
+    run_simd_reduced_MemoryTailsBroadcastAndGatherScatter<scalars::half>();
+}
+TEST(simd_reduced, MemoryTailsBroadcastAndGatherScatter_bfloat16)
+{
+    run_simd_reduced_MemoryTailsBroadcastAndGatherScatter<scalars::bfloat16>();
+}
 
 template <class T, int Rows> void check_transpose()
 {
@@ -624,8 +666,14 @@ template <class T> void run_simd_reduced_TransposeAndHalfWidthUtilities()
     }
 }
 
-TEST(simd_reduced, TransposeAndHalfWidthUtilities_half)     { run_simd_reduced_TransposeAndHalfWidthUtilities<scalars::half>(); }
-TEST(simd_reduced, TransposeAndHalfWidthUtilities_bfloat16) { run_simd_reduced_TransposeAndHalfWidthUtilities<scalars::bfloat16>(); }
+TEST(simd_reduced, TransposeAndHalfWidthUtilities_half)
+{
+    run_simd_reduced_TransposeAndHalfWidthUtilities<scalars::half>();
+}
+TEST(simd_reduced, TransposeAndHalfWidthUtilities_bfloat16)
+{
+    run_simd_reduced_TransposeAndHalfWidthUtilities<scalars::bfloat16>();
+}
 
 template <class T, class Op, class Ref>
 void check_math(const char* name, Op op, Ref ref, float lo, float hi)
@@ -697,8 +745,14 @@ template <class T> void run_simd_reduced_CompleteRealMathSurface()
         4.f);
 }
 
-TEST(simd_reduced, CompleteRealMathSurface_half)     { run_simd_reduced_CompleteRealMathSurface<scalars::half>(); }
-TEST(simd_reduced, CompleteRealMathSurface_bfloat16) { run_simd_reduced_CompleteRealMathSurface<scalars::bfloat16>(); }
+TEST(simd_reduced, CompleteRealMathSurface_half)
+{
+    run_simd_reduced_CompleteRealMathSurface<scalars::half>();
+}
+TEST(simd_reduced, CompleteRealMathSurface_bfloat16)
+{
+    run_simd_reduced_CompleteRealMathSurface<scalars::bfloat16>();
+}
 
 }  // namespace
 #endif

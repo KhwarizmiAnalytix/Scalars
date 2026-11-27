@@ -256,16 +256,46 @@ using ops_f64 = ops_sse_f64;
 #endif
 
 #define SCALARS_VMATH_AVX_COMMON(sfx, castv, casti)                                                \
-    SCALARS_FORCE_INLINE static vec_t zero() { return _mm256_setzero_##sfx(); }                    \
-    SCALARS_FORCE_INLINE static vec_t loadu(const scalar_t* p) { return _mm256_loadu_##sfx(p); }   \
-    SCALARS_FORCE_INLINE static void  storeu(scalar_t* p, vec_t v) { _mm256_storeu_##sfx(p, v); }  \
-    SCALARS_FORCE_INLINE static vec_t add(vec_t a, vec_t b) { return _mm256_add_##sfx(a, b); }     \
-    SCALARS_FORCE_INLINE static vec_t sub(vec_t a, vec_t b) { return _mm256_sub_##sfx(a, b); }     \
-    SCALARS_FORCE_INLINE static vec_t mul(vec_t a, vec_t b) { return _mm256_mul_##sfx(a, b); }     \
-    SCALARS_FORCE_INLINE static vec_t div(vec_t a, vec_t b) { return _mm256_div_##sfx(a, b); }     \
-    SCALARS_FORCE_INLINE static vec_t sqrt(vec_t a) { return _mm256_sqrt_##sfx(a); }               \
-    SCALARS_FORCE_INLINE static vec_t min(vec_t a, vec_t b) { return _mm256_min_##sfx(b, a); }     \
-    SCALARS_FORCE_INLINE static vec_t max(vec_t a, vec_t b) { return _mm256_max_##sfx(b, a); }     \
+    SCALARS_FORCE_INLINE static vec_t zero()                                                       \
+    {                                                                                              \
+        return _mm256_setzero_##sfx();                                                             \
+    }                                                                                              \
+    SCALARS_FORCE_INLINE static vec_t loadu(const scalar_t* p)                                     \
+    {                                                                                              \
+        return _mm256_loadu_##sfx(p);                                                              \
+    }                                                                                              \
+    SCALARS_FORCE_INLINE static void storeu(scalar_t* p, vec_t v)                                  \
+    {                                                                                              \
+        _mm256_storeu_##sfx(p, v);                                                                 \
+    }                                                                                              \
+    SCALARS_FORCE_INLINE static vec_t add(vec_t a, vec_t b)                                        \
+    {                                                                                              \
+        return _mm256_add_##sfx(a, b);                                                             \
+    }                                                                                              \
+    SCALARS_FORCE_INLINE static vec_t sub(vec_t a, vec_t b)                                        \
+    {                                                                                              \
+        return _mm256_sub_##sfx(a, b);                                                             \
+    }                                                                                              \
+    SCALARS_FORCE_INLINE static vec_t mul(vec_t a, vec_t b)                                        \
+    {                                                                                              \
+        return _mm256_mul_##sfx(a, b);                                                             \
+    }                                                                                              \
+    SCALARS_FORCE_INLINE static vec_t div(vec_t a, vec_t b)                                        \
+    {                                                                                              \
+        return _mm256_div_##sfx(a, b);                                                             \
+    }                                                                                              \
+    SCALARS_FORCE_INLINE static vec_t sqrt(vec_t a)                                                \
+    {                                                                                              \
+        return _mm256_sqrt_##sfx(a);                                                               \
+    }                                                                                              \
+    SCALARS_FORCE_INLINE static vec_t min(vec_t a, vec_t b)                                        \
+    {                                                                                              \
+        return _mm256_min_##sfx(b, a);                                                             \
+    }                                                                                              \
+    SCALARS_FORCE_INLINE static vec_t max(vec_t a, vec_t b)                                        \
+    {                                                                                              \
+        return _mm256_max_##sfx(b, a);                                                             \
+    }                                                                                              \
     SCALARS_FORCE_INLINE static vec_t lt(vec_t a, vec_t b)                                         \
     {                                                                                              \
         return _mm256_cmp_##sfx(a, b, _CMP_LT_OQ);                                                 \
@@ -282,10 +312,22 @@ using ops_f64 = ops_sse_f64;
     {                                                                                              \
         return _mm256_cmp_##sfx(a, b, _CMP_NGE_UQ);                                                \
     }                                                                                              \
-    SCALARS_FORCE_INLINE static vec_t isnan(vec_t a) { return _mm256_cmp_##sfx(a, a, _CMP_UNORD_Q); } \
-    SCALARS_FORCE_INLINE static vec_t band(vec_t a, vec_t b) { return _mm256_and_##sfx(a, b); }    \
-    SCALARS_FORCE_INLINE static vec_t bor(vec_t a, vec_t b) { return _mm256_or_##sfx(a, b); }      \
-    SCALARS_FORCE_INLINE static vec_t bxor(vec_t a, vec_t b) { return _mm256_xor_##sfx(a, b); }    \
+    SCALARS_FORCE_INLINE static vec_t isnan(vec_t a)                                               \
+    {                                                                                              \
+        return _mm256_cmp_##sfx(a, a, _CMP_UNORD_Q);                                               \
+    }                                                                                              \
+    SCALARS_FORCE_INLINE static vec_t band(vec_t a, vec_t b)                                       \
+    {                                                                                              \
+        return _mm256_and_##sfx(a, b);                                                             \
+    }                                                                                              \
+    SCALARS_FORCE_INLINE static vec_t bor(vec_t a, vec_t b)                                        \
+    {                                                                                              \
+        return _mm256_or_##sfx(a, b);                                                              \
+    }                                                                                              \
+    SCALARS_FORCE_INLINE static vec_t bxor(vec_t a, vec_t b)                                       \
+    {                                                                                              \
+        return _mm256_xor_##sfx(a, b);                                                             \
+    }                                                                                              \
     SCALARS_FORCE_INLINE static vec_t bandnot(vec_t a, vec_t b)                                    \
     {                                                                                              \
         return _mm256_andnot_##sfx(b, a);                                                          \
@@ -298,14 +340,26 @@ using ops_f64 = ops_sse_f64;
     {                                                                                              \
         return _mm256_round_##sfx(x, _MM_FROUND_TO_NEAREST_INT | _MM_FROUND_NO_EXC);               \
     }                                                                                              \
-    SCALARS_FORCE_INLINE static vec_t floor(vec_t x) { return _mm256_floor_##sfx(x); }             \
-    SCALARS_FORCE_INLINE static vec_t ceil(vec_t x) { return _mm256_ceil_##sfx(x); }               \
+    SCALARS_FORCE_INLINE static vec_t floor(vec_t x)                                               \
+    {                                                                                              \
+        return _mm256_floor_##sfx(x);                                                              \
+    }                                                                                              \
+    SCALARS_FORCE_INLINE static vec_t ceil(vec_t x)                                                \
+    {                                                                                              \
+        return _mm256_ceil_##sfx(x);                                                               \
+    }                                                                                              \
     SCALARS_FORCE_INLINE static vec_t trunc(vec_t x)                                               \
     {                                                                                              \
         return _mm256_round_##sfx(x, _MM_FROUND_TO_ZERO | _MM_FROUND_NO_EXC);                      \
     }                                                                                              \
-    SCALARS_FORCE_INLINE static bool any(vec_t m) { return _mm256_movemask_##sfx(m) != 0; }        \
-    SCALARS_FORCE_INLINE static void barrier(vec_t& v) { SCALARS_VMATH_X86_BARRIER(v); }
+    SCALARS_FORCE_INLINE static bool any(vec_t m)                                                  \
+    {                                                                                              \
+        return _mm256_movemask_##sfx(m) != 0;                                                      \
+    }                                                                                              \
+    SCALARS_FORCE_INLINE static void barrier(vec_t& v)                                             \
+    {                                                                                              \
+        SCALARS_VMATH_X86_BARRIER(v);                                                              \
+    }
 
 struct ops_avx_f32
 {
@@ -449,20 +503,50 @@ using ops_f64 = ops_avx_f64;
     {                                                                                              \
         return _mm512_test_epi##w##_mask(casti(m), casti(m));                                      \
     }                                                                                              \
-    SCALARS_FORCE_INLINE static vec_t zero() { return _mm512_setzero_##sfx(); }                    \
-    SCALARS_FORCE_INLINE static vec_t loadu(const scalar_t* p) { return _mm512_loadu_##sfx(p); }   \
-    SCALARS_FORCE_INLINE static void  storeu(scalar_t* p, vec_t v) { _mm512_storeu_##sfx(p, v); }  \
-    SCALARS_FORCE_INLINE static vec_t add(vec_t a, vec_t b) { return _mm512_add_##sfx(a, b); }     \
-    SCALARS_FORCE_INLINE static vec_t sub(vec_t a, vec_t b) { return _mm512_sub_##sfx(a, b); }     \
-    SCALARS_FORCE_INLINE static vec_t mul(vec_t a, vec_t b) { return _mm512_mul_##sfx(a, b); }     \
-    SCALARS_FORCE_INLINE static vec_t div(vec_t a, vec_t b) { return _mm512_div_##sfx(a, b); }     \
-    SCALARS_FORCE_INLINE static vec_t sqrt(vec_t a) { return _mm512_sqrt_##sfx(a); }               \
+    SCALARS_FORCE_INLINE static vec_t zero()                                                       \
+    {                                                                                              \
+        return _mm512_setzero_##sfx();                                                             \
+    }                                                                                              \
+    SCALARS_FORCE_INLINE static vec_t loadu(const scalar_t* p)                                     \
+    {                                                                                              \
+        return _mm512_loadu_##sfx(p);                                                              \
+    }                                                                                              \
+    SCALARS_FORCE_INLINE static void storeu(scalar_t* p, vec_t v)                                  \
+    {                                                                                              \
+        _mm512_storeu_##sfx(p, v);                                                                 \
+    }                                                                                              \
+    SCALARS_FORCE_INLINE static vec_t add(vec_t a, vec_t b)                                        \
+    {                                                                                              \
+        return _mm512_add_##sfx(a, b);                                                             \
+    }                                                                                              \
+    SCALARS_FORCE_INLINE static vec_t sub(vec_t a, vec_t b)                                        \
+    {                                                                                              \
+        return _mm512_sub_##sfx(a, b);                                                             \
+    }                                                                                              \
+    SCALARS_FORCE_INLINE static vec_t mul(vec_t a, vec_t b)                                        \
+    {                                                                                              \
+        return _mm512_mul_##sfx(a, b);                                                             \
+    }                                                                                              \
+    SCALARS_FORCE_INLINE static vec_t div(vec_t a, vec_t b)                                        \
+    {                                                                                              \
+        return _mm512_div_##sfx(a, b);                                                             \
+    }                                                                                              \
+    SCALARS_FORCE_INLINE static vec_t sqrt(vec_t a)                                                \
+    {                                                                                              \
+        return _mm512_sqrt_##sfx(a);                                                               \
+    }                                                                                              \
     SCALARS_FORCE_INLINE static vec_t fma(vec_t a, vec_t b, vec_t c)                               \
     {                                                                                              \
         return _mm512_fmadd_##sfx(a, b, c);                                                        \
     }                                                                                              \
-    SCALARS_FORCE_INLINE static vec_t min(vec_t a, vec_t b) { return _mm512_min_##sfx(b, a); }     \
-    SCALARS_FORCE_INLINE static vec_t max(vec_t a, vec_t b) { return _mm512_max_##sfx(b, a); }     \
+    SCALARS_FORCE_INLINE static vec_t min(vec_t a, vec_t b)                                        \
+    {                                                                                              \
+        return _mm512_min_##sfx(b, a);                                                             \
+    }                                                                                              \
+    SCALARS_FORCE_INLINE static vec_t max(vec_t a, vec_t b)                                        \
+    {                                                                                              \
+        return _mm512_max_##sfx(b, a);                                                             \
+    }                                                                                              \
     SCALARS_FORCE_INLINE static vec_t lt(vec_t a, vec_t b)                                         \
     {                                                                                              \
         return from_k(_mm512_cmp_##sfx##_mask(a, b, _CMP_LT_OQ));                                  \
@@ -535,8 +619,14 @@ using ops_f64 = ops_avx_f64;
     {                                                                                              \
         return _mm512_roundscale_##sfx(x, _MM_FROUND_TO_ZERO | _MM_FROUND_NO_EXC);                 \
     }                                                                                              \
-    SCALARS_FORCE_INLINE static bool any(vec_t m) { return to_k(m) != 0; }                         \
-    SCALARS_FORCE_INLINE static void barrier(vec_t& v) { SCALARS_VMATH_X86_BARRIER(v); }
+    SCALARS_FORCE_INLINE static bool any(vec_t m)                                                  \
+    {                                                                                              \
+        return to_k(m) != 0;                                                                       \
+    }                                                                                              \
+    SCALARS_FORCE_INLINE static void barrier(vec_t& v)                                             \
+    {                                                                                              \
+        SCALARS_VMATH_X86_BARRIER(v);                                                              \
+    }
 
 struct ops_avx512_f32
 {

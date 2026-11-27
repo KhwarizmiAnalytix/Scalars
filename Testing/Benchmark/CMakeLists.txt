@@ -62,7 +62,7 @@ foreach(_bench_source IN ITEMS ${bench_sources})
     endif()
     set_target_properties(
         ${target_name} PROPERTIES FOLDER "Benchmarks" VS_DEBUGGER_WORKING_DIRECTORY
-                                                   "$<TARGET_FILE_DIR:${target_name}>"
+                                                      "$<TARGET_FILE_DIR:${target_name}>"
     )
 
     if(SCALARS_ENABLE_TESTING)

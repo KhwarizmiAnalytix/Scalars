@@ -1,6 +1,7 @@
 #pragma once
 
-#include "backend/simd.h"
+#include "backend/cpu/neon/double/simd.h"
+#include "backend/cpu/neon/float/simd.h"
 
 #include <bit>
 #include <cstdint>

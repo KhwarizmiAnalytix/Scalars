@@ -44,15 +44,18 @@ template <class T> bool check_simd_math()
     {
         const double x         = static_cast<double>(input[static_cast<std::size_t>(i)]);
         const double tolerance = 1e-3;
-        if (std::fabs(static_cast<double>(exp_out[static_cast<std::size_t>(i)]) - std::exp(x)) > tolerance)
+        if (std::fabs(static_cast<double>(exp_out[static_cast<std::size_t>(i)]) - std::exp(x)) >
+            tolerance)
         {
             return false;
         }
-        if (std::fabs(static_cast<double>(log_out[static_cast<std::size_t>(i)]) - std::log(x)) > tolerance)
+        if (std::fabs(static_cast<double>(log_out[static_cast<std::size_t>(i)]) - std::log(x)) >
+            tolerance)
         {
             return false;
         }
-        if (std::fabs(static_cast<double>(sin_out[static_cast<std::size_t>(i)]) - std::sin(x)) > tolerance)
+        if (std::fabs(static_cast<double>(sin_out[static_cast<std::size_t>(i)]) - std::sin(x)) >
+            tolerance)
         {
             return false;
         }

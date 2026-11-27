@@ -11,8 +11,8 @@
 // ::erfcf, ::erfinvf, ...) in the global namespace, so a single implementation
 // serves both; only the runtime header include differs.
 
-#include <cstdint>
 #include <cmath>
+#include <cstdint>
 #include <type_traits>
 
 #if defined(__CUDACC__)
@@ -27,11 +27,9 @@ namespace scalars
 {
 
 // Primary template forward declaration required before the explicit specialization.
-template <typename T>
-struct simd;
+template <typename T> struct simd;
 
-template <>
-struct simd<float>
+template <> struct simd<float>
 {
     using simd_t  = float;
     using mask_t  = uint32_t;
@@ -53,8 +51,7 @@ struct simd<float>
     SCALARS_SIMD_RETURN_TYPE store(simd_t from, value_t* to) { *to = from; }
     SCALARS_SIMD_RETURN_TYPE storeu(simd_t from, value_t* to) { *to = from; }
 
-    template <
-        typename scalar_t,
+    template <typename scalar_t,
         typename std::enable_if<std::is_fundamental<scalar_t>::value, bool>::type = true>
     SCALARS_SIMD_METHOD simd_t set(scalar_t alpha)
     {
@@ -122,10 +119,7 @@ struct simd<float>
     // Normal CDF/inverse CDF — dispatch to device math on GPU, host math on CPU.
     // scalar_helper_functions.h uses SCALARS_ON_GPU_DEVICE to pick the right path.
     // N(x) = 0.5 * erfc(-x / sqrt(2))
-    SCALARS_SIMD_METHOD simd_t cdf(simd_t x)
-    {
-        return 0.5f * ::erfcf(-x * 0.7071067811865475244f);
-    }
+    SCALARS_SIMD_METHOD simd_t cdf(simd_t x) { return 0.5f * ::erfcf(-x * 0.7071067811865475244f); }
 
     // N^{-1}(p) = -sqrt(2) * erfinv(1 - 2p)
     SCALARS_SIMD_METHOD simd_t inv_cdf(simd_t x)
@@ -143,10 +137,7 @@ struct simd<float>
     }
 
     // On GPU, stride is the pre-computed absolute element index for this thread.
-    SCALARS_SIMD_METHOD simd_t gather(const value_t* base, int stride)
-    {
-        return base[stride];
-    }
+    SCALARS_SIMD_METHOD simd_t gather(const value_t* base, int stride) { return base[stride]; }
 
     SCALARS_SIMD_RETURN_TYPE scatter(simd_t val, const int* offsets, value_t* to)
     {
@@ -154,10 +145,7 @@ struct simd<float>
     }
 
     // On GPU, stride is the pre-computed absolute element index for this thread.
-    SCALARS_SIMD_RETURN_TYPE scatter(simd_t val, int stride, value_t* to)
-    {
-        to[stride] = val;
-    }
+    SCALARS_SIMD_RETURN_TYPE scatter(simd_t val, int stride, value_t* to) { to[stride] = val; }
 
     // -------------------------------------------------------------------------
     // Reductions — trivial identity for size=1 (single-lane)

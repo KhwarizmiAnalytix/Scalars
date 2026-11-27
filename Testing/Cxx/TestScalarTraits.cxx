@@ -67,9 +67,14 @@ TEST(ScalarTraits, AccumulateType)
     expect_accumulate<complex<float>, complex<double>, complex<float>>();
     expect_accumulate<complex<double>, complex<double>, complex<double>>();
 
-    const scalar_type types[] = {scalar_type::float16, scalar_type::bfloat16, scalar_type::float32,
-        scalar_type::float64, scalar_type::complex_half, scalar_type::complex_bf16,
-        scalar_type::complex_float, scalar_type::complex_double};
+    const scalar_type types[] = {scalar_type::float16,
+        scalar_type::bfloat16,
+        scalar_type::float32,
+        scalar_type::float64,
+        scalar_type::complex_half,
+        scalar_type::complex_bf16,
+        scalar_type::complex_float,
+        scalar_type::complex_double};
     for (const scalar_type type : types)
     {
         const auto cpu = to_accumulate_type(type, false);

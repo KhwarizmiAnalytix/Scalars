@@ -9,7 +9,7 @@
 #include <type_traits>
 
 #include "backend/cpu/neon/svml.h"
-#include "backend/simd.h"
+#include "backend/simd_base.h"
 #include "scalars_macros.h"
 
 namespace scalars
@@ -34,31 +34,30 @@ SCALARS_FORCE_INLINE float32x4_t map1_f32(float32x4_t v, float (*fn)(float))
 // std::hypot requires (inf beats NaN; otherwise NaN propagates).
 SCALARS_FORCE_INLINE float32x4_t hypot_f32(float32x4_t x, float32x4_t y)
 {
-    const uint32x4_t abs_mask = vdupq_n_u32(0x7FFFFFFFu);
-    const uint32x4_t inf_bits = vdupq_n_u32(0x7F800000u);
-    const float32x4_t zero    = vdupq_n_f32(0.f);
-    const float32x4_t one     = vdupq_n_f32(1.f);
+    const uint32x4_t  abs_mask = vdupq_n_u32(0x7FFFFFFFu);
+    const uint32x4_t  inf_bits = vdupq_n_u32(0x7F800000u);
+    const float32x4_t zero     = vdupq_n_f32(0.f);
+    const float32x4_t one      = vdupq_n_f32(1.f);
 
-    const uint32x4_t ax_bits = vandq_u32(vreinterpretq_u32_f32(x), abs_mask);
-    const uint32x4_t ay_bits = vandq_u32(vreinterpretq_u32_f32(y), abs_mask);
-    const float32x4_t ax     = vreinterpretq_f32_u32(ax_bits);
-    const float32x4_t ay     = vreinterpretq_f32_u32(ay_bits);
+    const uint32x4_t  ax_bits = vandq_u32(vreinterpretq_u32_f32(x), abs_mask);
+    const uint32x4_t  ay_bits = vandq_u32(vreinterpretq_u32_f32(y), abs_mask);
+    const float32x4_t ax      = vreinterpretq_f32_u32(ax_bits);
+    const float32x4_t ay      = vreinterpretq_f32_u32(ay_bits);
 
     const float32x4_t m = vmaxq_f32(ax, ay);
     const float32x4_t n = vminq_f32(ax, ay);
 
-    const uint32x4_t m_is_zero = vceqq_f32(m, zero);
-    const float32x4_t safe_m   = vbslq_f32(m_is_zero, one, m);
-    const float32x4_t t        = vdivq_f32(n, safe_m);
-    const float32x4_t scaled   = vmulq_f32(m, vsqrtq_f32(vfmaq_f32(one, t, t)));
-    float32x4_t result         = vbslq_f32(m_is_zero, zero, scaled);
+    const uint32x4_t  m_is_zero = vceqq_f32(m, zero);
+    const float32x4_t safe_m    = vbslq_f32(m_is_zero, one, m);
+    const float32x4_t t         = vdivq_f32(n, safe_m);
+    const float32x4_t scaled    = vmulq_f32(m, vsqrtq_f32(vfmaq_f32(one, t, t)));
+    float32x4_t       result    = vbslq_f32(m_is_zero, zero, scaled);
 
     const uint32x4_t any_inf =
         vorrq_u32(vceqq_u32(ax_bits, inf_bits), vceqq_u32(ay_bits, inf_bits));
-    const uint32x4_t any_nan =
-        vorrq_u32(vmvnq_u32(vceqq_f32(x, x)), vmvnq_u32(vceqq_f32(y, y)));
-    const float32x4_t nan = vdupq_n_f32(std::numeric_limits<float>::quiet_NaN());
-    const float32x4_t inf = vdupq_n_f32(std::numeric_limits<float>::infinity());
+    const uint32x4_t  any_nan = vorrq_u32(vmvnq_u32(vceqq_f32(x, x)), vmvnq_u32(vceqq_f32(y, y)));
+    const float32x4_t nan     = vdupq_n_f32(std::numeric_limits<float>::quiet_NaN());
+    const float32x4_t inf     = vdupq_n_f32(std::numeric_limits<float>::infinity());
 
     result = vbslq_f32(vbicq_u32(any_nan, any_inf), nan, result);
     result = vbslq_f32(any_inf, inf, result);
@@ -174,15 +173,9 @@ template <> struct simd<float>
 
     // Neither Accelerate nor SLEEF has a normal CDF, so the vectorized port
     // serves cdf/inv_cdf whatever SCALARS_MATH_BACKEND selects.
-    SCALARS_SIMD_METHOD simd_t cdf(simd_t x)
-    {
-        return detail_neon::pmf32::normal_cdf(x);
-    }
+    SCALARS_SIMD_METHOD simd_t cdf(simd_t x) { return detail_neon::pmf32::normal_cdf(x); }
 
-    SCALARS_SIMD_METHOD simd_t inv_cdf(simd_t x)
-    {
-        return detail_neon::pmf32::inv_normal_cdf(x);
-    }
+    SCALARS_SIMD_METHOD simd_t inv_cdf(simd_t x) { return detail_neon::pmf32::inv_normal_cdf(x); }
 
     SCALARS_SIMD_METHOD simd_t trunc(simd_t x) { return vrndq_f32(x); }
 
@@ -410,7 +403,8 @@ template <> struct simd<float>
         }
         else
         {
-            static_assert(sizeof(simd_t) == 0 && N != 0, "ptranspose: unsupported N for NEON float");
+            static_assert(
+                sizeof(simd_t) == 0 && N != 0, "ptranspose: unsupported N for NEON float");
         }
     }
 

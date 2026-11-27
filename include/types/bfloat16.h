@@ -139,7 +139,8 @@ SCALARS_CLANG_DIAGNOSTIC_IGNORE("-Wimplicit-int-float-conversion")
 /// Constructors
 inline SCALARS_HOST_DEVICE bfloat16::bfloat16(float value)
     :
-#if defined(__CUDACC__) && !defined(SCALARS_USE_HIP) && defined(__CUDA_ARCH__) && __CUDA_ARCH__ >= 800
+#if defined(__CUDACC__) && !defined(SCALARS_USE_HIP) && defined(__CUDA_ARCH__) &&                  \
+    __CUDA_ARCH__ >= 800
       x(__bfloat16_as_ushort(__float2bfloat16(value)))
 #elif defined(__SYCL_DEVICE_ONLY__) && defined(SYCL_EXT_ONEAPI_BFLOAT16_MATH_FUNCTIONS)
       x(scalars::bit_cast<uint16_t>(sycl::ext::oneapi::bfloat16(value)))

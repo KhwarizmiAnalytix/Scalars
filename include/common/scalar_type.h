@@ -17,5 +17,5 @@ enum class scalar_type : std::uint8_t
     complex_double
 };
 SCALARS_API std::string_view scalar_type_name(scalar_type type) noexcept;
-SCALARS_API std::size_t      scalar_type_size(scalar_type type) noexcept;
+SCALARS_API std::size_t scalar_type_size(scalar_type type) noexcept;
 }  // namespace scalars

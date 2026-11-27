@@ -75,8 +75,7 @@ SCALARS_FUNCTION_ATTRIBUTE T inv_cdf(T a)
 #endif
 }
 
-template <
-    typename T1,
+template <typename T1,
     typename T2,
     std::enable_if_t<std::is_fundamental<T1>::value && std::is_fundamental<T2>::value, int> = 0>
 SCALARS_FUNCTION_ATTRIBUTE auto add(T1 a, T2 b)
@@ -84,8 +83,7 @@ SCALARS_FUNCTION_ATTRIBUTE auto add(T1 a, T2 b)
     return a + b;
 }
 
-template <
-    typename T1,
+template <typename T1,
     typename T2,
     std::enable_if_t<std::is_fundamental<T1>::value && std::is_fundamental<T2>::value, int> = 0>
 SCALARS_FUNCTION_ATTRIBUTE auto sub(T1 a, T2 b)
@@ -93,8 +91,7 @@ SCALARS_FUNCTION_ATTRIBUTE auto sub(T1 a, T2 b)
     return a - b;
 }
 
-template <
-    typename T1,
+template <typename T1,
     typename T2,
     std::enable_if_t<std::is_fundamental<T1>::value && std::is_fundamental<T2>::value, int> = 0>
 SCALARS_FUNCTION_ATTRIBUTE auto mul(T1 a, T2 b)
@@ -102,8 +99,7 @@ SCALARS_FUNCTION_ATTRIBUTE auto mul(T1 a, T2 b)
     return a * b;
 }
 
-template <
-    typename T1,
+template <typename T1,
     typename T2,
     std::enable_if_t<std::is_fundamental<T1>::value && std::is_fundamental<T2>::value, int> = 0>
 SCALARS_FUNCTION_ATTRIBUTE auto div(T1 a, T2 b)
@@ -111,8 +107,7 @@ SCALARS_FUNCTION_ATTRIBUTE auto div(T1 a, T2 b)
     return a / b;
 }
 
-template <
-    typename T1,
+template <typename T1,
     typename T2,
     std::enable_if_t<std::is_fundamental<T1>::value && std::is_fundamental<T2>::value, int> = 0>
 SCALARS_FUNCTION_ATTRIBUTE auto eq(T1 a, T2 b)
@@ -120,8 +115,7 @@ SCALARS_FUNCTION_ATTRIBUTE auto eq(T1 a, T2 b)
     return a == b;
 }
 
-template <
-    typename T1,
+template <typename T1,
     typename T2,
     std::enable_if_t<std::is_fundamental<T1>::value && std::is_fundamental<T2>::value, int> = 0>
 SCALARS_FUNCTION_ATTRIBUTE auto neq(T1 a, T2 b)
@@ -129,8 +123,7 @@ SCALARS_FUNCTION_ATTRIBUTE auto neq(T1 a, T2 b)
     return a != b;
 }
 
-template <
-    typename T1,
+template <typename T1,
     typename T2,
     std::enable_if_t<std::is_fundamental<T1>::value && std::is_fundamental<T2>::value, int> = 0>
 SCALARS_FUNCTION_ATTRIBUTE auto gt(T1 a, T2 b)
@@ -138,8 +131,7 @@ SCALARS_FUNCTION_ATTRIBUTE auto gt(T1 a, T2 b)
     return a > b;
 }
 
-template <
-    typename T1,
+template <typename T1,
     typename T2,
     std::enable_if_t<std::is_fundamental<T1>::value && std::is_fundamental<T2>::value, int> = 0>
 SCALARS_FUNCTION_ATTRIBUTE auto ge(T1 a, T2 b)
@@ -147,8 +139,7 @@ SCALARS_FUNCTION_ATTRIBUTE auto ge(T1 a, T2 b)
     return a >= b;
 }
 
-template <
-    typename T1,
+template <typename T1,
     typename T2,
     std::enable_if_t<std::is_fundamental<T1>::value && std::is_fundamental<T2>::value, int> = 0>
 SCALARS_FUNCTION_ATTRIBUTE auto lt(T1 a, T2 b)
@@ -156,8 +147,7 @@ SCALARS_FUNCTION_ATTRIBUTE auto lt(T1 a, T2 b)
     return a < b;
 }
 
-template <
-    typename T1,
+template <typename T1,
     typename T2,
     std::enable_if_t<std::is_fundamental<T1>::value && std::is_fundamental<T2>::value, int> = 0>
 SCALARS_FUNCTION_ATTRIBUTE auto le(T1 a, T2 b)
@@ -165,8 +155,7 @@ SCALARS_FUNCTION_ATTRIBUTE auto le(T1 a, T2 b)
     return a <= b;
 }
 
-template <
-    typename T1,
+template <typename T1,
     typename T2,
     std::enable_if_t<std::is_fundamental<T1>::value && std::is_fundamental<T2>::value, int> = 0>
 SCALARS_FUNCTION_ATTRIBUTE auto cmple(T1 a, T2 b)
@@ -180,8 +169,7 @@ SCALARS_FUNCTION_ATTRIBUTE auto lnot(T1 a)
     return !a;
 }
 
-template <
-    typename T1,
+template <typename T1,
     typename T2,
     std::enable_if_t<std::is_fundamental<T1>::value && std::is_fundamental<T2>::value, int> = 0>
 SCALARS_FUNCTION_ATTRIBUTE auto lxor(T1 a, T2 b)
@@ -189,8 +177,7 @@ SCALARS_FUNCTION_ATTRIBUTE auto lxor(T1 a, T2 b)
     return a ^ b;
 }
 
-template <
-    typename T1,
+template <typename T1,
     typename T2,
     std::enable_if_t<std::is_fundamental<T1>::value && std::is_fundamental<T2>::value, int> = 0>
 SCALARS_FUNCTION_ATTRIBUTE auto land(T1 a, T2 b)
@@ -198,8 +185,7 @@ SCALARS_FUNCTION_ATTRIBUTE auto land(T1 a, T2 b)
     return a && b;
 }
 
-template <
-    typename T1,
+template <typename T1,
     typename T2,
     std::enable_if_t<std::is_fundamental<T1>::value && std::is_fundamental<T2>::value, int> = 0>
 SCALARS_FUNCTION_ATTRIBUTE auto lor(T1 a, T2 b)
@@ -207,8 +193,7 @@ SCALARS_FUNCTION_ATTRIBUTE auto lor(T1 a, T2 b)
     return a || b;
 }
 
-template <
-    typename T1,
+template <typename T1,
     typename T2,
     std::enable_if_t<std::is_fundamental<T1>::value && std::is_fundamental<T2>::value, int> = 0>
 SCALARS_FUNCTION_ATTRIBUTE auto if_else(bool a, T1 b, T2 c)

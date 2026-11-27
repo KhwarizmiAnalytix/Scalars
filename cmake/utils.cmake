@@ -222,14 +222,16 @@ if(_scalars_vec_is_x86)
     if(SCALARS_MATH_BACKEND_RESOLVED STREQUAL "svml")
         find_package(SVML QUIET)
         if(SVML_FOUND)
-            message(STATUS
-                "Scalars: SVML ThirdParty package found. Runtime files: ${SVML_RUNTIME_LIBRARIES}"
+            message(
+                STATUS
+                    "Scalars: SVML ThirdParty package found. Runtime files: ${SVML_RUNTIME_LIBRARIES}"
             )
         else()
-            message(WARNING
-                "SCALARS_MATH_BACKEND resolved to svml but ThirdParty SVML binaries were not found; "
-                "falling back to the built-in vector math (auto). "
-                "Ensure ThirdParty/svml/ contains the required libraries."
+            message(
+                WARNING
+                    "SCALARS_MATH_BACKEND resolved to svml but ThirdParty SVML binaries were not found; "
+                    "falling back to the built-in vector math (auto). "
+                    "Ensure ThirdParty/svml/ contains the required libraries."
             )
         endif()
     endif()
@@ -281,8 +283,9 @@ if(_scalars_vec_is_aarch64)
         SCALARS_COMPILER_SUPPORTS_SVE
     )
     if(SCALARS_COMPILER_SUPPORTS_SVE AND SCALARS_CPU_BACKEND STREQUAL "sve")
-        message(STATUS
-            "Scalars: compiler supports AArch64 SVE (${SCALARS_SVE_VECTOR_BITS}-bit vector length)."
+        message(
+            STATUS
+                "Scalars: compiler supports AArch64 SVE (${SCALARS_SVE_VECTOR_BITS}-bit vector length)."
         )
         set(_scalars_has_sve 1)
         set(_scalars_simd_active TRUE)

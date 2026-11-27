@@ -1,5 +1,7 @@
 #pragma once
 
+#include "backend/simd_base.h"
+
 #include <type_traits>
 
 #if SCALARS_HAS_SVML || SCALARS_HAS_SLEEF
@@ -21,8 +23,7 @@
 namespace scalars
 {
 
-template <>
-struct simd<double>
+template <> struct simd<double>
 {
     using simd_t      = __m256d;
     using mask_t      = __m256d;
@@ -52,8 +53,7 @@ struct simd<double>
 
     SCALARS_SIMD_RETURN_TYPE storeu(simd_t from, value_t* to) { _mm256_storeu_pd(to, from); }
 
-    template <
-        typename scalar_t,
+    template <typename scalar_t,
         typename std::enable_if<std::is_fundamental<scalar_t>::value, bool>::type = true>
     SCALARS_SIMD_METHOD simd_t set(const scalar_t alpha)
     {
@@ -67,9 +67,15 @@ struct simd<double>
     //======================================================================================
     SCALARS_SIMD_METHOD simd_t add(simd_t x, simd_t y) { return _mm256_add_pd(x, y); }
 
-    SCALARS_SIMD_METHOD simd_t sub(simd_t x, simd_t y) { return _mm256_sub_pd(x, y); }  // NOLINT(portability-simd-intrinsics)
+    SCALARS_SIMD_METHOD simd_t sub(simd_t x, simd_t y)
+    {
+        return _mm256_sub_pd(x, y);
+    }  // NOLINT(portability-simd-intrinsics)
 
-    SCALARS_SIMD_METHOD simd_t mul(simd_t x, simd_t y) { return _mm256_mul_pd(x, y); }  // NOLINT(portability-simd-intrinsics)
+    SCALARS_SIMD_METHOD simd_t mul(simd_t x, simd_t y)
+    {
+        return _mm256_mul_pd(x, y);
+    }  // NOLINT(portability-simd-intrinsics)
 
     SCALARS_SIMD_METHOD simd_t div(simd_t x, simd_t y) { return _mm256_div_pd(x, y); }
 
@@ -86,9 +92,15 @@ struct simd<double>
 
     SCALARS_SIMD_METHOD simd_t hypot(simd_t x, simd_t y) { return x86_math::hypot(x, y); }
 
-    SCALARS_SIMD_METHOD simd_t min(simd_t x, simd_t y) { return _mm256_min_pd(x, y); }  // NOLINT(portability-simd-intrinsics)
+    SCALARS_SIMD_METHOD simd_t min(simd_t x, simd_t y)
+    {
+        return _mm256_min_pd(x, y);
+    }  // NOLINT(portability-simd-intrinsics)
 
-    SCALARS_SIMD_METHOD simd_t max(simd_t x, simd_t y) { return _mm256_max_pd(x, y); }  // NOLINT(portability-simd-intrinsics)
+    SCALARS_SIMD_METHOD simd_t max(simd_t x, simd_t y)
+    {
+        return _mm256_max_pd(x, y);
+    }  // NOLINT(portability-simd-intrinsics)
 
     SCALARS_SIMD_METHOD simd_t signcopy(simd_t x, simd_t sign)
     {
@@ -100,7 +112,10 @@ struct simd<double>
     //======================================================================================
     SCALARS_SIMD_METHOD simd_t sqrt(simd_t x) { return _mm256_sqrt_pd(x); }
 
-    SCALARS_SIMD_METHOD simd_t sqr(simd_t x) { return _mm256_mul_pd(x, x); }  // NOLINT(portability-simd-intrinsics)
+    SCALARS_SIMD_METHOD simd_t sqr(simd_t x)
+    {
+        return _mm256_mul_pd(x, x);
+    }  // NOLINT(portability-simd-intrinsics)
     SCALARS_SIMD_METHOD simd_t ceil(simd_t x) { return _mm256_ceil_pd(x); }
 
     SCALARS_SIMD_METHOD simd_t floor(simd_t x) { return _mm256_floor_pd(x); }
@@ -149,7 +164,8 @@ struct simd<double>
     //======================================================================================
     SCALARS_FORCE_INLINE static double accumulate(simd_t x)
     {
-        const auto& t1 = _mm_add_pd(_mm256_extractf128_pd(x, 1), _mm256_castpd256_pd128(x));  // NOLINT(portability-simd-intrinsics)
+        const auto& t1 = _mm_add_pd(_mm256_extractf128_pd(x, 1),
+            _mm256_castpd256_pd128(x));  // NOLINT(portability-simd-intrinsics)
         const auto& t2 = _mm_unpackhi_pd(t1, t1);
 
         return _mm_cvtsd_f64(_mm_add_sd(t1, t2));  // NOLINT(portability-simd-intrinsics)
@@ -157,14 +173,18 @@ struct simd<double>
 
     SCALARS_FORCE_INLINE static value_t hmax(simd_t x)
     {
-        const auto& t = _mm256_max_pd(x, _mm256_permute2f128_pd(x, x, 1));  // NOLINT(portability-simd-intrinsics)
-        return _mm256_cvtsd_f64(_mm256_max_pd(t, _mm256_permute_pd(t, 5)));  // NOLINT(portability-simd-intrinsics)
+        const auto& t = _mm256_max_pd(
+            x, _mm256_permute2f128_pd(x, x, 1));  // NOLINT(portability-simd-intrinsics)
+        return _mm256_cvtsd_f64(
+            _mm256_max_pd(t, _mm256_permute_pd(t, 5)));  // NOLINT(portability-simd-intrinsics)
     }
 
     SCALARS_FORCE_INLINE static value_t hmin(simd_t x)
     {
-        const auto& tmp = _mm256_min_pd(x, _mm256_permute2f128_pd(x, x, 1));  // NOLINT(portability-simd-intrinsics)
-        return _mm256_cvtsd_f64(_mm256_min_pd(tmp, _mm256_permute_pd(tmp, 5)));  // NOLINT(portability-simd-intrinsics)
+        const auto& tmp = _mm256_min_pd(
+            x, _mm256_permute2f128_pd(x, x, 1));  // NOLINT(portability-simd-intrinsics)
+        return _mm256_cvtsd_f64(
+            _mm256_min_pd(tmp, _mm256_permute_pd(tmp, 5)));  // NOLINT(portability-simd-intrinsics)
     }
 
     //======================================================================================
@@ -182,10 +202,10 @@ struct simd<double>
         to[0]      = _mm_cvtsd_f64(low);
         to[stride] = _mm_cvtsd_f64(_mm_shuffle_pd(low, low, 1));
 
-        const auto s   = static_cast<ptrdiff_t>(stride);
-        auto high      = _mm256_extractf128_pd(from, 1);
-        to[s * 2]      = _mm_cvtsd_f64(high);
-        to[s * 3]      = _mm_cvtsd_f64(_mm_shuffle_pd(high, high, 1));
+        const auto s    = static_cast<ptrdiff_t>(stride);
+        auto       high = _mm256_extractf128_pd(from, 1);
+        to[s * 2]       = _mm_cvtsd_f64(high);
+        to[s * 3]       = _mm_cvtsd_f64(_mm_shuffle_pd(high, high, 1));
     }
 
     SCALARS_SIMD_METHOD simd_t gather(value_t const* from, const int* strides)
@@ -218,35 +238,17 @@ struct simd<double>
         return _mm256_blendv_pd(z, y, x);
     }
 
-    SCALARS_SIMD_METHOD mask_t eq(simd_t x, simd_t y)
-    {
-        return _mm256_cmp_pd(x, y, _CMP_EQ_OQ);
-    }
+    SCALARS_SIMD_METHOD mask_t eq(simd_t x, simd_t y) { return _mm256_cmp_pd(x, y, _CMP_EQ_OQ); }
 
-    SCALARS_SIMD_METHOD mask_t neq(simd_t x, simd_t y)
-    {
-        return _mm256_cmp_pd(x, y, _CMP_NEQ_UQ);
-    }
+    SCALARS_SIMD_METHOD mask_t neq(simd_t x, simd_t y) { return _mm256_cmp_pd(x, y, _CMP_NEQ_UQ); }
 
-    SCALARS_SIMD_METHOD mask_t gt(simd_t x, simd_t y)
-    {
-        return _mm256_cmp_pd(x, y, _CMP_GT_OS);
-    }
+    SCALARS_SIMD_METHOD mask_t gt(simd_t x, simd_t y) { return _mm256_cmp_pd(x, y, _CMP_GT_OS); }
 
-    SCALARS_SIMD_METHOD mask_t lt(simd_t x, simd_t y)
-    {
-        return _mm256_cmp_pd(x, y, _CMP_LT_OS);
-    }
+    SCALARS_SIMD_METHOD mask_t lt(simd_t x, simd_t y) { return _mm256_cmp_pd(x, y, _CMP_LT_OS); }
 
-    SCALARS_SIMD_METHOD mask_t ge(simd_t x, simd_t y)
-    {
-        return _mm256_cmp_pd(x, y, _CMP_GE_OS);
-    }
+    SCALARS_SIMD_METHOD mask_t ge(simd_t x, simd_t y) { return _mm256_cmp_pd(x, y, _CMP_GE_OS); }
 
-    SCALARS_SIMD_METHOD mask_t le(simd_t x, simd_t y)
-    {
-        return _mm256_cmp_pd(x, y, _CMP_LE_OS);
-    }
+    SCALARS_SIMD_METHOD mask_t le(simd_t x, simd_t y) { return _mm256_cmp_pd(x, y, _CMP_LE_OS); }
 
     //======================================================================================
     // comparison function
@@ -306,8 +308,7 @@ struct simd<double>
         _mm256_storeu_pd(to, _mm256_loadu_pd(from));
     }
 
-    template <int N>
-    SCALARS_SIMD_RETURN_TYPE ptranspose(simd_t x[N])  // NOLINT
+    template <int N> SCALARS_SIMD_RETURN_TYPE ptranspose(simd_t x[N])  // NOLINT
     {
         auto T0 = _mm256_shuffle_pd(x[0], x[1], 15);
         auto T1 = _mm256_shuffle_pd(x[0], x[1], 0);
@@ -320,10 +321,7 @@ struct simd<double>
         x[2] = _mm256_permute2f128_pd(T1, T3, 49);
     }
 
-    SCALARS_SIMD_METHOD simd_t ploadquad(const double* from)
-    {
-        return _mm256_broadcast_sd(from);
-    }
+    SCALARS_SIMD_METHOD simd_t ploadquad(const double* from) { return _mm256_broadcast_sd(from); }
 };
 
 }  // namespace scalars

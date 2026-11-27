@@ -93,11 +93,32 @@ inline float trig_reduce_huge(float xf, std::int32_t* quadrant)
     const std::uint64_t zero_dot_five = std::uint64_t(1) << 61;  // 0.5 in 2.62 fixed point
 
     // 192 bits of 2/pi, replicated in packets of 8 for aligned reads.
-    static const std::uint32_t two_over_pi[] = {
-        0x00000028, 0x000028be, 0x0028be60, 0x28be60db, 0xbe60db93, 0x60db9391, 0xdb939105,
-        0x9391054a, 0x91054a7f, 0x054a7f09, 0x4a7f09d5, 0x7f09d5f4, 0x09d5f47d, 0xd5f47d4d,
-        0xf47d4d37, 0x7d4d3770, 0x4d377036, 0x377036d8, 0x7036d8a5, 0x36d8a566, 0xd8a5664f,
-        0xa5664f10, 0x664f10e4, 0x4f10e410, 0x10e41000, 0xe4100000};
+    static const std::uint32_t two_over_pi[] = {0x00000028,
+        0x000028be,
+        0x0028be60,
+        0x28be60db,
+        0xbe60db93,
+        0x60db9391,
+        0xdb939105,
+        0x9391054a,
+        0x91054a7f,
+        0x054a7f09,
+        0x4a7f09d5,
+        0x7f09d5f4,
+        0x09d5f47d,
+        0xd5f47d4d,
+        0xf47d4d37,
+        0x7d4d3770,
+        0x4d377036,
+        0x377036d8,
+        0x7036d8a5,
+        0x36d8a566,
+        0xd8a5664f,
+        0xa5664f10,
+        0x664f10e4,
+        0x4f10e410,
+        0x10e41000,
+        0xe4100000};
 
     std::uint32_t xi = 0;
     std::memcpy(&xi, &xf, sizeof(xi));
@@ -209,21 +230,21 @@ template <class O> struct packet_math
     // with a zero exponent.
     static V frexp(V a, V& exponent)
     {
-        constexpr int kExpBits       = kBits - kMant - 1;
-        constexpr U   kSignMantMask  = ~(((U(1) << kExpBits) - U(1)) << kMant);
-        const V       normal_min     = cst(std::numeric_limits<T>::min());
-        const V       is_denormal    = O::lt(abs(a), normal_min);
-        const V       normalized_a   = O::select(is_denormal, O::mul(a, cst(T(U(1) << (kMant + 1)))), a);
-        const V       normal_offset  = cst(-T(kBias - 1));
-        const V       exponent_offset = O::select(
-            is_denormal, O::add(normal_offset, cst(-T(kMant + 1))), normal_offset);
+        constexpr int kExpBits      = kBits - kMant - 1;
+        constexpr U   kSignMantMask = ~(((U(1) << kExpBits) - U(1)) << kMant);
+        const V       normal_min    = cst(std::numeric_limits<T>::min());
+        const V       is_denormal   = O::lt(abs(a), normal_min);
+        const V normalized_a  = O::select(is_denormal, O::mul(a, cst(T(U(1) << (kMant + 1)))), a);
+        const V normal_offset = cst(-T(kBias - 1));
+        const V exponent_offset =
+            O::select(is_denormal, O::add(normal_offset, cst(-T(kMant + 1))), normal_offset);
 
         exponent = int_to_float(shr<kMant>(abs(normalized_a)));
         const V is_zero_or_not_finite =
             O::bor(O::eq(a, zero()), O::eq(exponent, cst(T((1 << kExpBits) - 1))));
         const V m = O::select(is_zero_or_not_finite,
-                              a,
-                              O::bor(O::band(normalized_a, bits(kSignMantMask)), cst(T(0.5))));
+            a,
+            O::bor(O::band(normalized_a, bits(kSignMantMask)), cst(T(0.5))));
         exponent  = O::select(is_zero_or_not_finite, zero(), O::add(exponent, exponent_offset));
         return m;
     }
@@ -234,13 +255,13 @@ template <class O> struct packet_math
     {
         constexpr int kExpBits = kBits - kMant - 1;
         const V       max_exp  = cst(T((1 << kExpBits) + (kMant - 1)));  // 278 / 2099
-        const V       last_max = cst(T(kBias - 1));                       // 126 / 1022
-        const V       e = float_to_int(O::min(O::max(exponent, negate(max_exp)), max_exp));
-        const V       b = float_to_int(O::min(O::max(exponent, negate(last_max)), last_max));
-        const V       t = O::bandnot(O::isub(e, b), bits(U(1)));  // even
+        const V       last_max = cst(T(kBias - 1));                      // 126 / 1022
+        const V       e        = float_to_int(O::min(O::max(exponent, negate(max_exp)), max_exp));
+        const V       b        = float_to_int(O::min(O::max(exponent, negate(last_max)), last_max));
+        const V       t        = O::bandnot(O::isub(e, b), bits(U(1)));               // even
         const V       c1       = shl<kMant - 1>(O::iadd(t, bits(U(2) * U(kBias))));   // 2^(t/2)
         const V       c2       = shl<kMant>(O::iadd(O::isub(e, t), bits(U(kBias))));  // 2^(e-t)
-        V             out = O::mul(a, c1);
+        V             out      = O::mul(a, c1);
         O::barrier(out);
         out = O::mul(out, c1);
         O::barrier(out);
@@ -252,7 +273,7 @@ template <class O> struct packet_math
     SCALARS_FORCE_INLINE static V ldexp_fast(V a, V exponent)
     {
         const V limit = cst(T(2 * kBias + 1));
-        const V e     = float_to_int(O::min(O::max(O::add(exponent, cst(T(kBias))), zero()), limit));
+        const V e = float_to_int(O::min(O::max(O::add(exponent, cst(T(kBias))), zero()), limit));
         return O::mul(a, shl<kMant>(e));
     }
 
@@ -264,7 +285,7 @@ template <class O> struct packet_math
     SCALARS_FORCE_INLINE static void veltkamp(V x, V& x_hi, V& x_lo)
     {
         constexpr int shift = (kDigits + 1) / 2;
-        V gamma = O::mul(cst(T(U(1) << shift) + T(1)), x);
+        V             gamma = O::mul(cst(T(U(1) << shift) + T(1)), x);
         O::barrier(gamma);
         V rho = O::sub(x, gamma);
         O::barrier(rho);
@@ -331,9 +352,9 @@ template <class O> struct packet_math
     // x + y = s_hi + s_lo exactly when |x| >= |y|.
     SCALARS_FORCE_INLINE static void fast_twosum(V x, V y, V& s_hi, V& s_lo)
     {
-        s_hi    = O::add(x, y);
+        s_hi      = O::add(x, y);
         const V t = O::sub(s_hi, x);
-        s_lo    = O::sub(y, t);
+        s_lo      = O::sub(y, t);
     }
 
     // {x_hi, x_lo} + {y_hi, y_lo}, assuming |x_hi| >= |y_hi|.
@@ -432,13 +453,13 @@ template <class O> struct packet_math
         {
             // log(1 + f) = f + f^2 P(f), Sollya fpminimax, error < 2.04e-8.
             constexpr float c[] = {8.8758550584316254e-02f,
-                                   -1.4199858903884888e-01f,
-                                   1.4824025332927704e-01f,
-                                   -1.6583317518234253e-01f,
-                                   1.9972395896911621e-01f,
-                                   -2.5001299381256104e-01f,
-                                   3.3333668112754822e-01f,
-                                   -4.9999997019767761e-01f};
+                -1.4199858903884888e-01f,
+                1.4824025332927704e-01f,
+                -1.6583317518234253e-01f,
+                1.9972395896911621e-01f,
+                -2.5001299381256104e-01f,
+                3.3333668112754822e-01f,
+                -4.9999997019767761e-01f};
             return madd(polevl(f, c), O::mul(f, f), f);
         }
         else
@@ -495,8 +516,9 @@ template <class O> struct packet_math
             const V log_x      = log(x);
             const V finite     = O::lt(abs(log_x), inf());
             const V finite_log = O::select(finite, log_x, zero());
-            const V split = madd(finite_log, cst(0.4342944920063018f),
-                                 O::mul(finite_log, cst(-1.0103049952192578e-08f)));
+            const V split      = madd(finite_log,
+                cst(0.4342944920063018f),
+                O::mul(finite_log, cst(-1.0103049952192578e-08f)));
             return O::select(finite, split, log_x);
         }
         else
@@ -522,8 +544,8 @@ template <class O> struct packet_math
         V          result  = madd(e, cst(kLn2), O::add(log_u, O::div(dx, u)));
         // On the kernel's own interval, log(1 + x) comes from x itself, without the rounding of
         // u and its first-order correction: 1 ulp instead of 1.6 for float near 0.
-        const V in_kernel = O::band(O::le(cst(T(-0.29289321881345247560)), x),
-                                    O::le(x, cst(T(0.41421356237309504880))));
+        const V in_kernel = O::band(
+            O::le(cst(T(-0.29289321881345247560)), x), O::le(x, cst(T(0.41421356237309504880))));
         result = O::select(in_kernel, log_mantissa(x), result);
         result = O::select(small, x, result);
         if (!special)
@@ -546,13 +568,13 @@ template <class O> struct packet_math
         if constexpr (kFloat)
         {
             const V r2     = O::mul(r, r);
-            V       p_even = madd(r2, cst(1.37449637986719608306884765625e-3f),
-                                  cst(4.166965186595916748046875e-2f));
-            const V p_odd  = madd(r2, cst(8.36894474923610687255859375e-3f),
-                                  cst(0.16666518151760101318359375f));
-            p_even         = madd(r2, p_even, cst(0.49999988079071044921875f));
-            const V p_low  = O::add(r, one());
-            const V y      = madd(r, p_odd, p_even);
+            V       p_even = madd(
+                r2, cst(1.37449637986719608306884765625e-3f), cst(4.166965186595916748046875e-2f));
+            const V p_odd =
+                madd(r2, cst(8.36894474923610687255859375e-3f), cst(0.16666518151760101318359375f));
+            p_even        = madd(r2, p_even, cst(0.49999988079071044921875f));
+            const V p_low = O::add(r, one());
+            const V y     = madd(r, p_odd, p_even);
             return madd(r2, y, p_low);
         }
         else
@@ -577,12 +599,13 @@ template <class O> struct packet_math
         const V r2 = O::mul(r, r);
         if constexpr (kFloat)
         {
-            V p_even = madd(r2, cst(1.393371261656284332275390625e-3f),
-                            cst(4.16664779186248779296875e-2f));
-            V p_odd  = madd(r2, cst(1.97434448637068271636962890625e-4f),
-                            cst(8.333566598594188690185546875e-3f));
-            p_even   = madd(r2, p_even, cst(0.5f));
-            p_odd    = madd(r2, p_odd, cst(0.1666666567325592041015625f));
+            V p_even = madd(
+                r2, cst(1.393371261656284332275390625e-3f), cst(4.16664779186248779296875e-2f));
+            V p_odd   = madd(r2,
+                cst(1.97434448637068271636962890625e-4f),
+                cst(8.333566598594188690185546875e-3f));
+            p_even    = madd(r2, p_even, cst(0.5f));
+            p_odd     = madd(r2, p_odd, cst(0.1666666567325592041015625f));
             const V y = madd(r, p_odd, p_even);
             return madd(r2, y, r);
         }
@@ -614,7 +637,7 @@ template <class O> struct packet_math
             const V m = O::rint(O::mul(x, cst(1.44269504088896341f)));
             V       r = nmadd(m, cst(kLn2Hi), x);
             O::barrier(r);  // -ffast-math would otherwise fuse the two products into m ln(2)
-            r = nmadd(m, cst(kLn2Lo), r);
+            r   = nmadd(m, cst(kLn2Lo), r);
             V y = exp_reduced(r);
 
             // 2^m = 2^(m/2) 2^(m - m/2): each factor is a normal float for |m| <= 150, so the
@@ -654,9 +677,9 @@ template <class O> struct packet_math
         const V n       = O::rint(O::mul(x, cst(kLog2e)));
         V       r       = nmadd(n, cst(kLn2Hi), x);
         O::barrier(r);
-        r            = nmadd(n, cst(kLn2Lo), r);
-        const V em1  = expm1_reduced(r);
-        V       c    = O::sub(one(), ldexp_fast(one(), negate(O::min(n, cst(T(kDigits + 2))))));
+        r           = nmadd(n, cst(kLn2Lo), r);
+        const V em1 = expm1_reduced(r);
+        V       c   = O::sub(one(), ldexp_fast(one(), negate(O::min(n, cst(T(kDigits + 2))))));
         O::barrier(c);
         V y = ldexp_fast(O::add(em1, c), O::sub(n, one()));
         O::barrier(y);
@@ -684,9 +707,9 @@ template <class O> struct packet_math
     SCALARS_FORCE_INLINE static V exp2_reduced(V f)
     {
         const T ln2_hi = kLn2;
-        const T ln2_lo = T((0.693147180559945309417232121458176568 - double(ln2_hi)) +
-                           2.3190468138462996e-17);
-        V       r_hi, r_lo;
+        const T ln2_lo =
+            T((0.693147180559945309417232121458176568 - double(ln2_hi)) + 2.3190468138462996e-17);
+        V r_hi, r_lo;
         twoprod(cst(ln2_hi), f, r_hi, r_lo);
         r_lo      = madd(cst(ln2_lo), f, r_lo);
         const V e = exp_reduced(r_hi);
@@ -721,7 +744,7 @@ template <class O> struct packet_math
         constexpr T      kL_hi     = kFloat ? T(3.321928024291992) : T(3.321928094887362);
         constexpr T      kL_lo     = kFloat ? T(7.059536955011936e-08) : T(1.661617516973592e-16);
         const V          x         = O::max(O::min(x_in, cst(T((kMaxExp + 1) / kLog2Of10))),
-                           cst(T(-(kMaxExp + kDigits - 1) / kLog2Of10)));
+            cst(T(-(kMaxExp + kDigits - 1) / kLog2Of10)));
         V                t_hi, t_lo;
         twoprod(x, cst(kL_hi), t_hi, t_lo);
         t_lo      = madd(x, cst(kL_lo), t_lo);
@@ -797,7 +820,7 @@ template <class O> struct packet_math
             huge_th = 71476.0625f;
             x       = madd(y, cst(-1.57079601287841796875f), x);
             x       = madd(y, cst(-3.1391647326017846353352069854736328125e-07f), x);
-            x       = madd(y, cst(-5.390302529957764765544681040410068817436695098876953125e-15f), x);
+            x = madd(y, cst(-5.390302529957764765544681040410068817436695098876953125e-15f), x);
         }
         else
         {
@@ -843,10 +866,11 @@ template <class O> struct packet_math
         pc   = madd(pc, x2, one());
         // sin(x) on [-pi/4, pi/4].
         V ps = cst(-0.0001959234114083702898469196984621021329076029360294342041015625f);
-        ps   = madd(ps, x2, cst(0.0083326873655616851693794799871284340042620897293090820312500000f));
-        ps   = madd(ps, x2, cst(-0.1666666203982298255503735617821803316473960876464843750000000000f));
-        ps   = O::mul(ps, x2);
-        ps   = madd(ps, x, x);
+        ps = madd(ps, x2, cst(0.0083326873655616851693794799871284340042620897293090820312500000f));
+        ps =
+            madd(ps, x2, cst(-0.1666666203982298255503735617821803316473960876464843750000000000f));
+        ps = O::mul(ps, x2);
+        ps = madd(ps, x, x);
 
         trig_finish(x_in, q, ps, pc, sin_out, cos_out);
     }
@@ -894,8 +918,12 @@ template <class O> struct packet_math
         {
             // Double-word x * 2/pi for the quadrant.
             V prod_hi, prod_lo;
-            twoprod(x_abs, cst(0.63661977236758138243288840385503135621547698974609375), prod_hi, prod_lo);
-            prod_lo = madd(x_abs, cst(-3.9357353350364971763790381828183628368294820823718866e-17), prod_lo);
+            twoprod(x_abs,
+                cst(0.63661977236758138243288840385503135621547698974609375),
+                prod_hi,
+                prod_lo);
+            prod_lo = madd(
+                x_abs, cst(-3.9357353350364971763790381828183628368294820823718866e-17), prod_lo);
             V       q    = O::rint(prod_hi);
             const V frac = O::add(O::sub(prod_hi, q), prod_lo);
             q            = O::add(q, O::band(O::lt(cst(0.5), frac), one()));
@@ -906,7 +934,8 @@ template <class O> struct packet_math
         else
         {
             const V bias     = cst(6755399441055744.0);  // 1.5 * 2^52
-            V       biased_q = O::add(O::mul(x_abs, cst(0.63661977236758138243288840385503135621547698974609375)), bias);
+            V       biased_q = O::add(
+                O::mul(x_abs, cst(0.63661977236758138243288840385503135621547698974609375)), bias);
             O::barrier(biased_q);
             q_int     = biased_q;
             const V q = O::sub(biased_q, bias);
@@ -927,23 +956,35 @@ template <class O> struct packet_math
 
         const V ss = O::mul(s, s);
         // cos(x) = 1 + u P(u), u = x^2, on [-pi/4, pi/4].
-        V scos = cst(-1.1368926065317776472832699312119132152576472805094454088248312473297119140625e-11);
-        scos   = madd(scos, ss, cst(2.0875905481768720039634091158002593413556269297259859740734100341796875e-09));
-        scos   = madd(scos, ss, cst(-2.7557315712466412785356544880299711763882442028261721134185791015625e-07));
-        scos   = madd(scos, ss, cst(2.480158729424286522739599714082459058772656135261058807373046875e-05));
-        scos   = madd(scos, ss, cst(-1.388888888888178789471350427220386336557567119598388671875e-03));
-        scos   = madd(scos, ss, cst(4.166666666666664353702032030923874117434024810791015625e-02));
-        scos   = madd(scos, ss, cst(-0.5));
-        scos   = madd(scos, ss, one());
+        V scos = cst(
+            -1.1368926065317776472832699312119132152576472805094454088248312473297119140625e-11);
+        scos = madd(scos,
+            ss,
+            cst(2.0875905481768720039634091158002593413556269297259859740734100341796875e-09));
+        scos = madd(scos,
+            ss,
+            cst(-2.7557315712466412785356544880299711763882442028261721134185791015625e-07));
+        scos = madd(
+            scos, ss, cst(2.480158729424286522739599714082459058772656135261058807373046875e-05));
+        scos =
+            madd(scos, ss, cst(-1.388888888888178789471350427220386336557567119598388671875e-03));
+        scos = madd(scos, ss, cst(4.166666666666664353702032030923874117434024810791015625e-02));
+        scos = madd(scos, ss, cst(-0.5));
+        scos = madd(scos, ss, one());
         // sin(x) = x (1 + u R(u)) on [-pi/4, pi/4].
-        V ssin = cst(1.59193066075142890698150587293845624470289834562208852730691432952880859375e-10);
-        ssin   = madd(ssin, ss, cst(-2.50511517945670206974594627392927126408039839589037001132965087890625e-08));
-        ssin   = madd(ssin, ss, cst(2.755731622544328228235042954619160582296899519860744476318359375e-06));
-        ssin   = madd(ssin, ss, cst(-1.9841269837089632013978068858506276228581555187702178955078125e-04));
-        ssin   = madd(ssin, ss, cst(8.333333333331312264835588621281203813850879669189453125e-03));
-        ssin   = madd(ssin, ss, cst(-0.1666666666666666574148081281236954964697360992431640625));
-        ssin   = O::mul(ssin, ss);
-        ssin   = madd(ssin, s, s);
+        V ssin =
+            cst(1.59193066075142890698150587293845624470289834562208852730691432952880859375e-10);
+        ssin = madd(ssin,
+            ss,
+            cst(-2.50511517945670206974594627392927126408039839589037001132965087890625e-08));
+        ssin = madd(
+            ssin, ss, cst(2.755731622544328228235042954619160582296899519860744476318359375e-06));
+        ssin = madd(
+            ssin, ss, cst(-1.9841269837089632013978068858506276228581555187702178955078125e-04));
+        ssin = madd(ssin, ss, cst(8.333333333331312264835588621281203813850879669189453125e-03));
+        ssin = madd(ssin, ss, cst(-0.1666666666666666574148081281236954964697360992431640625));
+        ssin = O::mul(ssin, ss);
+        ssin = madd(ssin, s, s);
 
         trig_finish(x_in, q_int, ssin, scos, sin_out, cos_out);
 
@@ -981,12 +1022,12 @@ template <class O> struct packet_math
         {
             (void)large_mask;
             constexpr float alpha[] = {1.12026982009410858154296875e-01f,
-                                       7.296695709228515625e-01f,
-                                       8.109951019287109375e-01f};
+                7.296695709228515625e-01f,
+                8.109951019287109375e-01f};
             constexpr float beta[]  = {1.00917108356952667236328125e-02f,
-                                       2.8318560123443603515625e-01f,
-                                       1.0f,
-                                       8.109951019287109375e-01f};
+                 2.8318560123443603515625e-01f,
+                 1.0f,
+                 8.109951019287109375e-01f};
             return O::mul(x, O::div(polevl(x2, alpha), polevl(x2, beta)));
         }
         else
@@ -994,18 +1035,18 @@ template <class O> struct packet_math
             // atan(x) = x + x u N(u) / Q(u), u = x^2 (Rminimax).
             constexpr double kPiOverTwoLo = 6.123233995736766e-17;
             constexpr double alpha[]      = {-2.4644487075790443e-04,
-                                             -7.8073996177164305e-03,
-                                             -6.2915029683194929e-02,
-                                             -1.9307140255021149e-01,
-                                             -2.4634297465012978e-01,
-                                             -1.1001453763093239e-01};
+                     -7.8073996177164305e-03,
+                     -6.2915029683194929e-02,
+                     -1.9307140255021149e-01,
+                     -2.4634297465012978e-01,
+                     -1.1001453763093239e-01};
             constexpr double beta[]       = {2.7311202462436667e-04,
-                                             1.0899150928962708e-02,
-                                             1.1548932646420353e-01,
-                                             4.9716458728465573e-01,
-                                             1.0,
-                                             9.3705509168587852e-01,
-                                             3.3004361289279920e-01};
+                      1.0899150928962708e-02,
+                      1.1548932646420353e-01,
+                      4.9716458728465573e-01,
+                      1.0,
+                      9.3705509168587852e-01,
+                      3.3004361289279920e-01};
             const V          p            = polevl(x2, alpha);
             const V          q            = polevl(x2, beta);
             const V          x0           = O::sub(x, O::band(large_mask, cst(kPiOverTwoLo)));
@@ -1025,31 +1066,32 @@ template <class O> struct packet_math
 
     SCALARS_NOINLINE static V atan2(V y, V x)
     {
-        const V ay   = abs(y);
-        const V ax   = abs(x);
-        const V swap = O::lt(ax, ay);
-        const V num  = O::select(swap, ax, ay);
-        const V den  = O::select(swap, ay, ax);
-        V       t    = O::div(num, den);
-        t            = O::select(O::eq(den, zero()), zero(), t);
-        t            = O::select(O::band(isinf(x), isinf(y)), one(), t);
-        V r          = atan_reduced(t, swap);
-        r            = O::select(swap, O::sub(cst(kPiOver2), r), r);
+        const V ay    = abs(y);
+        const V ax    = abs(x);
+        const V swap  = O::lt(ax, ay);
+        const V num   = O::select(swap, ax, ay);
+        const V den   = O::select(swap, ay, ax);
+        V       t     = O::div(num, den);
+        t             = O::select(O::eq(den, zero()), zero(), t);
+        t             = O::select(O::band(isinf(x), isinf(y)), one(), t);
+        V r           = atan_reduced(t, swap);
+        r             = O::select(swap, O::sub(cst(kPiOver2), r), r);
         const T pi_lo = kFloat ? T(-8.742278e-08f) : T(1.2246467991473532e-16);
-        r = O::select(signbit(x), O::add(O::sub(cst(kPi), r), cst(pi_lo)), r);
-        r = O::bxor(r, sign_of(y));
+        r             = O::select(signbit(x), O::add(O::sub(cst(kPi), r), cst(pi_lo)), r);
+        r             = O::bxor(r, sign_of(y));
         return O::bor(O::bor(O::isnan(x), O::isnan(y)), r);
     }
 
     // asin(z) = z + z u P(u) for u = z^2 <= 1/4, to a relative error of 2^-27.6 (Sollya).
     SCALARS_FORCE_INLINE static V asin_kernel_float(V z)
     {
-        const V u      = O::mul(z, z);
-        const V u2     = O::mul(u, u);
-        const V p_low  = madd(cst(7.4953101575374603271484375e-2f), u, cst(0.166667520999908447265625f));
-        const V p_high = madd(cst(4.21570129692554473876953125e-2f), u2,
-                              madd(cst(2.418550290167331695556640625e-2f), u,
-                                   cst(4.54690195620059967041015625e-2f)));
+        const V u  = O::mul(z, z);
+        const V u2 = O::mul(u, u);
+        const V p_low =
+            madd(cst(7.4953101575374603271484375e-2f), u, cst(0.166667520999908447265625f));
+        const V p_high = madd(cst(4.21570129692554473876953125e-2f),
+            u2,
+            madd(cst(2.418550290167331695556640625e-2f), u, cst(4.54690195620059967041015625e-2f)));
         return madd(O::mul(z, u), madd(p_high, u2, p_low), z);
     }
 
@@ -1086,11 +1128,11 @@ template <class O> struct packet_math
             //   |x| <= 1/2: acos(x) = pi/2 - asin(x)
             //   x   >  1/2: acos(x) = 2 asin(z)
             //   x   < -1/2: acos(x) = pi - 2 asin(z)
-            const V half  = cst(0.5f);
-            const V abs_x = abs(x_in);
-            const V large = O::lt(half, abs_x);
-            const V z     = O::select(large, O::sqrt(nmadd(half, abs_x, half)), abs_x);
-            const V p     = O::bxor(asin_kernel_float(z), O::bandnot(sign_of(x_in), large));
+            const V half         = cst(0.5f);
+            const V abs_x        = abs(x_in);
+            const V large        = O::lt(half, abs_x);
+            const V z            = O::select(large, O::sqrt(nmadd(half, abs_x, half)), abs_x);
+            const V p            = O::bxor(asin_kernel_float(z), O::bandnot(sign_of(x_in), large));
             const V small_result = O::sub(cst(kPiOver2), p);
             const V twice        = O::add(p, p);
             const V large_result = O::select(signbit(x_in), O::sub(cst(kPi), twice), twice);
@@ -1118,20 +1160,21 @@ template <class O> struct packet_math
         V       p_small;
         if constexpr (kFloat)
         {
-            constexpr float alpha[] = {2.7557314045e-06f, 1.9841270114e-04f, 8.3333335817e-03f, 1.6666666716e-01f};
-            p_small                 = polevl(x2, alpha);
+            constexpr float alpha[] = {
+                2.7557314045e-06f, 1.9841270114e-04f, 8.3333335817e-03f, 1.6666666716e-01f};
+            p_small = polevl(x2, alpha);
         }
         else
         {
             constexpr double alpha[] = {8.2206352466243297e-18,
-                                        2.8114572543455206e-15,
-                                        7.6471637318198164e-13,
-                                        1.6059043836821613e-10,
-                                        2.5052108385441718e-08,
-                                        2.7557319223985893e-06,
-                                        1.9841269841269841e-04,
-                                        8.3333333333333332e-03,
-                                        1.6666666666666666e-01};
+                2.8114572543455206e-15,
+                7.6471637318198164e-13,
+                1.6059043836821613e-10,
+                2.5052108385441718e-08,
+                2.7557319223985893e-06,
+                1.9841269841269841e-04,
+                8.3333333333333332e-03,
+                1.6666666666666666e-01};
             p_small                  = polevl(x2, alpha);
         }
         p_small = madd(O::mul(x2, x), p_small, x);
@@ -1160,13 +1203,15 @@ template <class O> struct packet_math
         {
             // tanh(x) ~= x^3 P(x^2) / Q(x^2) + x on [-1.25, 1.25] (Rminimax), and
             // 1 - 2 / (1 + exp(2 |x|)) beyond. Within 1 ulp.
-            constexpr float alpha[] = {-1.46725140511989593505859375e-02f, -3.333333432674407958984375e-01f};
-            constexpr float beta[]  = {1.570280082523822784423828125e-02f, 4.4401752948760986328125e-01f, 1.0f};
-            const V         large   = O::lt(cst(1.25f), abs_x);
+            constexpr float alpha[] = {
+                -1.46725140511989593505859375e-02f, -3.333333432674407958984375e-01f};
+            constexpr float beta[] = {
+                1.570280082523822784423828125e-02f, 4.4401752948760986328125e-01f, 1.0f};
+            const V large = O::lt(cst(1.25f), abs_x);
             // Large lanes enter the polynomial as 0, so that x^2 cannot overflow.
-            const V x_small   = O::bandnot(x, large);
-            const V x2        = O::mul(x_small, x_small);
-            const V x3        = O::mul(x2, x_small);
+            const V x_small = O::bandnot(x, large);
+            const V x2      = O::mul(x_small, x_small);
+            const V x3      = O::mul(x2, x_small);
             const V small_tanh =
                 O::bor(x_sign, madd(x3, O::div(polevl(x2, alpha), polevl(x2, beta)), x_small));
             if (!O::any(large))
@@ -1196,30 +1241,30 @@ template <class O> struct packet_math
         if constexpr (kFloat)
         {
             constexpr float alpha[] = {0.1819281280040740966796875f,
-                                       8.2311116158962249755859375e-2f,
-                                       0.14672131836414337158203125f,
-                                       0.1997792422771453857421875f,
-                                       0.3333373963832855224609375f};
+                8.2311116158962249755859375e-2f,
+                0.14672131836414337158203125f,
+                0.1997792422771453857421875f,
+                0.3333373963832855224609375f};
             y_small                 = madd(x3, polevl(x2, alpha), x);
         }
         else
         {
             constexpr double alpha[] = {3.3071338469301391e-03,
-                                        -4.7129526768798737e-02,
-                                        1.8185306179826699e-01,
-                                        -2.5949536095445679e-01,
-                                        1.2306328729812676e-01};
+                -4.7129526768798737e-02,
+                1.8185306179826699e-01,
+                -2.5949536095445679e-01,
+                1.2306328729812676e-01};
             constexpr double beta[]  = {-3.8679974580640881e-03,
-                                        7.6391885763341910e-02,
-                                        -4.2828141436397615e-01,
-                                        9.8733495886883648e-01,
-                                        -1.0000000000000000e+00,
-                                        3.6918986189438030e-01};
+                 7.6391885763341910e-02,
+                 -4.2828141436397615e-01,
+                 9.8733495886883648e-01,
+                 -1.0000000000000000e+00,
+                 3.6918986189438030e-01};
             y_small                  = madd(x3, O::div(polevl(x2, alpha), polevl(x2, beta)), x);
         }
 
-        const V half       = cst(T(0.5));
-        const V x_gt_half  = O::le(half, abs(x));
+        const V half      = cst(T(0.5));
+        const V x_gt_half = O::le(half, abs(x));
         if (!O::any(x_gt_half))
         {
             return y_small;
@@ -1229,7 +1274,7 @@ template <class O> struct packet_math
         const V x_eq_one = O::eq(one(), abs(x));
         const V x_gt_one = O::lt(one(), abs(x));
         return O::bor(x_gt_one,
-                      O::select(x_eq_one, O::bor(sign_of(x), inf()), O::select(x_gt_half, y_large, y_small)));
+            O::select(x_eq_one, O::bor(sign_of(x), inf()), O::select(x_gt_half, y_large, y_small)));
     }
 
     SCALARS_NOINLINE static V asinh(V x)
@@ -1251,9 +1296,9 @@ template <class O> struct packet_math
 
     SCALARS_NOINLINE static V acosh(V x)
     {
-        const V t     = O::sub(x, one());
-        const V huge  = O::lt(cst(kFloat ? T(1e10f) : T(1e150)), x);
-        const V t_tp2 = O::mul(O::select(huge, zero(), t), O::add(t, cst(T(2))));
+        const V t      = O::sub(x, one());
+        const V huge   = O::lt(cst(kFloat ? T(1e10f) : T(1e150)), x);
+        const V t_tp2  = O::mul(O::select(huge, zero(), t), O::add(t, cst(T(2))));
         V       result = log1p(O::select(huge, t, O::add(t, O::sqrt(t_tp2))));
         result         = O::select(huge, O::add(result, cst(kLn2)), result);
         return O::bor(O::lt(x, one()), result);
@@ -1303,18 +1348,18 @@ template <class O> struct packet_math
         if constexpr (kFloat)
         {
             constexpr float alpha[] = {-0.884942114353179931640625f,
-                                       2.4534566402435302734375f,
-                                       -2.6808016300201416015625f,
-                                       1.7967746257781982421875f,
-                                       0.31364738941192626953125f};
+                2.4534566402435302734375f,
+                -2.6808016300201416015625f,
+                1.7967746257781982421875f,
+                0.31364738941192626953125f};
             r                       = cbrt_last_halley(polevl(y, alpha), y);
         }
         else
         {
             constexpr double alpha[] = {0.59218535776880332210936330739059485495090484619140625,
-                                        -1.3859252584188996859637654779362492263317108154296875,
-                                        1.4581131468387165117661652402603067457675933837890625,
-                                        0.340841899750747245878557123432983644306659698486328125};
+                -1.3859252584188996859637654779362492263317108154296875,
+                1.4581131468387165117661652402603067457675933837890625,
+                0.340841899750747245878557123432983644306659698486328125};
             r                        = cbrt_last_halley(cbrt_halley(polevl(y, alpha), y), y);
         }
         r = ldexp_fast(r, e_div3);
@@ -1338,14 +1383,14 @@ template <class O> struct packet_math
             constexpr float  kC1_hi = static_cast<float>(kC1);
             constexpr float  kC1_lo = static_cast<float>(kC1 - static_cast<double>(kC1_hi));
             constexpr float  c[]    = {9.7010828554630279541015625e-02f,
-                                       -1.6896486282348632812500000e-01f,
-                                       1.7200836539268493652343750e-01f,
-                                       -1.7892272770404815673828125e-01f,
-                                       2.0505344867706298828125000e-01f,
-                                       -2.4046677350997924804687500e-01f,
-                                       2.8857553005218505859375000e-01f,
-                                       -3.6067414283752441406250000e-01f,
-                                       4.8089790344238281250000000e-01f};
+                    -1.6896486282348632812500000e-01f,
+                    1.7200836539268493652343750e-01f,
+                    -1.7892272770404815673828125e-01f,
+                    2.0505344867706298828125000e-01f,
+                    -2.4046677350997924804687500e-01f,
+                    2.8857553005218505859375000e-01f,
+                    -3.6067414283752441406250000e-01f,
+                    4.8089790344238281250000000e-01f};
             const V          x      = O::sub(z, one());
             const V          p      = polevl(x, c);
             V                p_hi, p_lo;
@@ -1370,7 +1415,11 @@ template <class O> struct packet_math
             const V x    = z;
 
             V t_hi, t_lo;
-            twoprod(cst(2.88539008177792677), cst(4.07660016854549667e-17), O::sub(x, one()), t_hi, t_lo);
+            twoprod(cst(2.88539008177792677),
+                cst(4.07660016854549667e-17),
+                O::sub(x, one()),
+                t_hi,
+                t_lo);
             V s_hi, s_lo;
             fast_twosum(one(), x, s_hi, s_lo);
             V q_hi, q_lo;
@@ -1383,12 +1432,12 @@ template <class O> struct packet_math
             V r4_hi, r4_lo;
             twoprod(r2_hi, r2_lo, r2_hi, r2_lo, r4_hi, r4_lo);
 
-            V       q_even = madd(q12, r4_hi, q8);
-            V       q_odd  = madd(q10, r4_hi, q6);
-            q_even         = madd(q_even, r4_hi, q4);
-            q_odd          = madd(q_odd, r4_hi, q2);
-            q_even         = madd(q_even, r4_hi, q0);
-            const V q      = madd(q_odd, r2_hi, q_even);
+            V q_even  = madd(q12, r4_hi, q8);
+            V q_odd   = madd(q10, r4_hi, q6);
+            q_even    = madd(q_even, r4_hi, q4);
+            q_odd     = madd(q_odd, r4_hi, q2);
+            q_even    = madd(q_even, r4_hi, q0);
+            const V q = madd(q_odd, r2_hi, q_even);
 
             V p_hi, p_lo;
             twoprod(r2_hi, r2_lo, q, p_hi, p_lo);
@@ -1448,18 +1497,19 @@ template <class O> struct packet_math
         const V x_abs_gt_one  = O::lt(one(), x_abs);
         const V x_abs_is_inf  = O::eq(x_abs, inf());
 
-        const V y_abs        = abs(y);
-        const V y_abs_is_inf = O::eq(y_abs, inf());
+        const V y_abs         = abs(y);
+        const V y_abs_is_inf  = O::eq(y_abs, inf());
         const V y_is_negative = O::lt(y, zero());
-        const V y_is_zero    = O::eq(y, zero());
-        const V y_is_one     = O::eq(y, one());
-        const V y_is_int     = O::bandnot(O::eq(O::floor(y), y), y_abs_is_inf);
-        const V y_div_2      = O::mul(y, cst(T(0.5)));
-        const V y_is_even    = O::eq(O::rint(y_div_2), y_div_2);
-        const V y_is_odd_int = O::bandnot(y_is_int, y_is_even);
+        const V y_is_zero     = O::eq(y, zero());
+        const V y_is_one      = O::eq(y, one());
+        const V y_is_int      = O::bandnot(O::eq(O::floor(y), y), y_abs_is_inf);
+        const V y_div_2       = O::mul(y, cst(T(0.5)));
+        const V y_is_even     = O::eq(O::rint(y_div_2), y_div_2);
+        const V y_is_odd_int  = O::bandnot(y_is_int, y_is_even);
         // From this |y| on, x^y is 0 or inf for every |x| != 1.
         constexpr T huge_exponent =
-            T(2 * (std::numeric_limits<T>::digits - std::numeric_limits<T>::min_exponent + 1)) * kLn2 / kEps;
+            T(2 * (std::numeric_limits<T>::digits - std::numeric_limits<T>::min_exponent + 1)) *
+            kLn2 / kEps;
         const V y_abs_is_huge = O::le(cst(huge_exponent), y_abs);
 
         // Negative finite base with a non-integer exponent: NaN.
@@ -1475,7 +1525,8 @@ template <class O> struct packet_math
         // pow(+-inf, y).
         const V x_pos_inf_value = O::bandnot(inf(), y_is_negative);
         const V x_neg_inf_value = O::select(y_is_odd_int, negate(x_pos_inf_value), x_pos_inf_value);
-        result = O::select(x_abs_is_inf, O::select(x_is_negative, x_neg_inf_value, x_pos_inf_value), result);
+        result                  = O::select(
+            x_abs_is_inf, O::select(x_is_negative, x_neg_inf_value, x_pos_inf_value), result);
         // NaN inputs give NaN, except for the two cases below.
         result = O::bor(O::bor(O::isnan(x), O::isnan(y)), result);
         // pow(x, 1) = x; pow(x, +-0) = 1 and pow(1, y) = 1, even for NaN.
@@ -1511,15 +1562,15 @@ template <class O> struct packet_math
     {
         if constexpr (kFloat)
         {
-            const V x  = O::min(O::max(x_in, cst(-11.0f)), cst(11.0f));
-            x_lo       = O::select(O::lt(abs(x_in), cst(11.0f)), x_lo, zero());
+            const V x = O::min(O::max(x_in, cst(-11.0f)), cst(11.0f));
+            x_lo      = O::select(O::lt(abs(x_in), cst(11.0f)), x_lo, zero());
             // erfc(x) = 1 + x S(x^2) for |x| <= 1.
-            constexpr float alpha[] = {5.61802298761904239654541015625e-04f,
-                                       -4.91381669417023658752441406250e-03f,
-                                       2.67075151205062866210937500000e-02f,
-                                       -1.12800106406211853027343750000e-01f,
-                                       3.76122951507568359375000000000e-01f,
-                                       -1.12837910652160644531250000000e+00f};
+            constexpr float alpha[]    = {5.61802298761904239654541015625e-04f,
+                   -4.91381669417023658752441406250e-03f,
+                   2.67075151205062866210937500000e-02f,
+                   -1.12800106406211853027343750000e-01f,
+                   3.76122951507568359375000000000e-01f,
+                   -1.12837910652160644531250000000e+00f};
             const V         x2         = O::mul(x, x);
             const V         erfc_small = madd(x, polevl(x2, alpha), one());
             const V         gt_one     = O::lt(one(), x2);
@@ -1529,14 +1580,14 @@ template <class O> struct packet_math
             }
             // erfc(x) = exp(-x^2) P(1/x^2) / (x Q(1/x^2)) for 1 < |x| < 9.
             constexpr float gamma[] = {1.0208116471767425537109375e-01f,
-                                       4.2920666933059692382812500e-01f,
-                                       3.2379078865051269531250000e-01f,
-                                       5.3971976041793823242187500e-02f};
+                4.2920666933059692382812500e-01f,
+                3.2379078865051269531250000e-01f,
+                5.3971976041793823242187500e-02f};
             constexpr float delta[] = {1.7251677811145782470703125e-02f,
-                                       3.9137163758277893066406250e-01f,
-                                       1.0000000000000000000000000e+00f,
-                                       6.2173241376876831054687500e-01f,
-                                       9.5662862062454223632812500e-02f};
+                3.9137163758277893066406250e-01f,
+                1.0000000000000000000000000e+00f,
+                6.2173241376876831054687500e-01f,
+                9.5662862062454223632812500e-02f};
             return O::select(gt_one, erfc_large(x, x2, x_lo, gamma, delta), erfc_small);
         }
         else
@@ -1545,17 +1596,19 @@ template <class O> struct packet_math
             x_lo       = O::select(O::lt(abs(x_in), cst(28.0)), x_lo, zero());
             const V x2 = O::mul(x, x);
             // erfc(x) = 1 - x S(x^2) / T(x^2) for |x| <= 1.
-            constexpr double alpha[] = {1.9493725660006057018823477644531294572516344487667083740234375e-04,
-                                        1.8272566210022942682217328425053892715368419885635375976562500e-03,
-                                        4.5303363351690106863856044583371840417385101318359375000000000e-02,
-                                        1.4215015503619179981775744181504705920815467834472656250000000e-01,
-                                        1.1283791670955125585606992899556644260883331298828125000000000e+00};
-            constexpr double beta[]  = {2.0294484101083099089526257108317963684385176748037338256835938e-05,
-                                        6.8117805899186819641732970609382391558028757572174072265625000e-04,
-                                        1.0582026056098614921752165685120417037978768348693847656250000e-02,
-                                        9.3252603143757495374188692949246615171432495117187500000000000e-02,
-                                        4.5931062818368939559832142549566924571990966796875000000000000e-01,
-                                        1.0};
+            constexpr double alpha[] = {
+                1.9493725660006057018823477644531294572516344487667083740234375e-04,
+                1.8272566210022942682217328425053892715368419885635375976562500e-03,
+                4.5303363351690106863856044583371840417385101318359375000000000e-02,
+                1.4215015503619179981775744181504705920815467834472656250000000e-01,
+                1.1283791670955125585606992899556644260883331298828125000000000e+00};
+            constexpr double beta[] = {
+                2.0294484101083099089526257108317963684385176748037338256835938e-05,
+                6.8117805899186819641732970609382391558028757572174072265625000e-04,
+                1.0582026056098614921752165685120417037978768348693847656250000e-02,
+                9.3252603143757495374188692949246615171432495117187500000000000e-02,
+                4.5931062818368939559832142549566924571990966796875000000000000e-01,
+                1.0};
             const V erfc_small = nmadd(x, O::div(polevl(x2, alpha), polevl(x2, beta)), one());
             const V gt_one     = O::lt(one(), x2);
             if (!O::any(gt_one))
@@ -1563,26 +1616,28 @@ template <class O> struct packet_math
                 return erfc_small;
             }
             // erfc(x) = exp(-x^2) P(1/x^2) / (x Q(1/x^2)) for 1 < |x| < 28.
-            constexpr double gamma[] = {1.5252844933226974316088642158462107545346952974796295166015625e-04,
-                                        1.0909912393738931124520519233556115068495273590087890625000000e-02,
-                                        1.0628604636755033252537572252549580298364162445068359375000000e-01,
-                                        3.3492472973137982217295416376146022230386734008789062500000000e-01,
-                                        4.5065776215933289750026347064704168587923049926757812500000000e-01,
-                                        2.9433039130294824659017649537418037652969360351562500000000000e-01,
-                                        9.8792676360600226170838311645638896152377128601074218750000000e-02,
-                                        1.7095935395503719655962981960328761488199234008789062500000000e-02,
-                                        1.4249109729504577659398023570247460156679153442382812500000000e-03,
-                                        4.4567378313647954771875570045835956989321857690811157226562500e-05};
-            constexpr double delta[] = {2.041985103115789845773520028160419315099716186523437500000000e-03,
-                                        5.316030659946043707142493417450168635696172714233398437500000000e-02,
-                                        3.426242193784684864077405563875799998641014099121093750000000e-01,
-                                        8.565637124308049799026321124983951449394226074218750000000000e-01,
-                                        1.000000000000000000000000000000000000000000000000000000000000e+00,
-                                        5.968805280570776972126623149961233139038085937500000000000000e-01,
-                                        1.890922854723317836356244470152887515723705291748046875000000e-01,
-                                        3.152505418656005586885981983868987299501895904541015625000000e-02,
-                                        2.565085751861882583380047861965067568235099315643310546875000e-03,
-                                        7.899362131678837697403017248376499992446042597293853759765625e-05};
+            constexpr double gamma[] = {
+                1.5252844933226974316088642158462107545346952974796295166015625e-04,
+                1.0909912393738931124520519233556115068495273590087890625000000e-02,
+                1.0628604636755033252537572252549580298364162445068359375000000e-01,
+                3.3492472973137982217295416376146022230386734008789062500000000e-01,
+                4.5065776215933289750026347064704168587923049926757812500000000e-01,
+                2.9433039130294824659017649537418037652969360351562500000000000e-01,
+                9.8792676360600226170838311645638896152377128601074218750000000e-02,
+                1.7095935395503719655962981960328761488199234008789062500000000e-02,
+                1.4249109729504577659398023570247460156679153442382812500000000e-03,
+                4.4567378313647954771875570045835956989321857690811157226562500e-05};
+            constexpr double delta[] = {
+                2.041985103115789845773520028160419315099716186523437500000000e-03,
+                5.316030659946043707142493417450168635696172714233398437500000000e-02,
+                3.426242193784684864077405563875799998641014099121093750000000e-01,
+                8.565637124308049799026321124983951449394226074218750000000000e-01,
+                1.000000000000000000000000000000000000000000000000000000000000e+00,
+                5.968805280570776972126623149961233139038085937500000000000000e-01,
+                1.890922854723317836356244470152887515723705291748046875000000e-01,
+                3.152505418656005586885981983868987299501895904541015625000000e-02,
+                2.565085751861882583380047861965067568235099315643310546875000e-03,
+                7.899362131678837697403017248376499992446042597293853759765625e-05};
             return O::select(gt_one, erfc_large(x, x2, x_lo, gamma, delta), erfc_small);
         }
     }
@@ -1592,11 +1647,11 @@ template <class O> struct packet_math
         V x, V x2, V x_lo, const T (&gamma)[NP], const T (&delta)[NQ])
     {
         // exp(-x^2) ~= exp(-x2) (1 - x2_lo) with x2 + x2_lo = (x + x_lo)^2 to first order.
-        const V x2_lo   = madd(O::add(x, x), x_lo, twoprod_low(x, x, x2));
-        const V exp2_hi = exp(negate(x2));
-        const V z       = nmadd(exp2_hi, x2_lo, exp2_hi);
-        const V q2      = reciprocal(x2);
-        const V r       = O::div(polevl(q2, gamma), O::mul(x, polevl(q2, delta)));
+        const V x2_lo     = madd(O::add(x, x), x_lo, twoprod_low(x, x, x2));
+        const V exp2_hi   = exp(negate(x2));
+        const V z         = nmadd(exp2_hi, x2_lo, exp2_hi);
+        const V q2        = reciprocal(x2);
+        const V r         = O::div(polevl(q2, gamma), O::mul(x, polevl(q2, delta)));
         const V maybe_two = O::select(O::lt(x, zero()), cst(T(2)), zero());
         return madd(z, r, maybe_two);
     }
@@ -1619,27 +1674,28 @@ template <class O> struct packet_math
         const V exp_neg_two     = cst(T(0.13533528323661269189));
         const V should_flipsign = O::le(a, O::sub(one(), exp_neg_two));
         const V b               = O::select(should_flipsign, a, O::sub(one(), a));
-        const V ndtri           = O::select(
-            O::lt(exp_neg_two, b), ndtri_gt_exp_neg_two(b), ndtri_lt_exp_neg_two(b, should_flipsign));
+        const V ndtri           = O::select(O::lt(exp_neg_two, b),
+            ndtri_gt_exp_neg_two(b),
+            ndtri_lt_exp_neg_two(b, should_flipsign));
         return O::select(O::eq(a, zero()), negate(inf()), O::select(O::eq(one(), a), inf(), ndtri));
     }
 
     SCALARS_FORCE_INLINE static V ndtri_gt_exp_neg_two(V b)
     {
         constexpr T p0[] = {T(-5.99633501014107895267e1),
-                            T(9.80010754185999661536e1),
-                            T(-5.66762857469070293439e1),
-                            T(1.39312609387279679503e1),
-                            T(-1.23916583867381258016e0)};
+            T(9.80010754185999661536e1),
+            T(-5.66762857469070293439e1),
+            T(1.39312609387279679503e1),
+            T(-1.23916583867381258016e0)};
         constexpr T q0[] = {T(1.0),
-                            T(1.95448858338141759834e0),
-                            T(4.67627912898881538453e0),
-                            T(8.63602421390890590575e1),
-                            T(-2.25462687854119370527e2),
-                            T(2.00260212380060660359e2),
-                            T(-8.20372256168333339912e1),
-                            T(1.59056225126211695515e1),
-                            T(-1.18331621121330003142e0)};
+            T(1.95448858338141759834e0),
+            T(4.67627912898881538453e0),
+            T(8.63602421390890590575e1),
+            T(-2.25462687854119370527e2),
+            T(2.00260212380060660359e2),
+            T(-8.20372256168333339912e1),
+            T(1.59056225126211695515e1),
+            T(-1.18331621121330003142e0)};
         const V     c    = O::sub(b, cst(T(0.5)));
         const V     c2   = O::mul(c, c);
         const V     r    = madd(c, O::mul(c2, O::div(polevl(c2, p0), polevl(c2, q0))), c);
@@ -1650,49 +1706,49 @@ template <class O> struct packet_math
     {
         // z = sqrt(-2 log b) in [2, 8]: b between exp(-2) and exp(-32).
         constexpr T p1[] = {T(4.05544892305962419923e0),
-                            T(3.15251094599893866154e1),
-                            T(5.71628192246421288162e1),
-                            T(4.40805073893200834700e1),
-                            T(1.46849561928858024014e1),
-                            T(2.18663306850790267539e0),
-                            T(-1.40256079171354495875e-1),
-                            T(-3.50424626827848203418e-2),
-                            T(-8.57456785154685413611e-4)};
+            T(3.15251094599893866154e1),
+            T(5.71628192246421288162e1),
+            T(4.40805073893200834700e1),
+            T(1.46849561928858024014e1),
+            T(2.18663306850790267539e0),
+            T(-1.40256079171354495875e-1),
+            T(-3.50424626827848203418e-2),
+            T(-8.57456785154685413611e-4)};
         constexpr T q1[] = {T(1.0),
-                            T(1.57799883256466749731e1),
-                            T(4.53907635128879210584e1),
-                            T(4.13172038254672030440e1),
-                            T(1.50425385692907503408e1),
-                            T(2.50464946208309415979e0),
-                            T(-1.42182922854787788574e-1),
-                            T(-3.80806407691578277194e-2),
-                            T(-9.33259480895457427372e-4)};
+            T(1.57799883256466749731e1),
+            T(4.53907635128879210584e1),
+            T(4.13172038254672030440e1),
+            T(1.50425385692907503408e1),
+            T(2.50464946208309415979e0),
+            T(-1.42182922854787788574e-1),
+            T(-3.80806407691578277194e-2),
+            T(-9.33259480895457427372e-4)};
         // z in [8, 64]: b between exp(-32) and exp(-2048).
         constexpr T p2[] = {T(3.23774891776946035970e0),
-                            T(6.91522889068984211695e0),
-                            T(3.93881025292474443415e0),
-                            T(1.33303460815807542389e0),
-                            T(2.01485389549179081538e-1),
-                            T(1.23716634817820021358e-2),
-                            T(3.01581553508235416007e-4),
-                            T(2.65806974686737550832e-6),
-                            T(6.23974539184983293730e-9)};
+            T(6.91522889068984211695e0),
+            T(3.93881025292474443415e0),
+            T(1.33303460815807542389e0),
+            T(2.01485389549179081538e-1),
+            T(1.23716634817820021358e-2),
+            T(3.01581553508235416007e-4),
+            T(2.65806974686737550832e-6),
+            T(6.23974539184983293730e-9)};
         constexpr T q2[] = {T(1.0),
-                            T(6.02427039364742014255e0),
-                            T(3.67983563856160859403e0),
-                            T(1.37702099489081330271e0),
-                            T(2.16236993594496635890e-1),
-                            T(1.34204006088543189037e-2),
-                            T(3.28014464682127739104e-4),
-                            T(2.89247864745380683936e-6),
-                            T(6.79019408009981274425e-9)};
+            T(6.02427039364742014255e0),
+            T(3.67983563856160859403e0),
+            T(1.37702099489081330271e0),
+            T(2.16236993594496635890e-1),
+            T(1.34204006088543189037e-2),
+            T(3.28014464682127739104e-4),
+            T(2.89247864745380683936e-6),
+            T(6.79019408009981274425e-9)};
         const V     x    = O::sqrt(O::mul(cst(T(-2)), log(b)));
         const V     x0   = O::sub(x, O::div(log(x), x));
         const V     z    = reciprocal(x);
         const V     x1   = O::mul(z,
-                            O::select(O::lt(x, cst(T(8))),
-                                      O::div(polevl(z, p1), polevl(z, q1)),
-                                      O::div(polevl(z, p2), polevl(z, q2))));
+            O::select(O::lt(x, cst(T(8))),
+                O::div(polevl(z, p1), polevl(z, q1)),
+                O::div(polevl(z, p2), polevl(z, q2))));
         return O::bxor(O::band(should_flipsign, sign_mask()), O::sub(x0, x1));
     }
 };

@@ -1,5 +1,7 @@
 #pragma once
 
+#include "backend/simd_base.h"
+
 #include <limits>
 #include <type_traits>
 
@@ -22,8 +24,7 @@
 namespace scalars
 {
 
-template <>
-struct simd<float>
+template <> struct simd<float>
 {
     using simd_t      = __m512;
     using simd_half_t = __m256;
@@ -57,8 +58,7 @@ struct simd<float>
 
     SCALARS_SIMD_RETURN_TYPE storeu(simd_t from, value_t* to) { _mm512_storeu_ps(to, from); }
 
-    template <
-        typename scalar_t,
+    template <typename scalar_t,
         typename std::enable_if<std::is_fundamental<scalar_t>::value, bool>::type = true>
     SCALARS_SIMD_METHOD simd_t set(scalar_t alpha)
     {
@@ -359,39 +359,38 @@ struct simd<float>
 
 #ifdef __AVX512DQ__
 // AVX512F does not define _mm512_extractf32x8_ps to extract _m256 from _m512
-#define SCALARS_EXTRACT_8f_FROM_16f(INPUT, OUTPUT)  \
-    __m256 OUTPUT##_0 = _mm512_extractf32x8_ps(INPUT, 0); \
+#define SCALARS_EXTRACT_8f_FROM_16f(INPUT, OUTPUT)                                                 \
+    __m256 OUTPUT##_0 = _mm512_extractf32x8_ps(INPUT, 0);                                          \
     __m256 OUTPUT##_1 = _mm512_extractf32x8_ps(INPUT, 1);
-#define SCALARS_INSERT_8f_INTO_16f(OUTPUT, INPUTA, INPUTB) \
-    OUTPUT = _mm512_insertf32x8(OUTPUT, INPUTA, 0);              \
+#define SCALARS_INSERT_8f_INTO_16f(OUTPUT, INPUTA, INPUTB)                                         \
+    OUTPUT = _mm512_insertf32x8(OUTPUT, INPUTA, 0);                                                \
     OUTPUT = _mm512_insertf32x8(OUTPUT, INPUTB, 1);
 
 #else
-#define SCALARS_EXTRACT_8f_FROM_16f(INPUT, OUTPUT)          \
-    __m256 OUTPUT##_0 = _mm256_insertf128_ps(                     \
-        _mm256_castps128_ps256(_mm512_extractf32x4_ps(INPUT, 0)), \
-        _mm512_extractf32x4_ps(INPUT, 1),                         \
-        1);                                                       \
-    __m256 OUTPUT##_1 = _mm256_insertf128_ps(                     \
-        _mm256_castps128_ps256(_mm512_extractf32x4_ps(INPUT, 2)), \
-        _mm512_extractf32x4_ps(INPUT, 3),                         \
-        1);
+#define SCALARS_EXTRACT_8f_FROM_16f(INPUT, OUTPUT)                                                 \
+    __m256 OUTPUT##_0 =                                                                            \
+        _mm256_insertf128_ps(_mm256_castps128_ps256(_mm512_extractf32x4_ps(INPUT, 0)),             \
+            _mm512_extractf32x4_ps(INPUT, 1),                                                      \
+            1);                                                                                    \
+    __m256 OUTPUT##_1 =                                                                            \
+        _mm256_insertf128_ps(_mm256_castps128_ps256(_mm512_extractf32x4_ps(INPUT, 2)),             \
+            _mm512_extractf32x4_ps(INPUT, 3),                                                      \
+            1);
 
-#define SCALARS_INSERT_8f_INTO_16f(OUTPUT, INPUTA, INPUTB)              \
-    OUTPUT = _mm512_insertf32x4(OUTPUT, _mm256_extractf128_ps(INPUTA, 0), 0); \
-    OUTPUT = _mm512_insertf32x4(OUTPUT, _mm256_extractf128_ps(INPUTA, 1), 1); \
-    OUTPUT = _mm512_insertf32x4(OUTPUT, _mm256_extractf128_ps(INPUTB, 0), 2); \
+#define SCALARS_INSERT_8f_INTO_16f(OUTPUT, INPUTA, INPUTB)                                         \
+    OUTPUT = _mm512_insertf32x4(OUTPUT, _mm256_extractf128_ps(INPUTA, 0), 0);                      \
+    OUTPUT = _mm512_insertf32x4(OUTPUT, _mm256_extractf128_ps(INPUTA, 1), 1);                      \
+    OUTPUT = _mm512_insertf32x4(OUTPUT, _mm256_extractf128_ps(INPUTB, 0), 2);                      \
     OUTPUT = _mm512_insertf32x4(OUTPUT, _mm256_extractf128_ps(INPUTB, 1), 3);
 #endif
 
-#define PACK_OUTPUT(OUTPUT, INPUT, INDEX, STRIDE) \
+#define PACK_OUTPUT(OUTPUT, INPUT, INDEX, STRIDE)                                                  \
     SCALARS_INSERT_8f_INTO_16f(OUTPUT[INDEX], INPUT[INDEX], INPUT[INDEX + STRIDE]);
 
-#define PACK_OUTPUT_2(OUTPUT, INPUT, INDEX, STRIDE) \
+#define PACK_OUTPUT_2(OUTPUT, INPUT, INDEX, STRIDE)                                                \
     SCALARS_INSERT_8f_INTO_16f(OUTPUT[INDEX], INPUT[2 * INDEX], INPUT[2 * INDEX + STRIDE]);
 
-    template <int N>
-    SCALARS_SIMD_RETURN_TYPE ptranspose(simd_t x[N])  // NOLINT
+    template <int N> SCALARS_SIMD_RETURN_TYPE ptranspose(simd_t x[N])  // NOLINT
     {
         if constexpr (N == 16)
         {

@@ -1,5 +1,7 @@
 #pragma once
 
+#include "backend/simd_base.h"
+
 #include <type_traits>
 
 #if SCALARS_HAS_SVML || SCALARS_HAS_SLEEF
@@ -21,8 +23,7 @@
 namespace scalars
 {
 
-template <>
-struct simd<double>
+template <> struct simd<double>
 {
     using simd_t      = __m512d;
     using simd_half_t = __m256d;
@@ -54,8 +55,7 @@ struct simd<double>
 
     SCALARS_SIMD_RETURN_TYPE storeu(simd_t from, value_t* to) { _mm512_storeu_pd(to, from); }
 
-    template <
-        typename scalar_t,
+    template <typename scalar_t,
         typename std::enable_if<std::is_fundamental<scalar_t>::value, bool>::type = true>
     SCALARS_SIMD_METHOD simd_t set(scalar_t alpha)
     {
@@ -150,10 +150,7 @@ struct simd<double>
     //======================================================================================
     // horizantal functions
     //======================================================================================
-    SCALARS_FORCE_INLINE static double accumulate(simd_t x)
-    {
-        return _mm512_reduce_add_pd(x);
-    }
+    SCALARS_FORCE_INLINE static double accumulate(simd_t x) { return _mm512_reduce_add_pd(x); }
 
     SCALARS_FORCE_INLINE static value_t hmax(simd_t x) { return _mm512_reduce_max_pd(x); }
 
@@ -370,8 +367,8 @@ struct simd<double>
         return _mm256_add_pd(x, y);
     }
 
-    SCALARS_SIMD_METHOD simd_half_t
-    fma(const simd_half_t& x, const simd_half_t& y, const simd_half_t& z)
+    SCALARS_SIMD_METHOD simd_half_t fma(
+        const simd_half_t& x, const simd_half_t& y, const simd_half_t& z)
     {
 #ifdef __FMA__
         return _mm256_fmadd_pd(x, y, z);
@@ -396,16 +393,15 @@ struct simd<double>
         to[stride * 3] = _mm_cvtsd_f64(_mm_shuffle_pd(high, high, 1));
     }
 
-#define PACK_OUTPUT_SQ_D(OUTPUT, INPUT, INDEX, STRIDE)                  \
-    OUTPUT[INDEX] = _mm512_insertf64x4(OUTPUT[INDEX], INPUT[INDEX], 0); \
+#define PACK_OUTPUT_SQ_D(OUTPUT, INPUT, INDEX, STRIDE)                                             \
+    OUTPUT[INDEX] = _mm512_insertf64x4(OUTPUT[INDEX], INPUT[INDEX], 0);                            \
     OUTPUT[INDEX] = _mm512_insertf64x4(OUTPUT[INDEX], INPUT[INDEX + STRIDE], 1);
 
-#define PACK_OUTPUT_D(OUTPUT, INPUT, INDEX, STRIDE)                           \
-    OUTPUT[INDEX] = _mm512_insertf64x4(OUTPUT[INDEX], INPUT[(2 * INDEX)], 0); \
+#define PACK_OUTPUT_D(OUTPUT, INPUT, INDEX, STRIDE)                                                \
+    OUTPUT[INDEX] = _mm512_insertf64x4(OUTPUT[INDEX], INPUT[(2 * INDEX)], 0);                      \
     OUTPUT[INDEX] = _mm512_insertf64x4(OUTPUT[INDEX], INPUT[(2 * INDEX) + STRIDE], 1);
 
-    template <int N>
-    SCALARS_SIMD_RETURN_TYPE ptranspose(simd_t x[N])
+    template <int N> SCALARS_SIMD_RETURN_TYPE ptranspose(simd_t x[N])
     {
         if constexpr (N == 8)
         {

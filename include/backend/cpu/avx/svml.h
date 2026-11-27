@@ -135,54 +135,51 @@ extern "C"
 
 #elif defined(_MSC_VER)
 
-#define SVML_FUNCTION_ONE_ARG(op)                                                             \
-    SCALARS_FORCE_INLINE __m256 SCALARS_VECTORCALL _mm256_##op##_ps(__m256 x)     \
-    {                                                                                         \
-        return reinterpret_cast<__m256(SCALARS_VECTORCALL*)(__m256)>(svml_ps(op))(x);   \
-    }                                                                                         \
-                                                                                              \
-    SCALARS_FORCE_INLINE __m256d SCALARS_VECTORCALL _mm256_##op##_pd(__m256d x)   \
-    {                                                                                         \
-        return reinterpret_cast<__m256d(SCALARS_VECTORCALL*)(__m256d)>(svml_pd(op))(x); \
+#define SVML_FUNCTION_ONE_ARG(op)                                                                  \
+    SCALARS_FORCE_INLINE __m256 SCALARS_VECTORCALL _mm256_##op##_ps(__m256 x)                      \
+    {                                                                                              \
+        return reinterpret_cast<__m256(SCALARS_VECTORCALL*)(__m256)>(svml_ps(op))(x);              \
+    }                                                                                              \
+                                                                                                   \
+    SCALARS_FORCE_INLINE __m256d SCALARS_VECTORCALL _mm256_##op##_pd(__m256d x)                    \
+    {                                                                                              \
+        return reinterpret_cast<__m256d(SCALARS_VECTORCALL*)(__m256d)>(svml_pd(op))(x);            \
     }
 
-#define SVML_FUNCTION_TWO_ARGS(op)                                                               \
-    SCALARS_FORCE_INLINE __m256 SCALARS_VECTORCALL _mm256_##op##_ps(                 \
-        __m256 x, __m256 y)                                                                      \
-    {                                                                                            \
-        return reinterpret_cast<__m256(SCALARS_VECTORCALL*)(__m256, __m256)>(svml_ps(op))( \
-            x, y);                                                                               \
-    }                                                                                            \
-                                                                                                 \
-    SCALARS_FORCE_INLINE __m256d SCALARS_VECTORCALL _mm256_##op##_pd(                \
-        __m256d x, __m256d y)                                                                    \
-    {                                                                                            \
-        return reinterpret_cast<__m256d(SCALARS_VECTORCALL*)(__m256d, __m256d)>(           \
-            svml_pd(op))(x, y);                                                                  \
+#define SVML_FUNCTION_TWO_ARGS(op)                                                                 \
+    SCALARS_FORCE_INLINE __m256 SCALARS_VECTORCALL _mm256_##op##_ps(__m256 x, __m256 y)            \
+    {                                                                                              \
+        return reinterpret_cast<__m256(SCALARS_VECTORCALL*)(__m256, __m256)>(svml_ps(op))(x, y);   \
+    }                                                                                              \
+                                                                                                   \
+    SCALARS_FORCE_INLINE __m256d SCALARS_VECTORCALL _mm256_##op##_pd(__m256d x, __m256d y)         \
+    {                                                                                              \
+        return reinterpret_cast<__m256d(SCALARS_VECTORCALL*)(__m256d, __m256d)>(svml_pd(op))(      \
+            x, y);                                                                                 \
     }
 
 #else  // !_MSC_VER
 
-#define SVML_FUNCTION_ONE_ARG(op)                                  \
-    SCALARS_FORCE_INLINE __m256 _mm256_##op##_ps(__m256 x)   \
-    {                                                              \
-        return svml_ps(op)(x);                                     \
-    }                                                              \
-                                                                   \
-    SCALARS_FORCE_INLINE __m256d _mm256_##op##_pd(__m256d x) \
-    {                                                              \
-        return svml_pd(op)(x);                                     \
+#define SVML_FUNCTION_ONE_ARG(op)                                                                  \
+    SCALARS_FORCE_INLINE __m256 _mm256_##op##_ps(__m256 x)                                         \
+    {                                                                                              \
+        return svml_ps(op)(x);                                                                     \
+    }                                                                                              \
+                                                                                                   \
+    SCALARS_FORCE_INLINE __m256d _mm256_##op##_pd(__m256d x)                                       \
+    {                                                                                              \
+        return svml_pd(op)(x);                                                                     \
     }
 
-#define SVML_FUNCTION_TWO_ARGS(op)                                            \
-    SCALARS_FORCE_INLINE __m256 _mm256_##op##_ps(__m256 x, __m256 y)    \
-    {                                                                         \
-        return svml_ps(op)(x, y);                                             \
-    }                                                                         \
-                                                                              \
-    SCALARS_FORCE_INLINE __m256d _mm256_##op##_pd(__m256d x, __m256d y) \
-    {                                                                         \
-        return svml_pd(op)(x, y);                                             \
+#define SVML_FUNCTION_TWO_ARGS(op)                                                                 \
+    SCALARS_FORCE_INLINE __m256 _mm256_##op##_ps(__m256 x, __m256 y)                               \
+    {                                                                                              \
+        return svml_ps(op)(x, y);                                                                  \
+    }                                                                                              \
+                                                                                                   \
+    SCALARS_FORCE_INLINE __m256d _mm256_##op##_pd(__m256d x, __m256d y)                            \
+    {                                                                                              \
+        return svml_pd(op)(x, y);                                                                  \
     }
 
 #endif  // defined(_MSC_VER)

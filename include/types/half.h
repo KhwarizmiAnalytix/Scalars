@@ -43,7 +43,8 @@
 #include "common/vec_half.h"
 #endif
 
-#if (defined(__aarch64__) || defined(__x86_64__) || defined(_M_X64) || defined(__i386) || defined(_M_IX86)) && \
+#if (defined(__aarch64__) || defined(__x86_64__) || defined(_M_X64) || defined(__i386) ||          \
+     defined(_M_IX86)) &&                                                                          \
     !defined(__CUDACC__) && !defined(__HIPCC__)
 #include "common/intrinsics.h"
 #endif
@@ -55,8 +56,8 @@
 // own ISA selection rather than guessing it. Excluded whenever
 // common/intrinsics.h above was not included (CUDA/HIP TUs), since the x86
 // intrinsic headers that declare _cvtsh_ss/_cvtss_sh are not pulled in there.
-#if defined(__F16C__) && \
-    (defined(__x86_64__) || defined(__i386__) || defined(_M_X64) || defined(_M_IX86)) && \
+#if defined(__F16C__) &&                                                                           \
+    (defined(__x86_64__) || defined(__i386__) || defined(_M_X64) || defined(_M_IX86)) &&           \
     !defined(__CUDACC__) && !defined(__HIPCC__)
 #define SCALARS_X86_F16 1
 #endif
