@@ -2,6 +2,7 @@
 
 #include "backend/simd_base.h"
 
+#include <cstdint>
 #include <limits>
 #include <type_traits>
 

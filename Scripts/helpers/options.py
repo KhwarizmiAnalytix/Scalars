@@ -1,6 +1,21 @@
 """Supported, documented setup options. Arbitrary build-tool flags are rejected."""
 
-OPTIONS = [
+from typing import TypedDict
+
+
+class _RequiredOption(TypedDict):
+    name: str
+    cache: str
+    kind: str
+
+
+class SetupOption(_RequiredOption, total=False):
+    """One documented setup option and the CMake cache entry it sets."""
+
+    choices: list[str]
+
+
+OPTIONS: list[SetupOption] = [
     {"name": "shared", "cache": "BUILD_SHARED_LIBS", "kind": "bool"},
     {
         "name": "cuda-architectures",

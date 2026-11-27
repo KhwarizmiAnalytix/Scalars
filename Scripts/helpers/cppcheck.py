@@ -60,7 +60,7 @@ class cppcheck_issue:
 def get_logical_processor_count() -> int:
     """Get the number of logical processors available."""
     try:
-        import psutil
+        import psutil  # pyrefly: ignore  # optional dependency
 
         return int(psutil.cpu_count(logical=True) or 1)
     except ImportError:

@@ -186,7 +186,8 @@ def argument_parser(bazel: bool = False) -> argparse.ArgumentParser:
             dest=option["name"].replace("-", "_"),
             type=converter,
             choices=option.get("choices"),
-            help=f"Set {option['name']} ({'on/off' if kind in ('bool', 'cuda-compat') else 'project setting'})",
+            help=f"Set {option['name']} "
+            f"({'on/off' if kind in ('bool', 'cuda-compat') else 'project setting'})",
         )
     return parser
 
@@ -245,7 +246,8 @@ def _reject_raw(arguments: list[str], parser: argparse.ArgumentParser) -> None:
             ("-D", "--cmake", "--copt", "--define", "--repo_env", "--test_output")
         ):
             parser.error(
-                f"unsupported argument {argument!r}; use documented setup actions and options"
+                f"unsupported argument {argument!r}; "
+                "use documented setup actions and options"
             )
 
 

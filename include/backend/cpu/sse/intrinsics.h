@@ -1,5 +1,7 @@
 #pragma once
 
+#include <cstdint>
+
 #include "common/intrinsics.h"
 #include "scalars_macros.h"
 

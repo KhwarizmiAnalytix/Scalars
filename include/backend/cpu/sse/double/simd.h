@@ -3,6 +3,7 @@
 #include "backend/simd_base.h"
 
 #include <cmath>
+#include <cstdint>
 #include <type_traits>
 
 #if SCALARS_HAS_SVML || SCALARS_HAS_SLEEF

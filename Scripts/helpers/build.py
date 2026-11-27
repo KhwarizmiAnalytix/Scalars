@@ -39,7 +39,7 @@ def _raise_stack_limit() -> None:
 def get_logical_processor_count() -> int:
     """Get the logical processor count, falling back to one if unavailable."""
     try:
-        import psutil
+        import psutil  # pyrefly: ignore  # optional dependency
 
         count = psutil.cpu_count(logical=True)
         if count is not None:

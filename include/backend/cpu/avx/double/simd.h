@@ -2,6 +2,7 @@
 
 #include "backend/simd_base.h"
 
+#include <cstdint>
 #include <type_traits>
 
 #if SCALARS_HAS_SVML || SCALARS_HAS_SLEEF
@@ -22,6 +23,9 @@
 
 namespace scalars
 {
+// NOLINTBEGIN(portability-simd-intrinsics) -- this header is an x86 SIMD
+// backend: the intrinsics are its purpose, and builds without the ISA never
+// include it.
 
 template <> struct simd<double>
 {
@@ -67,15 +71,9 @@ template <> struct simd<double>
     //======================================================================================
     SCALARS_SIMD_METHOD simd_t add(simd_t x, simd_t y) { return _mm256_add_pd(x, y); }
 
-    SCALARS_SIMD_METHOD simd_t sub(simd_t x, simd_t y)
-    {
-        return _mm256_sub_pd(x, y);
-    }  // NOLINT(portability-simd-intrinsics)
+    SCALARS_SIMD_METHOD simd_t sub(simd_t x, simd_t y) { return _mm256_sub_pd(x, y); }
 
-    SCALARS_SIMD_METHOD simd_t mul(simd_t x, simd_t y)
-    {
-        return _mm256_mul_pd(x, y);
-    }  // NOLINT(portability-simd-intrinsics)
+    SCALARS_SIMD_METHOD simd_t mul(simd_t x, simd_t y) { return _mm256_mul_pd(x, y); }
 
     SCALARS_SIMD_METHOD simd_t div(simd_t x, simd_t y) { return _mm256_div_pd(x, y); }
 
@@ -92,15 +90,9 @@ template <> struct simd<double>
 
     SCALARS_SIMD_METHOD simd_t hypot(simd_t x, simd_t y) { return x86_math::hypot(x, y); }
 
-    SCALARS_SIMD_METHOD simd_t min(simd_t x, simd_t y)
-    {
-        return _mm256_min_pd(x, y);
-    }  // NOLINT(portability-simd-intrinsics)
+    SCALARS_SIMD_METHOD simd_t min(simd_t x, simd_t y) { return _mm256_min_pd(x, y); }
 
-    SCALARS_SIMD_METHOD simd_t max(simd_t x, simd_t y)
-    {
-        return _mm256_max_pd(x, y);
-    }  // NOLINT(portability-simd-intrinsics)
+    SCALARS_SIMD_METHOD simd_t max(simd_t x, simd_t y) { return _mm256_max_pd(x, y); }
 
     SCALARS_SIMD_METHOD simd_t signcopy(simd_t x, simd_t sign)
     {
@@ -112,10 +104,7 @@ template <> struct simd<double>
     //======================================================================================
     SCALARS_SIMD_METHOD simd_t sqrt(simd_t x) { return _mm256_sqrt_pd(x); }
 
-    SCALARS_SIMD_METHOD simd_t sqr(simd_t x)
-    {
-        return _mm256_mul_pd(x, x);
-    }  // NOLINT(portability-simd-intrinsics)
+    SCALARS_SIMD_METHOD simd_t sqr(simd_t x) { return _mm256_mul_pd(x, x); }
     SCALARS_SIMD_METHOD simd_t ceil(simd_t x) { return _mm256_ceil_pd(x); }
 
     SCALARS_SIMD_METHOD simd_t floor(simd_t x) { return _mm256_floor_pd(x); }
@@ -164,27 +153,22 @@ template <> struct simd<double>
     //======================================================================================
     SCALARS_FORCE_INLINE static double accumulate(simd_t x)
     {
-        const auto& t1 = _mm_add_pd(_mm256_extractf128_pd(x, 1),
-            _mm256_castpd256_pd128(x));  // NOLINT(portability-simd-intrinsics)
+        const auto& t1 = _mm_add_pd(_mm256_extractf128_pd(x, 1), _mm256_castpd256_pd128(x));
         const auto& t2 = _mm_unpackhi_pd(t1, t1);
 
-        return _mm_cvtsd_f64(_mm_add_sd(t1, t2));  // NOLINT(portability-simd-intrinsics)
+        return _mm_cvtsd_f64(_mm_add_sd(t1, t2));
     }
 
     SCALARS_FORCE_INLINE static value_t hmax(simd_t x)
     {
-        const auto& t = _mm256_max_pd(
-            x, _mm256_permute2f128_pd(x, x, 1));  // NOLINT(portability-simd-intrinsics)
-        return _mm256_cvtsd_f64(
-            _mm256_max_pd(t, _mm256_permute_pd(t, 5)));  // NOLINT(portability-simd-intrinsics)
+        const auto& t = _mm256_max_pd(x, _mm256_permute2f128_pd(x, x, 1));
+        return _mm256_cvtsd_f64(_mm256_max_pd(t, _mm256_permute_pd(t, 5)));
     }
 
     SCALARS_FORCE_INLINE static value_t hmin(simd_t x)
     {
-        const auto& tmp = _mm256_min_pd(
-            x, _mm256_permute2f128_pd(x, x, 1));  // NOLINT(portability-simd-intrinsics)
-        return _mm256_cvtsd_f64(
-            _mm256_min_pd(tmp, _mm256_permute_pd(tmp, 5)));  // NOLINT(portability-simd-intrinsics)
+        const auto& tmp = _mm256_min_pd(x, _mm256_permute2f128_pd(x, x, 1));
+        return _mm256_cvtsd_f64(_mm256_min_pd(tmp, _mm256_permute_pd(tmp, 5)));
     }
 
     //======================================================================================
@@ -324,4 +308,5 @@ template <> struct simd<double>
     SCALARS_SIMD_METHOD simd_t ploadquad(const double* from) { return _mm256_broadcast_sd(from); }
 };
 
+// NOLINTEND(portability-simd-intrinsics)
 }  // namespace scalars
